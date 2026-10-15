@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>阶段1 · 采集与检测模块化（手势 + 眼神）</title>
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">👁✋</span>
+      <div>
+        <h1>眼动翻页插件 · 阶段 1 原型</h1>
+        <p class="sub">采集 / 检测模块化 + 关键点可视化（CameraModule · FaceMeshDetector · HandDetector）</p>
+      </div>
+    </div>
+    <div class="chips">
+      <span class="chip" id="chip-mode">模式：待定（距离估计 → 阶段2）</span>
+      <span class="chip" id="chip-status">摄像头：未启动</span>
+      <span class="chip" id="chip-fps">FPS：--</span>
+    </div>
+  </header>
+
+  <main class="viewer-wrap">
+    <div class="viewer" id="viewer">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="canvas"></canvas>
+      <div class="overlay" id="overlay">
+        <button id="btn-start">启动摄像头</button>
+        <p id="hint" class="hint">点击启动后授予摄像头权限（需 HTTPS / localhost）</p>
+      </div>
+    </div>
+    <aside class="side">
+      <div class="panel">
+        <h2>图例</h2>
+        <ul class="legend">
+          <li><i class="sw" style="background:rgba(80,170,255,.7)"></i>人脸网格（Face Mesh 468 点）</li>
+          <li><i class="sw" style="background:rgba(255,80,120,.9)"></i>虹膜（Iris，视线估计用）</li>
+          <li><i class="sw" style="background:#50dc96"></i>手部（Hands 21 点）</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h2>本阶段验证目标</h2>
+        <ul class="tick">
+          <li>摄像头采集模块化（CameraModule + 状态码）</li>
+          <li>人脸 + 虹膜检测模块化（FaceMeshDetector）</li>
+          <li>手部检测模块化（HandDetector）</li>
+          <li>统一异常状态码与错误提示</li>
+        </ul>
+        <p class="note">距离估计与「手势/眼神」自动切换在阶段 2 实现。</p>
+      </div>
+      <div class="panel">
+        <h2>实时检测</h2>
+        <p>人脸：<b id="face-state">--</b></p>
+        <p>手部：<b id="hand-state">--</b></p>
+        <p>虹膜：<b id="iris-state">--</b></p>
+      </div>
+    </aside>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

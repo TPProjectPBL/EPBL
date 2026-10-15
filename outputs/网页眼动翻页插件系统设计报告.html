@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>网页「手势 + 眼神」双模态翻页插件 · 系统设计报告</title>
+<style>
+  :root{
+    --bg:#f6f7fb; --card:#ffffff; --ink:#1c2333; --muted:#5b6474;
+    --line:#e6e9f0; --accent:#2f6bff; --accent-soft:#eaf0ff;
+    --gest:#0f9d58; --gest-soft:#e6f6ee; --gaze:#7a3bff; --gaze-soft:#f0eaff;
+    --ok:#0f9d58; --warn:#e08600; --bad:#d93025; --chip:#eef1f6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    line-height:1.72;font-size:15px;}
+  a{color:var(--accent);text-decoration:none}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 24px 96px}
+  header.doc{background:linear-gradient(135deg,#1f3a8a 0%,#2f6bff 55%,#7a3bff 100%);
+    color:#fff;border-radius:16px;padding:34px 34px 30px;margin-bottom:26px}
+  header.doc h1{margin:0 0 12px;font-size:26px;line-height:1.35}
+  header.doc .sub{font-size:14px;opacity:.92}
+  header.doc .meta{display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:18px;font-size:13px}
+  header.doc .meta b{font-weight:600;opacity:.75;margin-right:4px}
+  .toc{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin-bottom:26px}
+  .toc h2{margin:0 0 10px;font-size:15px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:32px}
+  .toc li{margin:3px 0;font-size:13.5px}
+  section{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:26px 28px;margin-bottom:22px}
+  h2.sec{font-size:20px;margin:0 0 4px;padding-bottom:10px;border-bottom:2px solid var(--accent-soft)}
+  h2.sec .no{color:var(--accent);margin-right:10px;font-weight:700}
+  h3{font-size:16px;margin:22px 0 8px;color:#25304a}
+  h4{font-size:14.5px;margin:16px 0 6px;color:#333c52}
+  p{margin:8px 0}
+  ul,ol{margin:8px 0;padding-left:22px}
+  li{margin:4px 0}
+  .lead{color:var(--muted);font-size:14px;margin:6px 0 14px}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}
+  th{background:#f2f5fb;font-weight:600;color:#25304a}
+  tr:nth-child(even) td{background:#fafbfe}
+  .tag{display:inline-block;padding:1px 9px;border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap}
+  .tag.ok{background:#e6f6ee;color:var(--ok)}
+  .tag.warn{background:#fff4e0;color:var(--warn)}
+  .tag.bad{background:#fdeceb;color:var(--bad)}
+  .tag.acc{background:var(--accent-soft);color:var(--accent)}
+  .tag.gest{background:var(--gest-soft);color:var(--gest)}
+  .tag.gaze{background:var(--gaze-soft);color:var(--gaze)}
+  .callout{border-left:4px solid var(--accent);background:var(--accent-soft);
+    border-radius:0 10px 10px 0;padding:12px 16px;margin:14px 0;font-size:14px}
+  .callout.warn{border-color:var(--warn);background:#fff7e8}
+  .callout.bad{border-color:var(--bad);background:#fdeceb}
+  .callout.gest{border-color:var(--gest);background:var(--gest-soft)}
+  .callout.gaze{border-color:var(--gaze);background:var(--gaze-soft)}
+  .callout b{display:block;margin-bottom:2px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:720px){.grid2{grid-template-columns:1fr}.toc ol{columns:1}}
+  .pill{display:inline-block;background:var(--chip);border:1px solid var(--line);
+    border-radius:8px;padding:2px 10px;font-size:12.5px;margin:2px 3px 2px 0}
+  .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;
+    background:#f0f2f7;border:1px solid var(--line);border-radius:5px;padding:0 6px}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+  .svgb{background:#0f1420;border-radius:12px;padding:18px;margin:14px 0;overflow-x:auto}
+  footer{color:var(--muted);font-size:12.5px;text-align:center;margin-top:8px}
+  .flow{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;white-space:pre-wrap;
+    background:#0f1420;color:#c9d4ee;border-radius:10px;padding:14px 16px;line-height:1.9;overflow-x:auto}
+  .mode{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
+  .mode .box{flex:1;min-width:230px;border-radius:12px;padding:16px 18px;border:1px solid var(--line)}
+  .mode .box.gest{background:var(--gest-soft);border-color:#b8e2cc}
+  .mode .box.gaze{background:var(--gaze-soft);border-color:#d7c4ff}
+  .mode .box h4{margin:0 0 6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>网页「手势 + 眼神」双模态翻页插件 · 系统设计报告</h1>
+  <div class="sub">远距离用手势控制、近距离用眼神控制，以 1.5 米为自动切换阈值；总体技术方案，指导后续开发、选型与验收。</div>
+  <div class="meta">
+    <span><b>文档版本</b>v2.0（替代 v1.0 眼动翻页方案）</span>
+    <span><b>日期</b>2026-10-15</span>
+    <span><b>作者</b>xu</span>
+    <span><b>状态</b>需求确认 + 总体设计（待评审）</span>
+    <span><b>目标平台</b>现代浏览器（桌面优先，移动端可用）</span>
+  </div>
+</header>
+
+<div class="toc">
+  <h2>目录</h2>
+  <ol>
+    <li><a href="#s1">摘要</a></li>
+    <li><a href="#s2">背景与目标</a></li>
+    <li><a href="#s3">需求确认</a></li>
+    <li><a href="#s4">可行性分析</a></li>
+    <li><a href="#s5">整体架构</a></li>
+    <li><a href="#s6">模块划分</a></li>
+    <li><a href="#s7">关键技术选型</a></li>
+    <li><a href="#s8">风险点</a></li>
+    <li><a href="#s9">可扩展性</a></li>
+    <li><a href="#s10">安全性</a></li>
+    <li><a href="#s11">实现步骤与测试验收</a></li>
+    <li><a href="#s12">验收标准汇总</a></li>
+    <li><a href="#s13">附录</a></li>
+  </ol>
+</div>
+
+<!-- 1 摘要 -->
+<section id="s1">
+  <h2 class="sec"><span class="no">01</span>摘要</h2>
+  <p>本插件将原「眼动翻页」方案升级为<strong>「手势 + 眼神」双模态翻页插件</strong>：一段嵌入宿主网页的前端脚本/组件，通过用户设备摄像头自动判断人与屏幕的距离，<strong>远距离（≥1.5m）用手势控制、近距离（&lt;1.5m）用眼神控制</strong>，无需点击翻页按键即可完成上下左右翻页/滚动。</p>
+  <p>核心架构结论：识别全程<strong>在用户本地浏览器前端执行</strong>（摄像头数据与推理不出设备）；「后端运行的插件」指「运行在宿主页面运行时中的客户端插件」。双模态通过<strong>距离估计 → 模式切换器</strong>统一调度，两个分支共用动作执行器与宿主适配层。</p>
+
+  <div class="mode">
+    <div class="box gest">
+      <h4><span class="tag gest">远距离 ≥ 1.5m</span></h4>
+      <p><b>手势控制</b>：MediaPipe Hands 检测手部关键点，识别挥动/滑动方向，映射上下左右翻页。适合演讲、大屏演示、站立远距离操作。</p>
+    </div>
+    <div class="box gaze">
+      <h4><span class="tag gaze">近距离 &lt; 1.5m</span></h4>
+      <p><b>眼神控制</b>：MediaPipe Face Mesh + Iris 检测虹膜关键点，估计注视方向，驻留触发翻页。适合桌面阅读、PDF/文档精细操作。</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <b>一句话结论</b>
+    <span class="mono">getUserMedia</span> 取摄像头 → <span class="mono">Face Mesh</span>（人脸/虹膜 + <strong>距离估计</strong>）与 <span class="mono">Hands</span>（手势）并行检测 → <strong>距离 ≥1.5m 走手势分支、&lt;1.5m 走眼神分支</strong> → 平滑/触发 → 统一动作执行器驱动宿主翻页。纯前端、零数据上传、HTTPS 强制。
+  </div>
+
+  <div class="grid2">
+    <div>
+      <h4>关键指标（第一阶段）</h4>
+      <ul>
+        <li>距离切换阈值：1.5m（迟滞带 ±0.2m）</li>
+        <li>眼神方向：上/下/左/右 + 中心，准确率 ≥ 90%</li>
+        <li>手势方向：上/下/左/右挥动，准确率 ≥ 90%</li>
+        <li>帧率：桌面 ≥ 30 FPS，移动端 ≥ 20 FPS</li>
+        <li>触发延迟：驻留 500–1000ms / 手势挥动即时</li>
+      </ul>
+    </div>
+    <div>
+      <h4>关键约束</h4>
+      <ul>
+        <li><strong>HTTPS / localhost</strong>：<span class="mono">getUserMedia</span> 仅安全上下文可用</li>
+        <li>需用户显式授予摄像头权限</li>
+        <li>需前置摄像头；手势模式需手部在画面内</li>
+        <li>距离估计需一次性标定，误差需受控</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 2 背景与目标 -->
+<section id="s2">
+  <h2 class="sec"><span class="no">02</span>背景与目标</h2>
+  <h3>2.1 变更背景</h3>
+  <p>方案由原生 iOS App 转向 Web 端交互页面插件。在「眼动翻页」基础上，产品进一步明确交互边界：<strong>近距离用眼神、远距离用手势，以 1.5 米为分界</strong>，使插件在桌面阅读与远距离演示两种典型场景下都自然可用。</p>
+  <h3>2.2 核心目标</h3>
+  <ul>
+    <li>提供可嵌入网页、开箱即用的<strong>双模态翻页</strong>能力，替代点击翻页按键。</li>
+    <li>按距离自动切换：<strong>≥1.5m 手势、&lt;1.5m 眼神</strong>，用户无需手动切换。</li>
+    <li>第一阶段覆盖上下左右四方向翻页，形成可演示、可验收的 MVP。</li>
+  </ul>
+  <h3>2.3 成功标准（MVP）</h3>
+  <ul>
+    <li>宿主页面引入脚本后，授权摄像头即可使用：走近用眼神、走远用手势翻页。</li>
+    <li>距离切换平滑、有 UI 提示、不产生误触发。</li>
+    <li>翻页动作可由宿主通过回调/事件自定义。</li>
+    <li>权限拒绝、无设备、无手/无人脸、低置信度等异常均有明确反馈与降级。</li>
+  </ul>
+</section>
+
+<!-- 3 需求确认 -->
+<section id="s3">
+  <h2 class="sec"><span class="no">03</span>需求确认</h2>
+
+  <h3>3.1 产品定位</h3>
+  <p>面向网页的「手势 + 眼神」双模态翻页交互插件：用户浏览演示文稿、PDF、电子书、长文页面时，根据距离自动采用手势或眼神翻页，实现免手/免按键操作与无障碍交互。</p>
+
+  <h3>3.2 可采用的插件形态</h3>
+  <table>
+    <tr><th style="width:20%">形态</th><th style="width:42%">说明</th><th style="width:20%">优点</th><th style="width:18%">适用</th></tr>
+    <tr><td><b>A. 嵌入式 JS SDK</b></td><td>宿主引入 <span class="mono">&lt;script&gt;</span>，暴露全局 API，配置「方向→动作」映射。</td><td>集成轻、可控强</td><td>自有网站/产品</td></tr>
+    <tr><td><b>B. Web Component 组件</b></td><td>封装为 <span class="mono">&lt;eye-page-turner&gt;</span>，Shadow DOM 隔离。</td><td>组件化、可复用</td><td>组件化工程</td></tr>
+    <tr><td><b>C. 浏览器扩展</b></td><td>Content Script 注入任意站点。</td><td>跨站通用</td><td>通用阅读/演示工具</td></tr>
+    <tr><td><b>D. 悬浮控制面板</b></td><td>注入悬浮 UI，模拟键盘/点击驱动宿主。</td><td>侵入性低</td><td>演示/快速验证</td></tr>
+  </table>
+  <div class="callout">
+    <b>推荐方案</b>
+    以 <strong>A（SDK）+ B（Web Component）</strong> 为主形态，<strong>C（浏览器扩展）</strong> 后续复用同一核心；D 作为 A 内部默认动作策略。
+  </div>
+
+  <h3>3.3 功能需求（FR）</h3>
+  <table>
+    <tr><th style="width:10%">编号</th><th>需求</th><th style="width:12%">模态</th><th style="width:14%">优先级</th></tr>
+    <tr><td>FR-1</td><td>采集前置摄像头视频流（getUserMedia）</td><td>共用</td><td><span class="tag acc">P0</span></td></tr>
+    <tr><td>FR-2</td><td>人脸 + 虹膜关键点检测（Face Mesh + Iris）</td><td><span class="tag gaze">眼神</span></td><td><span class="tag acc">P0</span></td></tr>
+    <tr><td>FR-3</td><td><strong>距离估计</strong>（人脸尺度 → 米，供模式切换）</td><td>共用</td><td><span class="tag acc">P0</span></td></tr>
+    <tr><td>FR-4</td><td><strong>手部关键点检测 + 手势方向识别</strong>（Hands）</td><td><span class="tag gest">手势</span></td><td><span class="tag acc">P0</span></td></tr>
+    <tr><td>FR-5</td><td>注视方向估计：上/下/左/右/中心</td><td><span class="tag gaze">眼神</span></td><td><span class="tag acc">P0</span></td></tr>
+    <tr><td>FR-6</td><td><strong>模式切换器</strong>：≥1.5m 手势、&lt;1.5m 眼神（含迟滞）</td><td>共用</td><td><span class="tag acc">P0</span></td></tr>
+    <tr><td>FR-7</td><td>平滑 + 驻留/手势触发（防误触、可配置）</td><td>共用</td><td><span class="tag acc">P0</span></td></tr>
+    <tr><td>FR-8</td><td>方向 → 翻页动作执行（可配置、可自定义）</td><td>共用</td><td><span class="tag acc">P0</span></td></tr>
+    <tr><td>FR-9</td><td>权限引导、拒绝/无设备/无人脸/无手降级提示</td><td>共用</td><td><span class="tag acc">P0</span></td></tr>
+    <tr><td>FR-10</td><td>模式与状态指示 UI（当前距离/模式/方向）</td><td>共用</td><td><span class="tag warn">P1</span></td></tr>
+    <tr><td>FR-11</td><td>可选注视校准（P1）</td><td><span class="tag gaze">眼神</span></td><td><span class="tag warn">P1</span></td></tr>
+    <tr><td>FR-12</td><td>宿主事件与全局 API（回调、开启/暂停/恢复）</td><td>共用</td><td><span class="tag acc">P0</span></td></tr>
+  </table>
+
+  <h3>3.4 非功能需求（NFR）</h3>
+  <table>
+    <tr><th style="width:22%">类别</th><th>要求</th></tr>
+    <tr><td>性能</td><td>桌面 ≥ 30 FPS；移动端 ≥ 20 FPS；单帧推理 &lt; 33ms</td></tr>
+    <tr><td>隐私</td><td>摄像头画面与关键点全程不出本地，不上传原始图像</td></tr>
+    <tr><td>安全</td><td>仅 HTTPS 生效；权限最小化；CSP 友好</td></tr>
+    <tr><td>兼容</td><td>Chrome/Edge/Safari/Firefox；桌面优先</td></tr>
+    <tr><td>体积</td><td>核心 SDK ≤ 500KB（gzip），模型按需懒加载</td></tr>
+    <tr><td>可维护</td><td>TypeScript、模块化、核心逻辑单测覆盖</td></tr>
+  </table>
+
+  <h3>3.5 待确认项（Open Questions）</h3>
+  <table>
+    <tr><th style="width:34%">问题</th><th style="width:40%">建议默认</th><th>影响</th></tr>
+    <tr><td>「后端运行」的含义</td><td>「嵌入宿主页面运行时中的客户端插件」，非远程推理</td><td>架构方向</td></tr>
+    <tr><td>1.5m 切换的测量基准</td><td>人脸瞳距/脸宽尺度估计距离，迟滞带 ±0.2m</td><td>距离估计</td></tr>
+    <tr><td>手势类型（挥动方向 vs 静态手势）</td><td>上下左右挥动/滑动方向为主，静态手势后续扩展</td><td>手势识别</td></tr>
+    <tr><td>方向→动作映射</td><td>上=上翻/向上滚，下=下翻/向下滚，左=上一页，右=下一页（可配置）</td><td>交互体验</td></tr>
+    <tr><td>远/近距离是否需手动覆盖</td><td>自动切换为主，预留手动锁定接口</td><td>交互体验</td></tr>
+  </table>
+</section>
+
+<!-- 4 可行性 -->
+<section id="s4">
+  <h2 class="sec"><span class="no">04</span>可行性分析</h2>
+  <h3>4.1 技术可行性 <span class="tag ok">高</span></h3>
+  <ul>
+    <li>摄像头采集、Face Mesh（人脸/虹膜）、Hands（手势）均有官方浏览器 WASM/WebGL 实现，成熟稳定。</li>
+    <li>眼神四方向为粗粒度分类，几何规则即可达可用精度；手势挥动方向识别同样属于低复杂度分类。</li>
+    <li>距离估计可用「瞳距/脸宽尺度法」实现，误差对 1.5m 阈值判断（配迟滞带）影响可控。</li>
+  </ul>
+  <h3>4.2 硬件可行性 <span class="tag ok">高</span></h3>
+  <ul>
+    <li>笔记本/一体机/手机/平板普遍带前置摄像头；外接摄像头亦可。</li>
+    <li>远距离手势需手部在取景范围内，前置广角通常可覆盖 1.5–3m。</li>
+  </ul>
+  <h3>4.3 距离估计可行性 <span class="tag warn">中</span></h3>
+  <ul>
+    <li>单目距离估计依赖尺度基准（瞳距/脸宽）与一次标定，个体差异（瞳距 55–70mm）会引入误差。</li>
+    <li>缓解：默认取 63mm 平均瞳距 + 可选个体标定；仅在 1.5m 阈值附近需要较高精度，迟滞带吸收抖动。</li>
+  </ul>
+  <h3>4.4 合规与权限 <span class="tag warn">中</span></h3>
+  <ul>
+    <li><span class="mono">getUserMedia</span> 仅安全上下文可用；权限拒绝即不可用，需降级。</li>
+  </ul>
+  <h3>4.5 结论</h3>
+  <p>双模态方案在技术、硬件层面<strong>完全可行</strong>，主要风险集中在<strong>距离估计精度、模式切换抖动、光照鲁棒性与低端设备性能</strong>，均可通过标定、迟滞、阈值与降级策略控制。建议启动 MVP。</p>
+</section>
+
+<!-- 5 架构 -->
+<section id="s5">
+  <h2 class="sec"><span class="no">05</span>整体架构</h2>
+  <p>插件为<strong>纯客户端前端应用</strong>。宿主页面加载脚本后，插件内部完成采集、双路检测（人脸/手势）、距离估计与模式切换、各自触发，最终通过统一适配层驱动宿主交互。</p>
+
+  <div class="svgb">
+  <svg viewBox="0 0 920 640" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,Segoe UI,PingFang SC,sans-serif">
+    <defs>
+      <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#8aa4e0"/></marker>
+    </defs>
+    <rect x="20" y="18" width="880" height="60" rx="10" fill="#1c2a52"/>
+    <text x="40" y="44" fill="#8ea2d9" font-size="12">宿主网页（静态 / 服务端渲染页面）</text>
+    <text x="40" y="64" fill="#c9d4ee" font-size="14">翻页按钮 · 滚动容器 · 内容区 · &lt;script src=&quot;eye-page-turner.js&quot;&gt;</text>
+
+    <rect x="20" y="92" width="880" height="410" rx="10" fill="#14203e" stroke="#3b4f86"/>
+    <text x="40" y="118" fill="#8ea2d9" font-size="12">双模态翻页插件核心（浏览器本地执行，数据不出设备）</text>
+
+    <!-- 采集 -->
+    <rect x="40" y="132" width="240" height="72" rx="8" fill="#1f3260"/>
+    <text x="56" y="156" fill="#ffffff" font-size="13" font-weight="bold">采集层</text>
+    <text x="56" y="176" fill="#aebfe8" font-size="12">getUserMedia 摄像头</text>
+    <text x="56" y="194" fill="#aebfe8" font-size="12">权限状态 · 视频帧流</text>
+
+    <!-- 双路检测 -->
+    <rect x="340" y="132" width="250" height="92" rx="8" fill="#1f3260"/>
+    <text x="356" y="156" fill="#ffffff" font-size="13" font-weight="bold">人脸检测（MediaPipe）</text>
+    <text x="356" y="176" fill="#aebfe8" font-size="12">Face Mesh 468 点 + Iris 虹膜</text>
+    <text x="356" y="194" fill="#aebfe8" font-size="12">头部姿态</text>
+    <text x="356" y="212" fill="#7ddbaa" font-size="12">→ 距离估计（瞳距/脸宽）</text>
+
+    <rect x="340" y="240" width="250" height="72" rx="8" fill="#1f3260"/>
+    <text x="356" y="264" fill="#ffffff" font-size="13" font-weight="bold">手势检测（MediaPipe Hands）</text>
+    <text x="356" y="284" fill="#aebfe8" font-size="12">手部 21 关键点</text>
+    <text x="356" y="302" fill="#aebfe8" font-size="12">→ 手势方向/轨迹</text>
+
+    <!-- 模式切换 -->
+    <rect x="650" y="132" width="230" height="180" rx="8" fill="#24365f" stroke="#7a3bff"/>
+    <text x="666" y="156" fill="#ffffff" font-size="13" font-weight="bold">模式切换器</text>
+    <text x="666" y="176" fill="#c9b6ff" font-size="12">距离 ≥ 1.5m → 手势模式</text>
+    <text x="666" y="194" fill="#c9b6ff" font-size="12">距离 &lt; 1.5m → 眼神模式</text>
+    <text x="666" y="214" fill="#c9b6ff" font-size="12">迟滞带 ±0.2m 防抖</text>
+    <text x="666" y="234" fill="#8ea2d9" font-size="11">切换时 UI 提示 + 动作冷却</text>
+
+    <!-- 两个分支 -->
+    <rect x="40" y="250" width="250" height="120" rx="8" fill="#1f3260"/>
+    <text x="56" y="274" fill="#7a9bff" font-size="13" font-weight="bold">眼神分支（&lt;1.5m）</text>
+    <text x="56" y="294" fill="#aebfe8" font-size="12">注视方向估计</text>
+    <text x="56" y="312" fill="#aebfe8" font-size="12">时序平滑 · 驻留状态机</text>
+    <text x="56" y="330" fill="#aebfe8" font-size="12">→ 方向 + 置信度</text>
+
+    <rect x="40" y="386" width="250" height="100" rx="8" fill="#1f3260"/>
+    <text x="56" y="410" fill="#7ddbaa" font-size="13" font-weight="bold">手势分支（≥1.5m）</text>
+    <text x="56" y="430" fill="#aebfe8" font-size="12">手势方向识别</text>
+    <text x="56" y="448" fill="#aebfe8" font-size="12">速度阈值 · 防抖触发</text>
+    <text x="56" y="466" fill="#aebfe8" font-size="12">→ 挥动方向</text>
+
+    <!-- 执行 -->
+    <rect x="650" y="386" width="230" height="100" rx="8" fill="#1f3260"/>
+    <text x="666" y="410" fill="#ffffff" font-size="13" font-weight="bold">动作执行 + 宿主适配</text>
+    <text x="666" y="430" fill="#aebfe8" font-size="12">方向→动作映射</text>
+    <text x="666" y="448" fill="#aebfe8" font-size="12">click / scroll / keyboard</text>
+    <text x="666" y="466" fill="#aebfe8" font-size="12">CustomEvent / 全局 API</text>
+
+    <!-- 箭头 -->
+    <line x1="280" y1="168" x2="336" y2="168" stroke="#8aa4e0" stroke-width="1.5" marker-end="url(#arr)"/>
+    <line x1="590" y1="180" x2="646" y2="200" stroke="#8aa4e0" stroke-width="1.5" marker-end="url(#arr)"/>
+    <line x1="590" y1="276" x2="646" y2="250" stroke="#8aa4e0" stroke-width="1.5" marker-end="url(#arr)"/>
+    <!-- 模式切换输出 -->
+    <line x1="650" y1="320" x2="294" y2="310" stroke="#7a3bff" stroke-width="1.5" marker-end="url(#arr)"/>
+    <line x1="650" y1="320" x2="294" y2="430" stroke="#7a3bff" stroke-width="1.5" marker-end="url(#arr)"/>
+    <!-- 分支到执行 -->
+    <line x1="290" y1="330" x2="646" y2="420" stroke="#8aa4e0" stroke-width="1.5" marker-end="url(#arr)"/>
+    <line x1="290" y1="436" x2="646" y2="440" stroke="#8aa4e0" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <!-- 支撑 -->
+    <rect x="40" y="502" width="840" height="52" rx="8" fill="#1a2a50" stroke="#3b4f86"/>
+    <text x="56" y="524" fill="#8ea2d9" font-size="12">横向支撑</text>
+    <text x="56" y="542" fill="#aebfe8" font-size="12">配置中心（方向映射/阈值/距离基准） · 权限与校准 UI · 本地日志/可选遥测（opt-in）</text>
+  </svg>
+  </div>
+
+  <h3>5.1 数据流</h3>
+  <div class="flow">摄像头帧
+  → 采集层（getUserMedia）
+  → [并行] 人脸检测（Face Mesh + Iris → 关键点 + 距离估计）｜ 手势检测（Hands → 手部关键点）
+  → 模式切换器（距离 ≥1.5m → 手势；&lt;1.5m → 眼神；迟滞防抖）
+  → 眼神分支（方向估计 → 平滑 → 驻留触发）｜ 手势分支（方向识别 → 速度阈值 → 触发）
+  → 动作执行层（方向→动作映射：click / scroll / keyboard）
+  → 宿主适配层（CustomEvent 派发 + 全局 API 回调）</div>
+
+  <h3>5.2 部署形态</h3>
+  <ul>
+    <li><strong>自托管</strong>：宿主引入 <span class="mono">eye-page-turner.umd.js</span>，模型托管自有/CDN。</li>
+    <li><strong>CDN / npm</strong>：发布到 npm + CDN，一行脚本引入。</li>
+    <li><strong>浏览器扩展</strong>：同一核心打包为扩展（后续阶段）。</li>
+  </ul>
+</section>
+
+<!-- 6 模块划分 -->
+<section id="s6">
+  <h2 class="sec"><span class="no">06</span>模块划分</h2>
+  <table>
+    <tr><th style="width:19%">模块</th><th style="width:43%">职责</th><th style="width:38%">对外接口（示例）</th></tr>
+    <tr><td><b>CameraModule</b></td><td>封装 getUserMedia、权限、设备选择、启停、帧回调</td><td class="mono">start() / stop() / onFrame(cb)</td></tr>
+    <tr><td><b>FaceMeshDetector</b></td><td>加载运行 Face Mesh + Iris，输出关键点与头部姿态</td><td class="mono">detect(video) → Landmarks</td></tr>
+    <tr><td><b>HandDetector</b></td><td>加载运行 MediaPipe Hands，输出手部关键点与轨迹</td><td class="mono">detect(video) → HandLandmarks</td></tr>
+    <tr><td><b>DistanceEstimator</b></td><td>由瞳距/脸宽 + 标定参数估计人屏距离（米）</td><td class="mono">estimate(landmarks) → meters</td></tr>
+    <tr><td><b>ModeSwitcher</b></td><td>按 1.5m 阈值 + 迟滞带切换手势/眼神模式，发切换事件</td><td class="mono">update(meters) → mode</td></tr>
+    <tr><td><b>GazeEstimator</b></td><td>由虹膜/眼角 + 头部姿态计算注视方向与置信度</td><td class="mono">estimate(landmarks) → {dir, conf}</td></tr>
+    <tr><td><b>GestureRecognizer</b></td><td>由手部轨迹/关键点识别上下左右挥动方向</td><td class="mono">recognize(hand) → {dir, conf}</td></tr>
+    <tr><td><b>DirectionSmoother</b></td><td>滑动窗口平滑，抑制抖动</td><td class="mono">push(dir, conf) → stableDir</td></tr>
+    <tr><td><b>DwellStateMachine</b></td><td>眼神驻留计时与触发</td><td class="mono">ingest(dir, now) / onTrigger(cb)</td></tr>
+    <tr><td><b>GestureTrigger</b></td><td>手势速度/位移阈值判定，触发挥动事件</td><td class="mono">ingest(dir, now) / onTrigger(cb)</td></tr>
+    <tr><td><b>ActionExecutor</b></td><td>方向映射为动作（点击、滚动、键盘模拟）</td><td class="mono">exec(direction, mapping)</td></tr>
+    <tr><td><b>HostAdapter</b></td><td>宿主对接：CustomEvent、全局 API、样式隔离</td><td class="mono">window.EyePageTurner / events</td></tr>
+    <tr><td><b>PermissionUI</b></td><td>权限引导、异常降级、模式/距离/方向指示</td><td class="mono">render(state)</td></tr>
+    <tr><td><b>CalibrationModule</b></td><td>距离标定 + 注视校准（P1，可选）</td><td class="mono">calibrate()</td></tr>
+    <tr><td><b>ConfigStore</b></td><td>集中配置：方向映射、阈值、驻留、距离基准、模型地址</td><td class="mono">get/set/merge(config)</td></tr>
+    <tr><td><b>Telemetry</b></td><td>本地日志 + 可选匿名遥测（opt-in，不上传图像）</td><td class="mono">log / flush</td></tr>
+  </table>
+  <div class="callout">
+    <b>解耦原则</b>
+    检测、估计/识别、切换、触发、执行五层通过「事件/回调 + 纯数据结构」通信；两个模态分支复用 <span class="mono">DirectionSmoother</span>、<span class="mono">ActionExecutor</span>、<span class="mono">HostAdapter</span>，仅触发策略不同。
+  </div>
+</section>
+
+<!-- 7 选型 -->
+<section id="s7">
+  <h2 class="sec"><span class="no">07</span>关键技术选型</h2>
+  <table>
+    <tr><th style="width:16%">领域</th><th style="width:26%">选型</th><th style="width:58%">理由</th></tr>
+    <tr><td>开发语言</td><td>TypeScript</td><td>类型安全、SDK 化、IDE 提示。</td></tr>
+    <tr><td>摄像头采集</td><td>MediaDevices.getUserMedia</td><td>浏览器原生、无依赖、标准 API。</td></tr>
+    <tr><td>人脸/虹膜检测</td><td>MediaPipe Face Mesh + Iris</td><td>官方 WASM/WebGL 实时方案，自带虹膜点支撑视线估计。</td></tr>
+    <tr><td>手势检测</td><td>MediaPipe Hands（21 点）</td><td>官方实时手势关键点，成熟、轻量，支持轨迹/方向识别。</td></tr>
+    <tr><td>距离估计</td><td>瞳距/脸宽尺度法 + 一次标定</td><td>单目可用、低算力；误差由迟滞带与个体标定吸收。</td></tr>
+    <tr><td>前端推理运行时</td><td>@mediapipe/tasks-vision（TF.js 备选）</td><td>SIMD/WebGL 加速、体积可控、官方维护。</td></tr>
+    <tr><td>视线方向估计</td><td>几何规则（虹膜偏移 + 头部补偿）</td><td>四方向粗分类无需重模型，透明低延迟，易调优。</td></tr>
+    <tr><td>手势方向识别</td><td>手部关键点轨迹 + 速度/位移阈值</td><td>挥动方向简单可靠，避免重模型训练。</td></tr>
+    <tr><td>平滑/触发</td><td>滑动窗口 + 驻留状态机 / 手势阈值</td><td>抑制抖动与误触，成熟模式。</td></tr>
+    <tr><td>动作执行</td><td>原生 DOM（click/scroll/KeyboardEvent）</td><td>无依赖，可驱动任意宿主翻页。</td></tr>
+    <tr><td>组件封装</td><td>Web Components（Custom Elements + Shadow DOM）</td><td>样式隔离、跨框架复用。</td></tr>
+    <tr><td>构建打包</td><td>Vite（library mode）→ ESM + UMD/IIFE</td><td>同时支持模块化与 script 直引。</td></tr>
+    <tr><td>宿主通信</td><td>DOM CustomEvent + 全局 API</td><td>解耦、无框架依赖。</td></tr>
+    <tr><td>模型分发</td><td>CDN 懒加载（.task/.tflite/WASM）</td><td>SDK 与模型分离，控制首屏体积。</td></tr>
+  </table>
+  <div class="callout warn">
+    <b>备选说明</b>
+    距离估计备选：MediaPipe <span class="mono">facialTransformationMatrixes</span> 的 tz 分量（相对距离）或脸框面积法；手势识别备选：轻量 MLP/TF.js 自定义手势模型。Safari 需关注 WASM SIMD 与 WebGL 差异，纳入兼容矩阵。
+  </div>
+</section>
+
+<!-- 8 风险 -->
+<section id="s8">
+  <h2 class="sec"><span class="no">08</span>风险点</h2>
+  <table>
+    <tr><th style="width:22%">风险</th><th style="width:12%">影响</th><th style="width:12%">概率</th><th style="width:54%">应对与缓解</th></tr>
+    <tr><td>距离估计误差导致模式误切换</td><td><span class="tag bad">高</span></td><td>中</td><td>瞳距标定 + 迟滞带 ±0.2m + 连续多帧确认才切换。</td></tr>
+    <tr><td>摄像头权限拒绝/无设备</td><td><span class="tag bad">高</span></td><td>中</td><td>权限引导 + 拒绝降级提示。</td></tr>
+    <tr><td>非 HTTPS 无法采集</td><td><span class="tag bad">高</span></td><td>中</td><td>强制 HTTPS；开发 localhost。</td></tr>
+    <tr><td>光照差/遮挡导致眼神误判</td><td><span class="tag warn">中</span></td><td>中</td><td>置信度阈值 + 低置信丢弃 + 提示。</td></tr>
+    <tr><td>手势误触（无意挥动翻页）</td><td><span class="tag warn">中</span></td><td>中</td><td>速度/位移阈值 + 触发冷却 + 中心中性区。</td></tr>
+    <tr><td>模式切换瞬间误触发</td><td><span class="tag warn">中</span></td><td>中</td><td>切换时动作冷却 + UI 提示。</td></tr>
+    <tr><td>低端设备帧率不足（双模型并行）</td><td><span class="tag warn">中</span></td><td>中</td><td>按当前模式只跑所需模型 + 检测降帧/降分辨率。</td></tr>
+    <tr><td>浏览器兼容差异</td><td><span class="tag warn">中</span></td><td>中</td><td>兼容矩阵 + 特性检测 + 回退。</td></tr>
+    <tr><td>插件与宿主样式/脚本冲突</td><td><span class="tag warn">中</span></td><td>低</td><td>Shadow DOM + 命名空间 + IIFE。</td></tr>
+    <tr><td>隐私合规质疑</td><td><span class="tag bad">高</span></td><td>低</td><td>明确本地处理不上传 + 隐私说明 + 开关。</td></tr>
+    <tr><td>SDK 体积影响加载</td><td><span class="tag warn">中</span></td><td>低</td><td>模型懒加载、gzip、tree-shaking。</td></tr>
+  </table>
+</section>
+
+<!-- 9 可扩展性 -->
+<section id="s9">
+  <h2 class="sec"><span class="no">09</span>可扩展性</h2>
+  <ul>
+    <li><strong>距离分档</strong>：1.5m 单阈值 → 多距离段（近/中/远）对应不同交互策略。</li>
+    <li><strong>方向粒度</strong>：四方向 → 九宫格 → 连续注视点。</li>
+    <li><strong>手势类型</strong>：挥动方向 → 静态手势（握拳确认/张掌暂停）→ 手势语义。</li>
+    <li><strong>动作类型</strong>：翻页 → 滚动 → 点击 → 返回/缩放。</li>
+    <li><strong>触发方式</strong>：驻留 → 眨眼/点头 → 语音协同。</li>
+    <li><strong>能力复用</strong>：Face Mesh 关键点可扩展疲劳监测（EAR/PERCLOS）、表情/情绪。</li>
+    <li><strong>分发形态</strong>：SDK → Web Component → 浏览器扩展 → 桌面端（Electron），共享核心。</li>
+    <li><strong>模型升级</strong>：检测层接口隔离，可替换自训练模型或云辅助（需隐私评审）。</li>
+  </ul>
+</section>
+
+<!-- 10 安全 -->
+<section id="s10">
+  <h2 class="sec"><span class="no">10</span>安全性</h2>
+  <ul>
+    <li><strong>数据不出设备</strong>：画面与关键点仅本地内存处理，不上传（默认）。</li>
+    <li><strong>仅安全上下文</strong>：非 HTTPS（除 localhost）拒绝启动。</li>
+    <li><strong>权限最小化</strong>：仅摄像头权限，不用麦克风；可随时撤销，插件监听并降级。</li>
+    <li><strong>透明可控</strong>：明显开关与状态指示，一键停止采集。</li>
+    <li><strong>遥测 opt-in</strong>：仅匿名事件级、无图像，默认关闭。</li>
+    <li><strong>宿主隔离</strong>：Shadow DOM 防样式污染；全局符号最小化；CSP nonce 接入说明。</li>
+    <li><strong>依赖安全</strong>：锁定版本、npm audit、模型文件完整性校验。</li>
+  </ul>
+</section>
+
+<!-- 11 实现步骤 -->
+<section id="s11">
+  <h2 class="sec"><span class="no">11</span>实现步骤与测试验收</h2>
+  <p class="lead">按阶段推进，每阶段有交付物、测试方法与验收标准；上阶段验收通过才进入下一阶段。</p>
+
+  <h3>阶段 0 · 需求冻结与原型验证</h3>
+  <table>
+    <tr><th style="width:18%">项</th><th>内容</th></tr>
+    <tr><td>目标</td><td>冻结双模态需求，跑通「摄像头 + Face Mesh/Iris + Hands 关键点可视化」原型。</td></tr>
+    <tr><td>交付物</td><td>demo 页；确认 1.5m 阈值、手势类型、方向映射。</td></tr>
+    <tr><td>测试</td><td>多设备采集；人脸/虹膜/手部关键点渲染核对；HTTPS 验证。</td></tr>
+    <tr><td>验收</td><td>demo 页稳定显示三类关键点，帧率达标，无控制台报错。</td></tr>
+  </table>
+
+  <h3>阶段 1 · 采集与双路检测模块</h3>
+  <table>
+    <tr><th style="width:18%">项</th><th>内容</th></tr>
+    <tr><td>目标</td><td>实现 CameraModule + FaceMeshDetector + HandDetector。</td></tr>
+    <tr><td>交付物</td><td>模块源码 + 单元测试（模拟关键点）。</td></tr>
+    <tr><td>测试</td><td>权限异常分支；帧回调稳定；检测降帧。</td></tr>
+    <tr><td>验收</td><td>关键点输出稳定，异常有明确状态码。</td></tr>
+  </table>
+
+  <h3>阶段 2 · 距离估计与模式切换</h3>
+  <table>
+    <tr><th style="width:18%">项</th><th>内容</th></tr>
+    <tr><td>目标</td><td>实现 DistanceEstimator + ModeSwitcher，1.5m 自动切换。</td></tr>
+    <tr><td>交付物</td><td>距离输出 + 模式切换器（含迟滞）+ 距离指示 UI。</td></tr>
+    <tr><td>测试</td><td>实测 1m/1.5m/2m 距离输出；临界反复横跳验证；切换无动作误触发。</td></tr>
+    <tr><td>验收</td><td>1.5m 附近切换正确、无抖动、切换时 UI 提示。</td></tr>
+  </table>
+
+  <h3>阶段 3 · 眼神方向估计（近距）</h3>
+  <table>
+    <tr><th style="width:18%">项</th><th>内容</th></tr>
+    <tr><td>目标</td><td>实现 GazeEstimator，输出上/下/左/右/中心 + 置信度。</td></tr>
+    <tr><td>交付物</td><td>方向估计算法 + 可视化方向指示。</td></tr>
+    <tr><td>测试</td><td>多人多光照目测一致性；录制回放回归。</td></tr>
+    <tr><td>验收</td><td>良好光照下四方向准确率 ≥ 90%。</td></tr>
+  </table>
+
+  <h3>阶段 4 · 手势方向识别（远距）</h3>
+  <table>
+    <tr><th style="width:18%">项</th><th>内容</th></tr>
+    <tr><td>目标</td><td>实现 GestureRecognizer，识别上下左右挥动方向。</td></tr>
+    <tr><td>交付物</td><td>手势方向识别 + 轨迹可视化。</td></tr>
+    <tr><td>测试</td><td>多人多距离挥动；速度/位移阈值调优；误触计数。</td></tr>
+    <tr><td>验收</td><td>1.5–3m 挥动方向准确率 ≥ 90%，误触可控。</td></tr>
+  </table>
+
+  <h3>阶段 5 · 平滑/触发与动作执行</h3>
+  <table>
+    <tr><th style="width:18%">项</th><th>内容</th></tr>
+    <tr><td>目标</td><td>实现两分支触发策略 + ActionExecutor + HostAdapter。</td></tr>
+    <tr><td>交付物</td><td>驻留状态机、手势触发、动作映射、全局 API/CustomEvent。</td></tr>
+    <tr><td>测试</td><td>真实 PDF/PPT/长文页集成；动作映射可配置验证。</td></tr>
+    <tr><td>验收</td><td>两模态均无需点击即可翻页；自定义回调正确触发。</td></tr>
+  </table>
+
+  <h3>阶段 6 · 插件封装与 UI</h3>
+  <table>
+    <tr><th style="width:18%">项</th><th>内容</th></tr>
+    <tr><td>目标</td><td>封装 Web Component + 权限/模式/状态 UI。</td></tr>
+    <tr><td>交付物</td><td>&lt;eye-page-turner&gt; 组件、权限与状态指示。</td></tr>
+    <tr><td>测试</td><td>Shadow DOM 隔离；权限拒绝/撤销；模式切换提示。</td></tr>
+    <tr><td>验收</td><td>组件可嵌入任意框架页面，异常提示清晰。</td></tr>
+  </table>
+
+  <h3>阶段 7 · 性能与兼容性</h3>
+  <table>
+    <tr><th style="width:18%">项</th><th>内容</th></tr>
+    <tr><td>目标</td><td>性能达标并覆盖主流浏览器。</td></tr>
+    <tr><td>交付物</td><td>性能报告、兼容矩阵、降级策略。</td></tr>
+    <tr><td>测试</td><td>Chrome/Edge/Safari/Firefox；高/低端设备帧率与内存。</td></tr>
+    <tr><td>验收</td><td>桌面 ≥ 30 FPS、移动 ≥ 20 FPS；无阻断性错误。</td></tr>
+  </table>
+
+  <h3>阶段 8 · 安全与发布</h3>
+  <table>
+    <tr><th style="width:18%">项</th><th>内容</th></tr>
+    <tr><td>目标</td><td>安全加固、文档、发布。</td></tr>
+    <tr><td>交付物</td><td>隐私说明、接入文档、npm/CDN 产物。</td></tr>
+    <tr><td>测试</td><td>依赖审计；抓包确认无外发；CSP 接入验证。</td></tr>
+    <tr><td>验收</td><td>抓包确认无图像/关键点外发；文档可复现。</td></tr>
+  </table>
+</section>
+
+<!-- 12 验收汇总 -->
+<section id="s12">
+  <h2 class="sec"><span class="no">12</span>验收标准汇总</h2>
+  <table>
+    <tr><th style="width:34%">验收项</th><th style="width:28%">指标</th><th>验证方式</th></tr>
+    <tr><td>距离切换</td><td>1.5m 阈值 + ±0.2m 迟滞，无抖动</td><td>实测 1/1.5/2m + 临界反复</td></tr>
+    <tr><td>眼神四方向准确率</td><td>≥ 90%（良好光照）</td><td>多人目测 + 录制回放</td></tr>
+    <tr><td>手势四方向准确率</td><td>≥ 90%（1.5–3m）</td><td>多人挥动标注</td></tr>
+    <tr><td>实时帧率</td><td>桌面 ≥ 30 FPS / 移动 ≥ 20 FPS</td><td>性能面板 + DevTools</td></tr>
+    <tr><td>触发延迟</td><td>驻留 500–1000ms；手势即时</td><td>计时打点</td></tr>
+    <tr><td>误触率</td><td>10 分钟 ≤ 5 次</td><td>连续使用统计</td></tr>
+    <tr><td>隐私</td><td>无图像/关键点外发</td><td>抓包 + 网络面板</td></tr>
+    <tr><td>兼容性</td><td>Chrome/Edge/Safari/Firefox</td><td>自动化 + 手工矩阵</td></tr>
+    <tr><td>包体积</td><td>核心 ≤ 500KB(gzip)，模型懒加载</td><td>构建产物统计</td></tr>
+    <tr><td>异常降级</td><td>权限/无设备/无人脸/无手/低置信有反馈</td><td>用例覆盖</td></tr>
+  </table>
+</section>
+
+<!-- 13 附录 -->
+<section id="s13">
+  <h2 class="sec"><span class="no">13</span>附录</h2>
+  <h3>术语表</h3>
+  <table>
+    <tr><th style="width:22%">术语</th><th>说明</th></tr>
+    <tr><td>getUserMedia</td><td>Web API，获取用户摄像头/麦克风媒体流。</td></tr>
+    <tr><td>Face Mesh</td><td>MediaPipe 人脸网格模型，输出 468 个人脸关键点。</td></tr>
+    <tr><td>Iris</td><td>MediaPipe 虹膜模型，输出虹膜关键点用于视线估计。</td></tr>
+    <tr><td>Hands</td><td>MediaPipe 手势模型，输出 21 个手部关键点。</td></tr>
+    <tr><td>距离估计 / Distance</td><td>由瞳距/脸宽尺度估算人屏距离，用于模式切换。</td></tr>
+    <tr><td>模式切换 / ModeSwitch</td><td>按距离在手势/眼神模式间切换（含迟滞）。</td></tr>
+    <tr><td>Dwell / 驻留</td><td>注视停留超时长后触发动作。</td></tr>
+    <tr><td>Shadow DOM</td><td>Web Components 样式与结构隔离机制。</td></tr>
+  </table>
+  <h3>参考</h3>
+  <ul>
+    <li>MediaPipe Face Landmarker / Hand Landmarker / Tasks 文档</li>
+    <li>MDN：MediaDevices.getUserMedia、Web Components</li>
+    <li>W3C：Permissions API、Secure Contexts</li>
+  </ul>
+</section>
+
+<footer>网页「手势 + 眼神」双模态翻页插件 · 系统设计报告 v2.0 · 2026-10-15 · 供内部评审与后续开发指导使用</footer>
+</div>
+</body>
+</html>
