@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>隔空控制器 · 测试台</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --ink: #1d1d1f;
+    --muted: #6e6e73;
+    --line: #e8e8ed;
+    --btn: #1d1d1f;
+    --btn-hover: #3a3a3c;
+    --blue: #0071e3;
+    --soft: #f5f5f7;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--ink); font-size: 15px; line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  header {
+    position: sticky; top: 0; z-index: 20;
+    background: rgba(255,255,255,.82);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid var(--line);
+    padding: 14px 28px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  }
+  header .brand { display: flex; align-items: center; gap: 12px; }
+  header .logo { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg,#0f1728,#2f4aa8); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 15px; }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: .2px; }
+  header .sub { font-size: 12px; color: var(--muted); }
+  .spacer { flex: 1; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink);
+    background: var(--soft); border: 1px solid var(--line); padding: 5px 13px; border-radius: 20px; white-space: nowrap;
+  }
+  .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: #c7c7cc; }
+  .pill.on .dot { background: #34c759; }
+  .pill.warn .dot { background: #ff9500; }
+  .pill.off .dot { background: #ff3b30; }
+
+  /* 诊断横幅 */
+  .banner {
+    position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
+    z-index: 50; background: #fff3f3; border: 1px solid #ffcccc; color: #b3261e;
+    border-radius: 12px; padding: 12px 18px; font-size: 13px; max-width: 760px; width: calc(100% - 40px);
+    box-shadow: 0 8px 24px rgba(0,0,0,.14); display: flex; align-items: flex-start; gap: 12px;
+  }
+  .banner .msg { flex: 1; }
+  .banner button { border: none; background: none; cursor: pointer; font-size: 14px; color: inherit; padding: 0 2px; }
+
+  /* 诊断行（排查眼动追踪用） */
+  .dbg-line {
+    position: fixed; top: 80px; right: 12px; z-index: 60;
+    font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #b3261e; background: #fff3f3; border: 1px solid #ffcccc;
+    border-radius: 8px; padding: 4px 8px; max-width: 680px;
+    white-space: normal; word-break: break-all;
+  }
+
+  main { max-width: 1120px; margin: 0 auto; padding: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .panel { background: var(--bg); border: 1px solid var(--line); border-radius: 20px; padding: 24px; min-width: 0; }
+  .panel h2 { font-size: 19px; margin: 0 0 4px; letter-spacing: -.2px; }
+  .panel .desc { font-size: 13px; color: var(--muted); margin: 0 0 18px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 12px; }
+
+  .btn-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .key {
+    position: relative; background: var(--btn); color: #fff; border: none; border-radius: var(--radius);
+    padding: 20px 8px; font-size: 14px; font-weight: 500; cursor: pointer; text-align: center; letter-spacing: .2px;
+    transition: background .18s ease, transform .12s ease, box-shadow .18s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,.08); font-family: inherit; -webkit-user-select: none; user-select: none;
+  }
+  .key:hover { background: var(--btn-hover); }
+  .key:active { transform: scale(.96); }
+  .key .glyph { display: block; font-size: 20px; margin-bottom: 6px; }
+  .key.hovered { background: #515154; box-shadow: 0 0 0 3px rgba(0,113,227,.35); }
+  .key.triggered { background: var(--blue); }
+
+  .zoom-stage {
+    position: relative; overflow: hidden; background: var(--soft); border-radius: 16px;
+    height: 340px; display: flex; align-items: center; justify-content: center;
+  }
+  .zoom-card {
+    width: 260px; padding: 28px 24px; border-radius: 20px;
+    background: linear-gradient(150deg, #0f1728 0%, #2f4aa8 100%); color: #fff; text-align: center;
+    transform: scale(1); transform-origin: center; transition: transform .06s linear;
+    box-shadow: 0 12px 32px rgba(15,23,40,.28); will-change: transform;
+  }
+  .zoom-card .big { font-size: 44px; font-weight: 700; margin: 6px 0 2px; letter-spacing: -.5px; }
+  .zoom-card .unit { font-size: 13px; opacity: .75; }
+  .zoom-card .divider { height: 1px; background: rgba(255,255,255,.22); margin: 16px 0; }
+  .zoom-card .label { font-size: 13px; opacity: .9; }
+  .zoom-meta { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
+  .zoom-meta .val { font-size: 15px; font-weight: 600; }
+  .gesture-tag {
+    display: inline-block; font-size: 12px; font-weight: 600; padding: 4px 14px; border-radius: 20px;
+    background: var(--soft); color: var(--muted); border: 1px solid var(--line);
+  }
+  .gesture-tag.open { background: #e6f4ea; color: #1a7f37; border-color: #bfe3c9; }
+  .gesture-tag.close { background: #ffe8e0; color: #b33a1e; border-color: #ffcfbf; }
+
+  footer { max-width: 1120px; margin: 0 auto 40px; padding: 0 28px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  footer .note { font-size: 12px; color: var(--muted); margin-left: auto; }
+
+  .gaze-cursor {
+    position: fixed; left: 50%; top: 50%; z-index: 30; width: 34px; height: 34px; margin: -17px 0 0 -17px;
+    border: 2px solid var(--blue); border-radius: 50%; pointer-events: none; display: none;
+  }
+  .gaze-cursor::after {
+    content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px;
+    background: var(--blue); border-radius: 50%;
+  }
+  .gaze-cursor.live { display: block; }
+
+  .cam-wrap { position: fixed; right: 20px; bottom: 20px; z-index: 25; border-radius: 14px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,.18); border: 1px solid var(--line); background:#000; }
+  .cam-wrap video { display: block; width: 150px; height: 113px; object-fit: cover; transform: scaleX(-1); }
+  .cam-wrap .cam-label { position: absolute; left: 0; bottom: 0; font-size: 10px; color: #fff; background: rgba(0,0,0,.45); padding: 2px 8px; border-radius: 0 8px 0 0; }
+  .cam-off { position: fixed; right: 20px; bottom: 20px; z-index: 25; font-size: 12px; color: var(--muted); background: var(--soft); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; }
+
+  @media (max-width: 860px) {
+    main { grid-template-columns: 1fr; }
+    .btn-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="logo">◉</div>
+    <div>
+      <h1>隔空控制器</h1>
+      <div class="sub">眼动控制鼠标 · 手势控制缩放</div>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <div class="pill" id="pillLib"><span class="dot"></span>检测库加载中…</div>
+  <div class="pill" id="pillCam"><span class="dot"></span>摄像头</div>
+  <div class="pill" id="pillFace"><span class="dot"></span>人脸</div>
+  <div class="pill" id="pillHand"><span class="dot"></span>手部</div>
+  <div class="pill"><span class="dot"></span><span id="fpsVal">0</span> FPS</div>
+  <div class="pill" id="pillBackend"><span class="dot off"></span>后端未连接</div>
+</header>
+
+<div class="dbg-line" id="dbgLine">诊断：初始化中…</div>
+
+<div class="banner" id="banner" style="display:none;">
+  <div class="msg" id="bannerText"></div>
+  <button id="bannerClose" aria-label="关闭">✕</button>
+</div>
+
+<main>
+  <section class="panel">
+    <h2>眼动追踪</h2>
+    <p class="desc">保持头部稳定，转动眼球——视线光标会随注视方向移动。悬停按键高亮，驻留约 0.8 s 触发点击。</p>
+    <div class="btn-grid" id="btnGrid">
+      <button class="key" data-label="上一页"><span class="glyph">‹</span>上一页</button>
+      <button class="key" data-label="下一页"><span class="glyph">›</span>下一页</button>
+      <button class="key" data-label="播放/暂停"><span class="glyph">▶</span>播放</button>
+      <button class="key" data-label="音量+"><span class="glyph">＋</span>音量</button>
+      <button class="key" data-label="音量-"><span class="glyph">－</span>静音</button>
+      <button class="key" data-label="刷新"><span class="glyph">↻</span>刷新</button>
+      <button class="key" data-label="收藏"><span class="glyph">☆</span>收藏</button>
+      <button class="key" data-label="分享"><span class="glyph">↗</span>分享</button>
+      <button class="key" data-label="全屏"><span class="glyph">⤢</span>全屏</button>
+      <button class="key" data-label="返回"><span class="glyph">←</span>返回</button>
+      <button class="key" data-label="确认"><span class="glyph">✓</span>确认</button>
+      <button class="key" data-label="关闭"><span class="glyph">✕</span>关闭</button>
+    </div>
+    <div class="hint">提示：点击页面任意按键可直接验证按钮交互（无需摄像头也可测试 UI）。</div>
+  </section>
+
+  <section class="panel">
+    <h2>隔空手势</h2>
+    <p class="desc">对镜头<strong>张开手掌</strong>放大，<strong>握拳</strong>缩小；移开手掌则停止缩放。</p>
+    <div class="zoom-stage" id="zoomStage">
+      <div class="zoom-card" id="zoomCard">
+        <div class="label">缩放级别</div>
+        <div class="big" id="zoomNum">100</div>
+        <div class="unit">%</div>
+        <div class="divider"></div>
+        <div class="label">张开手 ⇧ 放大 · 握拳 ⇩ 缩小</div>
+      </div>
+    </div>
+    <div class="zoom-meta">
+      <span class="gesture-tag" id="gestureTag">未检测到手</span>
+      <span class="val">缩放 <span id="scaleVal">100%</span></span>
+    </div>
+    <div class="hint">缩放范围 60% – 240%，超过范围自动停止（限幅保护）。</div>
+  </section>
+</main>
+
+<footer>
+  <span class="pill"><span class="dot"></span>隐私：画面与特征仅本地处理，不上传</span>
+  <span class="note">隔空控制器 · 测试台 v0.2 · 需通过 localhost / HTTPS 访问以使用摄像头</span>
+</footer>
+
+<div class="gaze-cursor" id="gazeCursor"></div>
+<div class="cam-wrap" id="camWrap" style="display:none;">
+  <video id="video" playsinline muted></video>
+  <span class="cam-label">摄像头预览</span>
+</div>
+<div class="cam-off" id="camOff">摄像头未启动</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- 状态 ----------
+  const S = {
+    cursor: { x: window.innerWidth / 2, y: window.innerHeight / 2 },
+    scale: 1.0, scaleMin: 0.6, scaleMax: 2.4,
+    gesture: "none", faceSeen: false, handSeen: false, backend: false,
+    speed: 18, deadzone: 0.06, dwellMs: 800,
+    irisOk: true,
+    dbg: { faceSend: 0, faceRes: 0, handSend: 0, handRes: 0, faceErr: "", handErr: "" },
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const cursorEl = $("gazeCursor");
+  const zoomCard = $("zoomCard");
+  const keys = Array.from(document.querySelectorAll(".key"));
+
+  // ---------- 诊断横幅 ----------
+  let bannerVisible = false;
+  function showBanner(html) {
+    $("bannerText").innerHTML = html;
+    $("banner").style.display = "flex";
+    bannerVisible = true;
+  }
+  $("bannerClose").addEventListener("click", () => { $("banner").style.display = "none"; bannerVisible = false; });
+
+  // ---------- 视线光标 ----------
+  function updateCursor() {
+    cursorEl.style.left = S.cursor.x + "px";
+    cursorEl.style.top = S.cursor.y + "px";
+    const cx = S.cursor.x, cy = S.cursor.y;
+    let hovered = null;
+    for (const k of keys) {
+      const r = k.getBoundingClientRect();
+      if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) { hovered = k; break; }
+    }
+    dwellOn(hovered);
+  }
+
+  let dwellKey = null, dwellStart = 0;
+  function dwellOn(key) {
+    keys.forEach(k => {
+      k.classList.remove("hovered");
+      if (k !== key) { k.classList.remove("triggered"); }
+    });
+    if (!key) { dwellKey = null; return; }
+    key.classList.add("hovered");
+    if (dwellKey !== key) { dwellKey = key; dwellStart = performance.now(); }
+    if (performance.now() - dwellStart >= S.dwellMs) {
+      triggerKey(key);
+      dwellKey = null; dwellStart = performance.now() + 600;
+    }
+  }
+
+  function triggerKey(key) {
+    key.classList.add("triggered");
+    setTimeout(() => key.classList.remove("triggered"), 300);
+    sendToBackend({ type: "click", label: key.dataset.label });
+  }
+  keys.forEach(k => k.addEventListener("click", () => triggerKey(k)));
+
+  // ---------- 缩放 ----------
+  function applyScale() {
+    S.scale = Math.max(S.scaleMin, Math.min(S.scaleMax, S.scale));
+    zoomCard.style.transform = "scale(" + S.scale + ")";
+    const pct = Math.round(S.scale * 100);
+    $("scaleVal").textContent = pct + "%";
+    $("zoomNum").textContent = pct;
+  }
+
+  function onHandResults(results) {
+    S.dbg.handRes++;
+    S.handSeen = !!(results.multiHandLandmarks && results.multiHandLandmarks.length);
+    setPill($("pillHand"), S.handSeen);
+    if (!S.handSeen) { setGesture("none"); return; }
+    const lm = results.multiHandLandmarks[0];
+    const tips = [4, 8, 12, 16, 20];
+    const d = (a, b) => Math.hypot(lm[a].x - lm[b].x, lm[a].y - lm[b].y, lm[a].z - lm[b].z);
+    let sum = 0;
+    for (const t of tips) sum += d(t, 9);
+    const norm = (sum / tips.length) / Math.max(d(0, 9), 1e-4);
+    if (norm > 1.25) setGesture("open");
+    else if (norm < 0.95) setGesture("close");
+    else setGesture("none");
+  }
+
+  function setGesture(g) {
+    if (g === S.gesture) return;
+    S.gesture = g;
+    const tag = $("gestureTag");
+    if (g === "open") { tag.textContent = "张开手 · 放大"; tag.className = "gesture-tag open"; }
+    else if (g === "close") { tag.textContent = "握拳 · 缩小"; tag.className = "gesture-tag close"; }
+    else { tag.textContent = "未检测到手"; tag.className = "gesture-tag"; }
+  }
+
+  function tickGesture() {
+    if (S.gesture === "open") { S.scale += 0.012; applyScale(); sendToBackend({ type: "zoom", dir: 1 }); }
+    else if (S.gesture === "close") { S.scale -= 0.012; applyScale(); sendToBackend({ type: "zoom", dir: -1 }); }
+    requestAnimationFrame(tickGesture);
+  }
+  requestAnimationFrame(tickGesture);
+
+  // ---------- 眼动判定（含虹膜缺失兜底）----------
+  function onFaceResults(results) {
+    S.dbg.faceRes++;
+    S.faceSeen = !!(results.multiFaceLandmarks && results.multiFaceLandmarks.length);
+    setPill($("pillFace"), S.faceSeen);
+    if (!S.faceSeen) return;
+    const lm = results.multiFaceLandmarks[0];
+    let ox = 0, oy = 0;
+
+    // 虹膜方案（refineLandmarks 提供 468/473）
+    if (lm[468] && lm[473]) {
+      const L = { iris: lm[468], out: lm[33], inn: lm[133], top: lm[159], bot: lm[145] };
+      const R = { iris: lm[473], out: lm[263], inn: lm[362], top: lm[386], bot: lm[374] };
+      const off = (e) => {
+        const cx = (e.out.x + e.inn.x) / 2, cy = (e.top.y + e.bot.y) / 2;
+        const w = Math.max(Math.abs(e.out.x - e.inn.x), 1e-4);
+        const h = Math.max(Math.abs(e.top.y - e.bot.y), 1e-4);
+        return { x: (e.iris.x - cx) / w, y: (e.iris.y - cy) / h };
+      };
+      const oL = off(L), oR = off(R);
+      // 双眼注视同向 → 水平取平均；预览镜像(scaleX(-1))使水平反向，故取反
+      ox = -(oL.x + oR.x) / 2;
+      oy = (oL.y + oR.y) / 2;
+    } else {
+      // 兜底：眼睛中心相对鼻子的粗略偏移（精度较低，仅保底演示）
+      if (S.irisOk) {
+        S.irisOk = false;
+        showBanner("当前模型未提供虹膜关键点（468/473），已降级为粗略眼动。如需更高精度，请使用支持 refineLandmarks 的模型。");
+      }
+      const Lc = { x: (lm[33].x + lm[133].x) / 2, y: (lm[159].y + lm[145].y) / 2 };
+      const Rc = { x: (lm[263].x + lm[362].x) / 2, y: (lm[386].y + lm[374].y) / 2 };
+      const nose = lm[1];
+      ox = ((Lc.x + Rc.x) / 2 - nose.x) * 3;
+      oy = ((Lc.y + Rc.y) / 2 - nose.y) * 3;
+    }
+
+    if (Math.abs(ox) < S.deadzone) ox = 0;
+    if (Math.abs(oy) < S.deadzone) oy = 0;
+    S.cursor.x = clamp(S.cursor.x + ox * S.speed, 0, window.innerWidth);
+    S.cursor.y = clamp(S.cursor.y + oy * S.speed, 0, window.innerHeight);
+    sendToBackend({ type: "move", dx: ox * S.speed, dy: oy * S.speed });
+    updateCursor();
+  }
+
+  // ---------- 工具 ----------
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  function setPill(el, on) { el.classList.toggle("on", on); el.classList.toggle("off", !on); el.classList.remove("warn"); }
+
+  // ---------- 后端 WebSocket（可选）----------
+  let ws = null;
+  function connectBackend() {
+    try {
+      ws = new WebSocket("ws://127.0.0.1:8899");
+      ws.onopen = () => { S.backend = true; setBackendPill(true); };
+      ws.onclose = () => { S.backend = false; setBackendPill(false); setTimeout(connectBackend, 3000); };
+      ws.onerror = () => ws.close();
+    } catch (e) { /* 无后端，网页内演示模式 */ }
+  }
+  function setBackendPill(on) {
+    const p = $("pillBackend");
+    p.querySelector(".dot").className = "dot " + (on ? "on" : "off");
+    p.lastChild.textContent = on ? " 后端已连接" : " 后端未连接";
+  }
+  function sendToBackend(obj) { if (S.backend && ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
+
+  // ---------- 检测库动态加载（多 CDN 自动降级）----------
+  const CDN_SOURCES = [
+    { name: "本地", base: "vendor/mediapipe", local: true },
+    { name: "jsdelivr", base: "https://cdn.jsdelivr.net/npm" },
+    { name: "unpkg", base: "https://unpkg.com" },
+    { name: "npmmirror", base: "https://registry.npmmirror.com", suffix: "/files" },
+  ];
+  let CURRENT_CDN = CDN_SOURCES[0];
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = src; s.async = false;
+      s.onload = () => resolve();
+      s.onerror = () => { s.remove(); reject(new Error("load fail: " + src)); };
+      document.head.appendChild(s);
+    });
+  }
+
+  // npmmirror 需要带版本号，其余 CDN 走 /npm/ 或根路径
+  const PKG_VER = { face_mesh: "0.4.1657299874", hands: "0.4.1675469240" };
+  function fileUrl(src, pkg, file) {
+    if (src.local) return `${src.base}/${pkg}/${file}`;
+    if (src.name === "npmmirror") {
+      return `${src.base}/@mediapipe/${pkg}/${PKG_VER[pkg]}${src.suffix}/${file}`;
+    }
+    return `${src.base}/@mediapipe/${pkg}/${file}`;
+  }
+
+  async function loadDeps() {
+    for (const src of CDN_SOURCES) {
+      try {
+        await loadScript(fileUrl(src, "face_mesh", "face_mesh.js"));
+        await loadScript(fileUrl(src, "hands", "hands.js"));
+        if (typeof window.FaceMesh !== "undefined" && typeof window.Hands !== "undefined") {
+          CURRENT_CDN = src;
+          return true;
+        }
+      } catch (e) { /* 尝试下一个源 */ }
+    }
+    return false;
+  }
+
+  // ---------- 摄像头 + 检测循环 ----------
+  async function init() {
+    const video = $("video");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+      video.srcObject = stream;
+      await video.play();
+      $("camWrap").style.display = "block";
+      $("camOff").style.display = "none";
+      setPill($("pillCam"), true);
+      cursorEl.classList.add("live");
+    } catch (e) {
+      setPill($("pillCam"), false);
+      $("camOff").textContent = "摄像头未启动（授权被拒或无摄像头）";
+      showBanner("<b>摄像头无法启动。</b> 请检查：1) 是否点击了「允许」授权摄像头；2) 浏览器是否允许该站点访问摄像头（地址栏摄像头图标）；3) 摄像头是否被其他应用占用。按键仍可用鼠标直接测试。");
+      return;
+    }
+
+    try {
+      // 诊断模式：?mode=face 只跑人脸、?mode=hand 只跑手部、默认 both 交替跑
+      const qp = new URLSearchParams(location.search);
+      const mode = qp.get("mode") || "both";
+      const runFace = mode !== "hand";
+      const runHand = mode !== "face";
+
+      const faceMesh = new FaceMesh({ locateFile: (f) => fileUrl(CURRENT_CDN, "face_mesh", f) });
+      faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: false, useCpuInference: true, minDetectionConfidence: 0.4, minTrackingConfidence: 0.4 });
+      faceMesh.onResults(onFaceResults);
+
+      const hands = new Hands({ locateFile: (f) => fileUrl(CURRENT_CDN, "hands", f) });
+      hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.4, minTrackingConfidence: 0.4 });
+      hands.onResults(onHandResults);
+
+      // 显式初始化：下载 wasm 与模型（失败会抛出明确错误）。
+      // 关键：MediaPipe 不允许并行初始化多个模型——两个 wasm glue 共享全局
+      // 变量 createMediapipeSolutionsWasm，并行加载会互相覆盖，触发
+      // "Module.arguments has been replaced with plain arguments_" 崩溃。
+      // 必须逐个 await（先 faceMesh 完成，再 hands）。
+      setLibPill("loading");
+      if (runFace) await faceMesh.initialize();
+      if (runHand) await hands.initialize();
+      setLibPill("ready");
+
+      let frames = 0, last = performance.now(), tick = 0;
+      function loop() {
+        if (video.readyState >= 2) {
+          if (runFace && runHand) {
+            if (tick % 2 === 0) {
+              S.dbg.faceSend++;
+              faceMesh.send({ image: video }).catch(e => { S.dbg.faceErr = (e && e.message) || String(e); });
+            } else {
+              S.dbg.handSend++;
+              hands.send({ image: video }).catch(e => { S.dbg.handErr = (e && e.message) || String(e); });
+            }
+          } else if (runFace) {
+            S.dbg.faceSend++;
+            faceMesh.send({ image: video }).catch(e => { S.dbg.faceErr = (e && e.message) || String(e); });
+          } else if (runHand) {
+            S.dbg.handSend++;
+            hands.send({ image: video }).catch(e => { S.dbg.handErr = (e && e.message) || String(e); });
+          }
+        }
+        tick++;
+        frames++;
+        const now = performance.now();
+        if (now - last >= 1000) {
+          $("fpsVal").textContent = frames; frames = 0; last = now;
+          $("dbgLine").textContent = "诊断[mode=" + mode + ",faceCPU,noRefine] · face " + S.dbg.faceSend + "/" + S.dbg.faceRes + " · hand " + S.dbg.handSend + "/" + S.dbg.handRes + (S.dbg.faceErr ? " · faceErr: " + S.dbg.faceErr : "") + (S.dbg.handErr ? " · handErr: " + S.dbg.handErr : "");
+        }
+        requestAnimationFrame(loop);
+      }
+      requestAnimationFrame(loop);
+    } catch (e) {
+      setLibPill("fail");
+      showBanner("<b>检测模型加载失败：</b>" + (e && e.message ? e.message : e) + "<br>请打开浏览器控制台（F12 → Console / Network）查看具体是哪个文件加载失败，并确认可访问 " + CURRENT_CDN.base);
+    }
+  }
+
+  function setLibPill(state) {
+    const p = $("pillLib");
+    const dot = p.querySelector(".dot");
+    if (state === "ready") { dot.className = "dot on"; p.lastChild.textContent = " 检测库就绪"; }
+    else if (state === "fail") { dot.className = "dot off"; p.lastChild.textContent = " 检测库加载失败"; }
+    else { dot.className = "dot warn"; p.lastChild.textContent = " 模型加载中…（需数秒）"; }
+  }
+
+  // ---------- 启动 ----------
+  connectBackend();
+  updateCursor();
+
+  loadDeps().then((ok) => {
+    if (!ok) {
+      setLibPill("fail");
+      showBanner("<b>检测库（MediaPipe）加载失败。</b> 可能原因：网络无法访问 jsdelivr/unpkg/npmmirror，或被广告拦截插件拦截。请：1) 检查网络；2) 关闭广告拦截器；3) 打开控制台（F12）查看具体报错。");
+      return;
+    }
+    init();
+  });
+})();
+</script>
+</body>
+</html>

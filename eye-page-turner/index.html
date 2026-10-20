@@ -3,22 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>阶段1 · 采集与检测模块化（手势 + 眼神）</title>
+  <title>眼动翻页插件 · 检测引擎（阶段 3）</title>
   <link rel="stylesheet" href="./src/style.css" />
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <span class="logo">👁✋</span>
-      <div>
-        <h1>眼动翻页插件 · 阶段 1 原型</h1>
-        <p class="sub">采集 / 检测模块化 + 关键点可视化（CameraModule · FaceMeshDetector · HandDetector）</p>
+      <span class="logo">👁</span>
+      <div class="brand-text">
+        <h1>眼动翻页 · 检测引擎</h1>
+        <p class="sub">后台运行 · 广播翻页指令到主页面（BroadcastChannel）</p>
       </div>
     </div>
     <div class="chips">
-      <span class="chip" id="chip-mode">模式：待定（距离估计 → 阶段2）</span>
+      <span class="chip chip-mode" id="chip-mode">模式：待定</span>
       <span class="chip" id="chip-status">摄像头：未启动</span>
       <span class="chip" id="chip-fps">FPS：--</span>
+      <span class="chip" id="chip-link">广播：未启动</span>
+      <button id="btn-stealth" class="btn btn-ghost">隐式模式</button>
     </div>
   </header>
 
@@ -31,30 +33,71 @@
         <p id="hint" class="hint">点击启动后授予摄像头权限（需 HTTPS / localhost）</p>
       </div>
     </div>
+
     <aside class="side">
-      <div class="panel">
-        <h2>图例</h2>
-        <ul class="legend">
-          <li><i class="sw" style="background:rgba(80,170,255,.7)"></i>人脸网格（Face Mesh 468 点）</li>
-          <li><i class="sw" style="background:rgba(255,80,120,.9)"></i>虹膜（Iris，视线估计用）</li>
-          <li><i class="sw" style="background:#50dc96"></i>手部（Hands 21 点）</li>
-        </ul>
+      <div class="panel panel-steps">
+        <h2>快速上手</h2>
+        <ol class="steps">
+          <li><span class="step-num">1</span>点击「启动摄像头」并授权</li>
+          <li><span class="step-num">2</span>站 1 米处正视镜头，点「标定」</li>
+          <li><span class="step-num">3</span>另开标签页打开 <b>reader.html</b></li>
+          <li><span class="step-num">4</span>手势上下 / 视线上下，主页面自动翻页</li>
+        </ol>
       </div>
-      <div class="panel">
-        <h2>本阶段验证目标</h2>
-        <ul class="tick">
-          <li>摄像头采集模块化（CameraModule + 状态码）</li>
-          <li>人脸 + 虹膜检测模块化（FaceMeshDetector）</li>
-          <li>手部检测模块化（HandDetector）</li>
-          <li>统一异常状态码与错误提示</li>
-        </ul>
-        <p class="note">距离估计与「手势/眼神」自动切换在阶段 2 实现。</p>
+
+      <div class="panel panel-mode">
+        <h2>当前模式</h2>
+        <div class="mode-badge" id="mode-state">--</div>
+        <div class="dist-row">
+          <span>人屏距离</span>
+          <span class="dist-value" id="distance-state">--</span>
+        </div>
+        <div class="dist-bar">
+          <div class="dist-bar-track">
+            <div class="dist-bar-fill" id="dist-fill"></div>
+            <div class="dist-bar-threshold" title="1.5m 切换阈值"></div>
+          </div>
+          <div class="dist-scale"><span>0m</span><span>1.5m</span><span>3m</span></div>
+        </div>
       </div>
+
+      <div class="panel">
+        <h2>翻页指令</h2>
+        <ul class="command-list">
+          <li><span class="cmd-key">✋ 手势</span>手掌举高 → 上一页 · 放低 → 下一页</li>
+          <li><span class="cmd-key">👁 眼神</span>向上看 → 上一页 · 向下看 → 下一页</li>
+        </ul>
+        <p class="cmd-note" id="cmd-note">指令将通过广播发送到主页面</p>
+      </div>
+
+      <div class="panel">
+        <h2>距离标定</h2>
+        <p class="note">站在已知距离处（建议 1 米），正视镜头后点击标定。未标定将使用默认参数（粗略）。</p>
+        <div class="calib-row">
+          <span>参考距离</span>
+          <input id="calib-distance" type="number" value="1.0" step="0.1" min="0.2" max="5" />
+          <span>米</span>
+        </div>
+        <button id="btn-calibrate" class="btn">标定</button>
+        <p class="calib-state">状态：<b id="calib-state">未标定（默认参数）</b></p>
+      </div>
+
       <div class="panel">
         <h2>实时检测</h2>
-        <p>人脸：<b id="face-state">--</b></p>
-        <p>手部：<b id="hand-state">--</b></p>
-        <p>虹膜：<b id="iris-state">--</b></p>
+        <ul class="detect-list">
+          <li><span class="dot" id="dot-face"></span><span class="detect-name">人脸</span><span class="detect-val" id="face-state">--</span></li>
+          <li><span class="dot" id="dot-hand"></span><span class="detect-name">手部</span><span class="detect-val" id="hand-state">--</span></li>
+          <li><span class="dot" id="dot-iris"></span><span class="detect-name">虹膜</span><span class="detect-val" id="iris-state">--</span></li>
+        </ul>
+      </div>
+
+      <div class="panel">
+        <h2>画面图例</h2>
+        <ul class="legend">
+          <li><i class="sw" style="background:rgba(80,170,255,.7)"></i>人脸网格（Face Mesh 468 点）</li>
+          <li><i class="sw" style="background:rgba(255,80,120,.9)"></i>虹膜（Iris，瞳距/视线用）</li>
+          <li><i class="sw" style="background:#50dc96"></i>手部（Hands 21 点）</li>
+        </ul>
       </div>
     </aside>
   </main>

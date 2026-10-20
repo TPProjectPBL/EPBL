@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>隔空控制器 · 系统设计报告</title>
+<style>
+  :root {
+    --ink: #1a2033;
+    --muted: #5b6577;
+    --line: #e4e8f0;
+    --brand: #2f6bff;
+    --brand-deep: #1a2a5e;
+    --accent: #ffb020;
+    --bg: #ffffff;
+    --bg-soft: #f6f8fc;
+    --mono: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    color: var(--ink);
+    font-size: 15px;
+    line-height: 1.8;
+    background: var(--bg);
+  }
+  a { color: var(--brand); text-decoration: none; }
+
+  .hero {
+    background: linear-gradient(135deg, #0f1728 0%, #1a2a5e 55%, #2f4aa8 100%);
+    color: #eaf0ff;
+    padding: 64px 32px 48px;
+  }
+  .hero .wrap { max-width: 980px; margin: 0 auto; }
+  .hero .tag { display: inline-block; font-size: 12px; letter-spacing: 2px; color: #ffd479; font-weight: 700; text-transform: uppercase; }
+  .hero h1 { font-size: 34px; margin: 16px 0 10px; line-height: 1.3; }
+  .hero .sub { font-size: 16px; color: #b9c6e8; max-width: 760px; }
+  .hero .meta { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 10px; }
+  .hero .meta span { font-size: 12.5px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); border-radius: 20px; padding: 4px 14px; }
+
+  .layout { max-width: 1120px; margin: 0 auto; padding: 0 32px 80px; display: grid; grid-template-columns: 220px 1fr; gap: 40px; }
+  nav.toc { position: sticky; top: 24px; align-self: start; font-size: 13.5px; padding-top: 40px; }
+  nav.toc .ttl { font-size: 11px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; margin-bottom: 10px; }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--line); }
+  nav.toc li { margin: 0; }
+  nav.toc a { display: block; padding: 6px 14px; color: var(--muted); border-left: 2px solid transparent; margin-left: -2px; }
+  nav.toc a:hover { color: var(--brand); }
+
+  article { padding-top: 40px; min-width: 0; }
+  h2 { font-size: 24px; color: var(--brand-deep); margin: 52px 0 16px; padding-bottom: 10px; border-bottom: 2px solid var(--line); scroll-margin-top: 24px; }
+  h2 .no { color: var(--brand); font-weight: 800; margin-right: 10px; }
+  h3 { font-size: 17px; color: var(--ink); margin: 28px 0 10px; }
+  h4 { font-size: 15px; margin: 20px 0 8px; color: var(--brand-deep); }
+  p { margin: 10px 0; color: #2a3142; }
+  ul, ol { margin: 10px 0; padding-left: 24px; color: #2a3142; }
+  li { margin: 5px 0; }
+  strong { color: var(--brand-deep); }
+  .lead { font-size: 16px; color: #3a4154; background: var(--bg-soft); border-left: 3px solid var(--accent); padding: 16px 20px; border-radius: 0 12px 12px 0; margin: 16px 0; }
+
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--bg-soft); color: var(--brand-deep); font-weight: 600; white-space: nowrap; }
+  tr:nth-child(even) td { background: #fafbfe; }
+
+  code { background: #eef2fb; color: #2345a8; padding: 1px 6px; border-radius: 4px; font-family: var(--mono); font-size: 13px; }
+  pre { background: #0f1728; color: #cfe0ff; border-radius: 12px; padding: 18px 20px; font-family: var(--mono); font-size: 12.8px; line-height: 1.7; overflow-x: auto; margin: 14px 0; }
+  pre code { background: none; color: inherit; padding: 0; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .card { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; background: #fff; }
+  .card h4 { margin-top: 0; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 10px; border-radius: 20px; margin: 0 4px 4px 0; }
+  .tag.p0 { background: #ffe8e0; color: #b33a1e; }
+  .tag.p1 { background: #fff2d9; color: #8a5a00; }
+  .tag.core { background: #e6f4ea; color: #1a7f37; }
+  .callout { background: #eef6ff; border: 1px solid #d5e6ff; border-radius: 10px; padding: 14px 18px; margin: 14px 0; }
+  .warn { background: #fff7ec; border: 1px solid #ffe1b8; border-radius: 10px; padding: 14px 18px; margin: 14px 0; }
+  .warn b { color: #9a5b00; }
+  .step { border-left: 3px solid var(--brand); padding-left: 18px; margin: 20px 0; }
+  .step h3 { margin-top: 0; }
+  .step .acc { font-size: 13px; color: var(--muted); background: var(--bg-soft); border-radius: 8px; padding: 10px 14px; margin-top: 8px; }
+  .footer { border-top: 1px solid var(--line); margin-top: 60px; padding: 20px 0; font-size: 12px; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="wrap">
+    <span class="tag">System Design Report · 系统设计报告</span>
+    <h1>隔空控制器（Air Controller）</h1>
+    <p class="sub">后端运作的非接触控制器：以视线控制鼠标移动、以隔空手势控制缩放（张开手放大、握拳缩小）。本报告确认需求，分析可行性、整体架构、模块划分、技术选型、风险、可扩展性、安全性与分步实现/验收，用于指导后续开发。</p>
+    <div class="meta">
+      <span>文档版本 v1.0</span>
+      <span>状态：需求确认 + 总体设计</span>
+      <span>日期 2026-10-17</span>
+      <span>目标平台：macOS 优先（跨平台可扩展）</span>
+      <span>控制端：Python 后端 + OS API</span>
+      <span>展示端：浏览器网页（Apple 风格）</span>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <nav class="toc">
+    <div class="ttl">目录</div>
+    <ol>
+      <li><a href="#s1">1 需求确认</a></li>
+      <li><a href="#s2">2 可行性分析</a></li>
+      <li><a href="#s3">3 整体架构</a></li>
+      <li><a href="#s4">4 模块划分</a></li>
+      <li><a href="#s5">5 技术选型与理由</a></li>
+      <li><a href="#s6">6 风险点与应对</a></li>
+      <li><a href="#s7">7 可扩展性</a></li>
+      <li><a href="#s8">8 安全性</a></li>
+      <li><a href="#s9">9 实现步骤与验收</a></li>
+      <li><a href="#s10">10 里程碑与验收汇总</a></li>
+    </ol>
+  </nav>
+
+  <article>
+
+    <h2 id="s1"><span class="no">1</span>需求确认</h2>
+    <p class="lead">将项目定位为「后端运作的控制器」：以普通摄像头识别眼动与手势，由<strong>本地后端进程</strong>通过操作系统 API 控制鼠标与缩放，前端网页仅作测试展示与状态反馈，不干扰前台操作。</p>
+
+    <h3>1.1 核心需求</h3>
+    <table>
+      <tr><th style="width:160px">编号</th><th>需求</th><th>优先级</th></tr>
+      <tr><td>F1</td><td>眼动追踪：以视线控制鼠标移动（操作系统级光标）。</td><td><span class="tag p0">P0 核心</span></td></tr>
+      <tr><td>F2</td><td>隔空手势：张开手 → 放大；握拳 → 缩小。</td><td><span class="tag p0">P0 核心</span></td></tr>
+      <tr><td>F3</td><td>测试展示网页：白底、黑色圆角按键、Apple 风格，放置能体现功能的交互元素。</td><td><span class="tag p0">P0 核心</span></td></tr>
+      <tr><td>F4</td><td>后端运作：控制逻辑在本地后端进程运行，可操作系统鼠标 / 缩放。</td><td><span class="tag p0">P0 核心</span></td></tr>
+      <tr><td>F5</td><td>状态反馈：实时显示检测状态、注视点、手势状态、缩放级别。</td><td><span class="tag p1">P1</span></td></tr>
+    </table>
+
+    <h3>1.2 需求澄清与默认约定</h3>
+    <ul>
+      <li><strong>「控制鼠标」指操作系统级真实光标</strong>：浏览器安全沙箱禁止网页 JS 直接移动系统鼠标，因此必须由本地后端通过 OS API 执行（见 2.1）。</li>
+      <li><strong>「后端运作」</strong>：动作执行（鼠标移动、缩放）在后端进程完成；前端负责采集 / 检测 / 展示，二者通过本地 WebSocket 通信。</li>
+      <li><strong>缩放对象</strong>：MVP 同时支持「应用内缩放」（前端测试页元素 scale）与「系统缩放」（后端模拟滚轮 / 快捷键），前者用于无后端时演示，后者为最终目标。</li>
+      <li><strong>运行环境</strong>：以 macOS 优先（开发机为 macOS）；后端 OS 控制 API 选用跨平台库，Windows / Linux 可迁移。</li>
+    </ul>
+
+    <h2 id="s2"><span class="no">2</span>可行性分析</h2>
+
+    <h3>2.1 技术可行性</h3>
+    <table>
+      <tr><th style="width:180px">关键点</th><th>结论</th><th>依据</th></tr>
+      <tr><td>眼动追踪</td><td>可行</td><td>MediaPipe Face Mesh 提供虹膜关键点（Iris，468–477），结合头部姿态可估计注视方向；普通摄像头即可，无需专用眼动仪。</td></tr>
+      <tr><td>系统鼠标控制</td><td>可行，但需后端</td><td>网页 JS 受安全沙箱限制无法移动系统光标；Python 的 pyautogui / pynput 可跨平台控制鼠标。</td></tr>
+      <tr><td>手势缩放</td><td>可行</td><td>MediaPipe Hands 输出 21 个手部关键点，可由手指伸直度判定「张开 / 握拳」。</td></tr>
+      <tr><td>前端 ↔ 后端通信</td><td>可行</td><td>WebSocket 低延迟双向，适合连续坐标流上报。</td></tr>
+    </table>
+
+    <h3>2.2 关键约束与难点</h3>
+    <div class="warn"><b>macOS 权限</b>：pyautogui / pynput 移动鼠标需授予「辅助功能（Accessibility）」权限，否则调用会被系统拒绝。这是后端控制的首要环境障碍，需在实现步骤中优先处理并验证。</div>
+    <ul>
+      <li><strong>精度</strong>：普通摄像头无标定下注视点估计存在误差（约百像素级），需采用「相对移动 + 平滑 + 死区」策略，避免光标抖动。</li>
+      <li><strong>坐标系映射</strong>：前端归一化坐标 → 后端屏幕像素坐标，需考虑屏幕分辨率、浏览器窗口位置、多显示器。</li>
+      <li><strong>延迟</strong>：检测 + 通信 + 平滑链路需控制在可接受范围（目标 &lt; 100 ms 增量响应）。</li>
+    </ul>
+
+    <h3>2.3 结论</h3>
+    <p>技术路线可行，主要风险集中在<strong>系统权限</strong>与<strong>眼动精度</strong>两点，均可通过「先前端自包含演示、再接入后端控制」的分步策略控制风险（见第 9 章）。</p>
+
+    <h2 id="s3"><span class="no">3</span>整体架构</h2>
+    <p>采用<strong>前后端分离</strong>架构：前端负责采集与检测，后端负责指令执行。</p>
+    <pre>┌───────────────────────────────┐          ┌──────────────────────────────────┐
+│  前端（浏览器 · 测试展示页）        │          │  后端控制器（Python · 本地进程）      │
+│  ─────────────────────────────  │ WebSocket │  ────────────────────────────────  │
+│  摄像头采集 (getUserMedia)       │ ───────▶  │  指令解析与平滑 (EMA / 死区 / 防抖)    │
+│  眼动检测 (Face Mesh + Iris)     │ 归一化坐标 │  坐标映射 (归一化 → 屏幕像素)          │
+│  手势检测 (Hands 21 点)          │ 手势状态   │  鼠标执行 (pyautogui 移动 / 滚轮)      │
+│  指令生成 (平滑 / 死区)           │           │  缩放执行 (滚轮 / 快捷键)             │
+│  测试台 UI (Apple 风格按键)       │ ◀───────  │  状态回传 (缩放级别 / 心跳)            │
+└───────────────────────────────┘          └──────────────────────────────────┘
+                      摄像头画面与生物特征全程本地处理，不出设备</pre>
+
+    <h3>3.1 数据流</h3>
+    <ol>
+      <li>前端摄像头取帧，MediaPipe 并行检测人脸（含虹膜）与手部。</li>
+      <li>眼动：由虹膜相对眼眶偏移 + 头部姿态，生成「光标增量向量」。</li>
+      <li>手势：由 5 指伸直度判定状态（张开 / 握拳 / 无），生成「缩放指令」。</li>
+      <li>前端经 WebSocket 将增量向量与手势状态实时上报后端。</li>
+      <li>后端做平滑与死区过滤，映射为屏幕坐标，pyautogui 移动鼠标；手势触发滚轮 / 快捷键缩放。</li>
+      <li>后端回传缩放级别、运行状态，前端实时显示。</li>
+    </ol>
+
+    <h3>3.2 两阶段演进</h3>
+    <table>
+      <tr><th>阶段</th><th>检测位置</th><th>说明</th></tr>
+      <tr><td>阶段一（MVP）</td><td>前端（浏览器 MediaPipe）</td><td>复用现有前端技术栈，快速验证链路；后端只做执行。</td></tr>
+      <tr><td>阶段二（增强）</td><td>后端（Python mediapipe + opencv）</td><td>检测下沉，前端纯展示，真正「后端运作」、不依赖浏览器窗口。</td></tr>
+    </table>
+
+    <h2 id="s4"><span class="no">4</span>模块划分</h2>
+
+    <h3>4.1 前端模块</h3>
+    <table>
+      <tr><th style="width:200px">模块</th><th>职责</th></tr>
+      <tr><td>采集模块</td><td>getUserMedia 取摄像头视频流，输出到检测器与预览。</td></tr>
+      <tr><td>眼动检测模块</td><td>Face Mesh（refineLandmarks 开启）输出虹膜关键点，计算虹膜相对眼眶偏移。</td></tr>
+      <tr><td>手势检测模块</td><td>Hands 输出 21 点，计算手指伸直度，判定张开 / 握拳。</td></tr>
+      <tr><td>指令生成模块</td><td>将检测结果转为「光标增量向量 + 手势状态」，做平滑、死区、冷却。</td></tr>
+      <tr><td>通信模块</td><td>WebSocket 上报指令、接收后端状态回传。</td></tr>
+      <tr><td>测试台 UI 模块</td><td>Apple 风格页面：黑色圆角按键网格、可缩放内容卡片、视线光标、状态面板。</td></tr>
+    </table>
+
+    <h3>4.2 后端模块</h3>
+    <table>
+      <tr><th style="width:200px">模块</th><th>职责</th></tr>
+      <tr><td>通信服务</td><td>FastAPI / websockets 提供 WebSocket 端点，接收前端指令流。</td></tr>
+      <tr><td>指令解析与平滑</td><td>对增量向量做 EMA 平滑、死区过滤、限速（防止光标瞬移）。</td></tr>
+      <tr><td>坐标映射</td><td>归一化增量 → 屏幕像素增量；读取屏幕尺寸（支持缩放因子）。</td></tr>
+      <tr><td>鼠标控制</td><td>pyautogui 移动光标、点击、滚轮。</td></tr>
+      <tr><td>缩放控制</td><td>张开手 / 握拳映射为滚轮（scroll）或 Ctrl+加减 缩放。</td></tr>
+      <tr><td>权限检查</td><td>启动时检测并提示 macOS「辅助功能」权限。</td></tr>
+    </table>
+
+    <h2 id="s5"><span class="no">5</span>技术选型与理由</h2>
+    <table>
+      <tr><th style="width:190px">技术项</th><th>选型</th><th>选型理由</th></tr>
+      <tr><td>眼动追踪</td><td>MediaPipe Face Mesh + Iris</td><td>虹膜关键点成熟、免标定、CDN 直接引入；与既有项目技术栈一致，降低迁移成本。</td></tr>
+      <tr><td>手势识别</td><td>MediaPipe Hands</td><td>21 点手部关键点，判定手指伸直 / 弯曲可靠，社区成熟。</td></tr>
+      <tr><td>前端通信</td><td>WebSocket（原生）</td><td>低延迟双向、连续坐标流场景合适；浏览器原生支持，无需额外依赖。</td></tr>
+      <tr><td>后端框架</td><td>Python + FastAPI + uvicorn（或 websockets）</td><td>轻量、异步高并发、WebSocket 支持好，生态成熟。</td></tr>
+      <tr><td>OS 控制</td><td>pyautogui（移动 / 滚轮）+ pynput（可选）</td><td>跨平台（macOS / Windows / Linux）、API 简洁、社区成熟。</td></tr>
+      <tr><td>阶段二检测</td><td>Python mediapipe + opencv</td><td>将检测下沉后端，实现「后端运作」、不依赖浏览器。</td></tr>
+    </table>
+    <div class="callout"><b>眼动映射策略</b>：MVP 采用「<strong>相对移动</strong>」模式——视线偏移方向驱动光标增量移动（类轨迹球），避免绝对坐标标定的复杂度；后续可选 WebGazer.js 回归模型做「绝对注视点」校准增强。</div>
+
+    <h2 id="s6"><span class="no">6</span>风险点与应对</h2>
+    <table>
+      <tr><th style="width:180px">风险</th><th>影响</th><th>应对</th></tr>
+      <tr><td>macOS 辅助功能权限</td><td>后端无法移动鼠标</td><td>步骤 4 优先验证；启动时检测权限并给出引导说明。</td></tr>
+      <tr><td>眼动精度不足 / 抖动</td><td>光标漂移、难对准</td><td>相对移动 + EMA 平滑 + 死区 + 限速；可选校准增强。</td></tr>
+      <tr><td>光照 / 佩戴眼镜</td><td>检测失败或误判</td><td>置信度门限、失败降级提示、状态实时反馈。</td></tr>
+      <tr><td>坐标系映射偏差</td><td>光标位置错位</td><td>读取屏幕尺寸与缩放因子；后续支持浏览器窗口定位。</td></tr>
+      <tr><td>缩放指令冲突</td><td>系统缩放与应用内缩放打架</td><td>提供缩放模式切换；MVP 默认应用内缩放、系统缩放独立开关。</td></tr>
+      <tr><td>隐私顾虑</td><td>用户拒绝摄像头</td><td>全程本地处理、不上传；明示隐私边界。</td></tr>
+    </table>
+
+    <h2 id="s7"><span class="no">7</span>可扩展性</h2>
+    <ul>
+      <li><strong>更多手势</strong>：捏合缩放、挥手翻页、单指点击、拖拽，复用 Hands 关键点新增分类即可。</li>
+      <li><strong>更多控制目标</strong>：键盘输入、系统音量 / 亮度、窗口管理，统一走「指令 → OS API」后端执行层。</li>
+      <li><strong>检测下沉后端</strong>：阶段二把 MediaPipe 移到 Python，前端退化为纯展示 / 遥控面板。</li>
+      <li><strong>参数化配置</strong>：灵敏度、死区、平滑系数、手势阈值集中配置，支持热更新。</li>
+      <li><strong>多屏 / 多设备</strong>：坐标映射层抽象，支持多显示器与多分辨率。</li>
+    </ul>
+
+    <h2 id="s8"><span class="no">8</span>安全性</h2>
+    <ul>
+      <li><strong>本地闭环</strong>：后端仅监听 <code>127.0.0.1</code>，不接受外部网络连接，防止远程控制。</li>
+      <li><strong>数据本地化</strong>：摄像头画面与生物特征仅在本地处理，不上传、不落盘。</li>
+      <li><strong>最小权限</strong>：仅申请鼠标 / 键盘控制所需权限，不申请多余权限。</li>
+      <li><strong>认证（可选）</strong>：本地 WebSocket 加一次性 token，避免其他本地进程误连。</li>
+      <li><strong>安全上下文</strong>：前端摄像头访问仅通过 localhost / HTTPS。</li>
+    </ul>
+
+    <h2 id="s9"><span class="no">9</span>实现步骤与验收</h2>
+    <p>采用「前端自包含演示 → 后端控制接入 → 端到端联调」的分步推进，每步独立可测、可验收。</p>
+
+    <div class="step">
+      <h3>步骤 1 · 测试台 UI（Apple 风格）</h3>
+      <p>搭建白底、黑色圆角按键网格、可缩放内容卡片、视线光标、状态面板的前端页面。</p>
+      <div class="acc"><b>测试</b>：静态打开页面，逐键 hover / 点击，缩放卡片手动缩放。<br><b>验收</b>：白底黑圆角键呈现 Apple 风格；按键 hover 变暗、点击有反馈；无布局错乱。</div>
+    </div>
+
+    <div class="step">
+      <h3>步骤 2 · 眼动检测 + 视线光标（网页内）</h3>
+      <p>接入 Face Mesh Iris，虹膜相对眼眶偏移生成增量向量，驱动网页内「视线光标」移动；悬停按键高亮，停留驻留触发点击。</p>
+      <div class="acc"><b>测试</b>：授权摄像头，上下左右转动眼球，观察光标是否随视线方向移动、悬停是否高亮。<br><b>验收</b>：光标随视线平滑移动（EMA 平滑、无明显抖动）；悬停按键高亮；驻留 ≥ 0.8 s 触发点击。</div>
+    </div>
+
+    <div class="step">
+      <h3>步骤 3 · 手势检测 + 缩放（网页内）</h3>
+      <p>接入 Hands，计算 5 指伸直度判定张开 / 握拳，驱动内容卡片 scale 放大 / 缩小。</p>
+      <div class="acc"><b>测试</b>：对镜头张开手掌、握拳，观察卡片缩放与状态面板的「张开 / 握拳」判定。<br><b>验收</b>：张开手持续放大、握拳持续缩小；松开（无手）停止；缩放比例实时显示、限幅保护。</div>
+    </div>
+
+    <div class="step">
+      <h3>步骤 4 · 后端服务 + 系统鼠标控制</h3>
+      <p>搭建 Python WebSocket 服务，接入 pyautogui，实现「增量向量 → 屏幕像素移动」，并检测 macOS 辅助功能权限。</p>
+      <div class="acc"><b>测试</b>：用测试脚本向后端发送固定增量，观察系统光标是否移动。<br><b>验收</b>：后端能移动系统鼠标；未授权时给出明确权限提示；仅监听 127.0.0.1。</div>
+    </div>
+
+    <div class="step">
+      <h3>步骤 5 · 前后端联调（视线 → 系统鼠标）</h3>
+      <p>前端 WebSocket 上报增量向量，后端执行系统鼠标移动；状态回传前端显示。</p>
+      <div class="acc"><b>测试</b>：转动眼球，系统光标跟随移动；对照前端「视线光标」与系统光标。<br><b>验收</b>：端到端增量响应 &lt; 100 ms；系统光标移动方向与视线一致；有死区与限速防抖。</div>
+    </div>
+
+    <div class="step">
+      <h3>步骤 6 · 手势 → 系统缩放</h3>
+      <p>张开手 / 握拳经后端映射为滚轮（scroll）或 Ctrl+加减，实现系统缩放。</p>
+      <div class="acc"><b>测试</b>：对镜头张开 / 握拳，观察系统缩放（浏览器缩放、桌面图标等）变化。<br><b>验收</b>：张开手放大、握拳缩小；缩放连续且有限幅；支持应用内 / 系统两种模式切换。</div>
+    </div>
+
+    <div class="step">
+      <h3>步骤 7 · 端到端验收</h3>
+      <p>全链路联调：眼动 + 手势同时运行，测试台按键作为交互目标，完整走查所有功能。</p>
+      <div class="acc"><b>测试</b>：真实用户操作，视线将系统光标移动到目标按键并触发，手势缩放内容卡片与系统缩放。<br><b>验收</b>：达到第 10 章验收指标；异常（无脸 / 无手 / 权限拒绝 / 低置信度）均有明确反馈与降级。</div>
+    </div>
+
+    <h2 id="s10"><span class="no">10</span>里程碑与验收汇总</h2>
+    <table>
+      <tr><th>里程碑</th><th>内容</th><th>验收标准</th></tr>
+      <tr><td>M1</td><td>测试台 UI + 眼动光标 + 网页内手势缩放（步骤 1–3）</td><td>无后端即可在网页内演示两种能力。</td></tr>
+      <tr><td>M2</td><td>后端鼠标 / 缩放控制（步骤 4）</td><td>后端可移动系统鼠标、可触发缩放。</td></tr>
+      <tr><td>M3</td><td>前后端联调（步骤 5–6）</td><td>视线驱动系统鼠标、手势驱动系统缩放。</td></tr>
+      <tr><td>M4</td><td>端到端验收（步骤 7）</td><td>真实用户盲测通过。</td></tr>
+    </table>
+
+    <h3>10.1 关键指标（KPI）</h3>
+    <table>
+      <tr><th>指标</th><th>目标</th></tr>
+      <tr><td>检测帧率</td><td>≥ 20 FPS</td></tr>
+      <tr><td>光标增量端到端延迟</td><td>&lt; 100 ms</td></tr>
+      <tr><td>手势判定（张开 / 握拳）</td><td>≥ 95%（真人盲测）</td></tr>
+      <tr><td>缩放响应</td><td>指令触发到缩放生效 &lt; 200 ms</td></tr>
+      <tr><td>稳定性</td><td>光标无漂移抖动（死区 + 平滑生效）</td></tr>
+    </table>
+
+    <div class="footer">隔空控制器 Air Controller · 系统设计报告 v1.0 · 2026-10-17</div>
+  </article>
+</div>
+
+</body>
+</html>
