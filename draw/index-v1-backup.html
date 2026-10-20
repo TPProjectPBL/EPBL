@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>隔空画板 · Air Canvas</title>
+<style>
+/* ============================================================
+ * 隔空画板 · 单文件 UI（零外部依赖，无构建步骤）
+ * 深色霓虹科技风：背景 #0a0e17 / 面板 #111827 / 分割线 #1f2b45
+ * ============================================================ */
+:root{
+  --bg:#0a0e17;
+  --panel:#111827;
+  --line:#1f2b45;
+  --accent:#4cc9f0;
+  --danger:#ff4d6d;
+  --warn:#ffd166;
+  --text:#e6edf7;
+  --muted:#7d8da8;
+  --ease:.18s ease;
+}
+
+*,*::before,*::after{ box-sizing:border-box; }
+
+html,body{ height:100%; }
+
+body{
+  margin:0;
+  height:100vh;
+  overflow:hidden;
+  display:grid;
+  grid-template-rows:auto auto 1fr;
+  background:var(--bg);
+  color:var(--text);
+  font-family:ui-sans-serif,system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ---------------- 顶栏 ---------------- */
+.topbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  padding:14px 26px;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(17,24,39,.94),rgba(10,14,23,.8));
+}
+.brand{ display:flex; align-items:baseline; gap:12px; }
+.brand h1{
+  margin:0;
+  font-size:22px;
+  font-weight:800;
+  letter-spacing:.16em;
+}
+.brand h1 .accent{ color:var(--accent); }
+.brand .sub{
+  font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;
+  letter-spacing:.3em;
+  color:var(--muted);
+}
+.meta{
+  font:600 11px/1.7 ui-monospace,Menlo,Consolas,monospace;
+  letter-spacing:.24em;
+  color:var(--muted);
+  text-align:right;
+}
+.meta b{ color:var(--accent); font-weight:600; }
+
+/* ---------------- 工具栏 ---------------- */
+.toolbar{
+  /* Grid + minmax(0,1fr)：窄屏时色条可收缩并横向滚动，
+     保证「清空 / 保存」按钮永远完整可见 */
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:18px;
+  padding:14px 26px;
+  border-bottom:1px solid var(--line);
+  background:rgba(17,24,39,.72);
+}
+.palette{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  /* flex-basis 必须为 0：否则色条按内容宽度（6×120px+间距）撑开，
+     窄屏下会把「清空 / 保存」按钮挤出可视区 */
+  flex:1 1 0;
+  min-width:0;
+  padding:8px 2px;
+  overflow-x:auto;
+  overflow-y:hidden;
+  scrollbar-width:none;
+}
+.palette::-webkit-scrollbar{ display:none; }
+
+.swatch{
+  position:relative;
+  flex:1 1 0;
+  min-width:120px;
+  height:64px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.16);
+  background:var(--c);
+  cursor:pointer;
+  z-index:1;
+  transition:transform var(--ease),box-shadow var(--ease),border-color var(--ease);
+}
+.swatch:hover{
+  transform:translateY(-1px);
+  box-shadow:0 0 20px -2px var(--c);
+}
+.swatch.is-gazed{
+  border-color:rgba(255,255,255,.92);
+  box-shadow:0 0 26px -2px var(--c),0 0 0 2px rgba(255,255,255,.35) inset;
+  z-index:3;
+}
+.swatch.is-active{
+  border-color:#fff;
+  transform:scale(1.2);
+  box-shadow:0 0 30px -2px var(--c);
+  z-index:4;
+}
+.swatch .tag{
+  position:absolute;
+  left:12px;
+  top:10px;
+  font:700 12px/1 ui-monospace,Menlo,Consolas,monospace;
+  letter-spacing:.14em;
+  color:rgba(10,14,23,.62);
+  pointer-events:none;
+}
+.swatch .dwell{
+  position:absolute;
+  left:10px;
+  right:10px;
+  bottom:10px;
+  height:3px;
+  border-radius:2px;
+  background:rgba(255,255,255,.94);
+  transform:scaleX(0);
+  transform-origin:left center;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity var(--ease);
+}
+.swatch.is-gazed .dwell{ opacity:1; }
+
+.actions{ display:flex; gap:12px; flex:0 0 auto; }
+.btn{
+  position:relative;
+  min-width:128px;
+  height:64px;
+  border-radius:14px;
+  border:1px solid var(--line);
+  background:rgba(10,14,23,.66);
+  color:var(--text);
+  font:700 15px/1 ui-sans-serif,system-ui,sans-serif;
+  letter-spacing:.18em;
+  cursor:pointer;
+  transition:transform var(--ease),box-shadow var(--ease),border-color var(--ease),background var(--ease);
+}
+.btn:hover{
+  transform:translateY(-1px);
+  border-color:var(--accent);
+  box-shadow:0 0 22px -6px var(--accent);
+}
+.btn.is-gazed{
+  border-color:var(--accent);
+  box-shadow:0 0 0 1px var(--accent) inset,0 0 26px -6px var(--accent);
+}
+.btn.is-armed{ animation:armedPulse .45s ease-in-out; }
+@keyframes armedPulse{
+  0%,100%{ box-shadow:0 0 0 1px var(--accent) inset,0 0 10px -6px var(--accent); }
+  50%{ box-shadow:0 0 0 2px var(--accent) inset,0 0 34px -4px var(--accent); background:rgba(76,201,240,.16); }
+}
+.btn.danger:hover{
+  border-color:var(--danger);
+  box-shadow:0 0 22px -6px var(--danger);
+}
+.btn.danger.is-gazed{
+  border-color:var(--danger);
+  box-shadow:0 0 0 1px var(--danger) inset,0 0 26px -6px var(--danger);
+}
+.btn.danger.is-armed{ animation:armedPulseDanger .45s ease-in-out; }
+@keyframes armedPulseDanger{
+  0%,100%{ box-shadow:0 0 0 1px var(--danger) inset,0 0 10px -6px var(--danger); }
+  50%{ box-shadow:0 0 0 2px var(--danger) inset,0 0 34px -4px var(--danger); background:rgba(255,77,109,.16); }
+}
+.btn .key{
+  position:absolute;
+  right:10px;
+  bottom:8px;
+  font:600 10px/1 ui-monospace,Menlo,Consolas,monospace;
+  letter-spacing:.1em;
+  color:var(--muted);
+}
+
+/* ---------------- 画布 ---------------- */
+.stage{
+  position:relative;
+  overflow:hidden;
+  cursor:none;
+  background:var(--bg);
+  min-height:0;
+}
+.stage canvas{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  display:block;
+}
+#bgLayer{ z-index:1; }
+#staticLayer{ z-index:2; }
+#liveLayer{ z-index:3; }
+
+/* 笔尖光标：抬笔虚线圈 / 落笔实线圈 + 中心实点 */
+.pen-cursor{
+  position:absolute;
+  left:0;
+  top:0;
+  z-index:10;
+  width:36px;
+  height:36px;
+  margin:-18px 0 0 -18px;
+  border-radius:50%;
+  border:2px dashed currentColor;
+  color:var(--accent);
+  box-shadow:0 0 20px -2px currentColor;
+  opacity:0;
+  pointer-events:none;
+  transition:transform var(--ease),opacity var(--ease),border-color var(--ease),box-shadow var(--ease);
+}
+.pen-cursor::after{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:8px;
+  height:8px;
+  margin:-4px 0 0 -4px;
+  border-radius:50%;
+  background:currentColor;
+  box-shadow:0 0 12px currentColor;
+  opacity:.5;
+  transition:opacity var(--ease);
+}
+.pen-cursor.is-down{
+  border-style:solid;
+  transform:scale(.62);
+}
+.pen-cursor.is-down::after{ opacity:1; }
+
+/* ---------------- HUD（左下） ---------------- */
+.hud{
+  position:fixed;
+  left:26px;
+  bottom:26px;
+  z-index:40;
+  min-width:268px;
+  padding:14px 18px;
+  border-radius:14px;
+  border:1px solid var(--line);
+  background:rgba(17,24,39,.74);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  font:400 12px/1.7 ui-monospace,Menlo,Consolas,monospace;
+  letter-spacing:.06em;
+  color:var(--muted);
+  pointer-events:none;
+}
+.hud .row{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:20px;
+}
+.hud .row > span{
+  font-size:11px;
+  letter-spacing:.2em;
+  color:var(--muted);
+}
+.hud .row b{
+  color:var(--text);
+  font-weight:600;
+  white-space:nowrap;
+}
+.hud .row b.on{ color:var(--accent); }
+.hud .row b.warn{ color:var(--warn); }
+.hud .dot{
+  display:inline-block;
+  width:10px;
+  height:10px;
+  margin-right:6px;
+  border-radius:3px;
+  background:var(--accent);
+  box-shadow:0 0 8px currentColor;
+  vertical-align:-1px;
+}
+.hud .sep{
+  height:1px;
+  margin:8px 0;
+  background:var(--line);
+}
+
+/* ---------------- 帮助面板（右下） ---------------- */
+.help{
+  position:fixed;
+  right:26px;
+  bottom:26px;
+  z-index:40;
+  width:312px;
+  padding:14px 18px;
+  border-radius:14px;
+  border:1px solid var(--line);
+  background:rgba(17,24,39,.74);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  font-size:12px;
+  line-height:1.7;
+  color:var(--muted);
+  pointer-events:none;
+}
+.help h2{
+  margin:0 0 8px;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.28em;
+  color:var(--accent);
+}
+.help ul{
+  margin:0;
+  padding:0;
+  list-style:none;
+  display:grid;
+  gap:5px;
+}
+.help li{ display:flex; align-items:baseline; gap:10px; }
+.help .k{
+  flex:0 0 auto;
+  min-width:78px;
+  font:600 11px/1.7 ui-monospace,Menlo,Consolas,monospace;
+  color:var(--text);
+}
+.help .v{ flex:1 1 auto; }
+.help .hint{
+  margin-top:10px;
+  padding-top:9px;
+  border-top:1px solid var(--line);
+  font-size:11px;
+  line-height:1.65;
+}
+.help .hint b{ color:var(--warn); font-weight:600; }
+
+/* ---------------- Toast ---------------- */
+.toast{
+  position:fixed;
+  left:50%;
+  top:48%;
+  z-index:60;
+  padding:16px 32px;
+  border-radius:14px;
+  border:1px solid var(--accent);
+  background:rgba(17,24,39,.94);
+  box-shadow:0 0 46px -10px var(--accent);
+  font-size:17px;
+  font-weight:600;
+  letter-spacing:.12em;
+  color:var(--text);
+  opacity:0;
+  transform:translate(-50%,-50%) scale(.94);
+  pointer-events:none;
+  transition:opacity var(--ease),transform var(--ease);
+}
+.toast.is-show{
+  opacity:1;
+  transform:translate(-50%,-50%) scale(1);
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <h1>隔空画板<span class="accent">.</span></h1>
+    <span class="sub">AIR CANVAS</span>
+  </div>
+  <div class="meta">GAZE <b>+</b> GESTURE</div>
+</header>
+
+<div class="toolbar">
+  <div class="palette" id="palette" role="listbox" aria-label="调色板"></div>
+  <div class="actions">
+    <button class="btn danger" id="btnClear" type="button">清空<span class="key">[C]</span></button>
+    <button class="btn" id="btnSave" type="button">保存<span class="key">[S]</span></button>
+  </div>
+</div>
+
+<main class="stage" id="stage">
+  <canvas id="bgLayer"></canvas>
+  <canvas id="staticLayer"></canvas>
+  <canvas id="liveLayer"></canvas>
+  <div class="pen-cursor" id="penCursor"></div>
+</main>
+
+<section class="hud" aria-label="状态栏">
+  <div class="row"><span>TIP</span><b id="hudTip">0, 0</b></div>
+  <div class="row"><span>STATE</span><b id="hudState">抬笔 · OPEN_PALM</b></div>
+  <div class="row"><span>COLOR</span><b id="hudColor"><i class="dot" id="hudColorDot"></i><span id="hudColorName">红</span></b></div>
+  <div class="row"><span>FPS</span><b id="hudFps">--</b></div>
+  <div class="sep"></div>
+  <div class="row"><span>MODE</span><b id="hudMode" class="on">待机 · STANDBY</b></div>
+  <div class="row"><span>GAZE</span><b id="hudGaze">CENTER</b></div>
+</section>
+
+<aside class="help" aria-label="操作帮助">
+  <h2>操作指南</h2>
+  <ul>
+    <li><span class="k">注视上方</span><span class="v">进入选色区，停留 1 秒选定颜色</span></li>
+    <li><span class="k">握拳</span><span class="v">落笔 · 移动即画线</span></li>
+    <li><span class="k">张开手掌</span><span class="v">抬笔 · 只移动笔尖不画线</span></li>
+    <li><span class="k">注视+握拳</span><span class="v">清空 / 保存（双条件，防误触）</span></li>
+    <li><span class="k">Victory</span><span class="v">切换到下一个颜色（降级兜底）</span></li>
+  </ul>
+  <div class="hint">
+    <b>开发模拟</b>：鼠标移动＝手掌／注视点，按住＝握拳，松开＝张开；
+    1–6 选色、C 清空、S 保存、G 模拟注视信号丢失、V 触发 Victory。
+  </div>
+</aside>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ============================================================
+   * 1. 常量配置
+   * ============================================================ */
+  /** 调色板：块大＝容错率高（用 UI 设计弥补识别精度） */
+  const PALETTE = [
+    { name: '红', key: '1', hex: '#ff4d6d' },
+    { name: '黄', key: '2', hex: '#ffd166' },
+    { name: '绿', key: '3', hex: '#06d6a0' },
+    { name: '蓝', key: '4', hex: '#4cc9f0' },
+    { name: '紫', key: '5', hex: '#b388ff' },
+    { name: '白', key: '6', hex: '#f8f9fa' }
+  ];
+
+  const CFG = {
+    penWidth: 7,        // 线宽 ≈7px
+    glowBlur: 18,       // shadowBlur 发光 ≈18px
+    smooth: 0.34,       // 输入指数平滑系数（以 60fps 为基准）
+    minStep: 1.6,       // 最小采样距离(CSS px)，抑制手抖抖动
+    penCooldown: 300,   // DB-02 落笔/抬笔切换 300ms 冷却
+    dwellMs: 1000,      // DB-03 注视停留 1 秒确认
+    armMs: 450,         // DB-04/05 执行前二次视觉确认时长
+    idleMs: 3000,       // 无输入自动进入待机
+    maxDpr: 2,          // devicePixelRatio 上限
+    toastMs: 900        // toast 存活时长
+  };
+
+  const clamp = (v, a, b) => (v < a ? a : (v > b ? b : v));
+  const clamp01 = (v) => clamp(v, 0, 1);
+
+  /* ============================================================
+   * 2. DOM 引用
+   * ============================================================ */
+  const $ = (id) => document.getElementById(id);
+
+  const stage = $('stage');
+  const paletteEl = $('palette');
+  const btnClear = $('btnClear');
+  const btnSave = $('btnSave');
+  const penCursor = $('penCursor');
+  const toastEl = $('toast');
+
+  const hudTip = $('hudTip');
+  const hudState = $('hudState');
+  const hudColorDot = $('hudColorDot');
+  const hudColorName = $('hudColorName');
+  const hudFps = $('hudFps');
+  const hudMode = $('hudMode');
+  const hudGaze = $('hudGaze');
+
+  const canvases = {
+    bg: $('bgLayer'),
+    stat: $('staticLayer'),
+    live: $('liveLayer')
+  };
+  const ctxs = {
+    bg: canvases.bg.getContext('2d'),
+    stat: canvases.stat.getContext('2d'),
+    live: canvases.live.getContext('2d')
+  };
+
+  /* ============================================================
+   * 3. Input —— 统一输入抽象层（渲染层唯一数据源）
+   * ------------------------------------------------------------
+   * 绘图 / 交互代码只允许读取 Input，禁止直接读鼠标或摄像头。
+   *
+   * 字段约定：
+   *   x, y        手掌中心归一化坐标（0~1，摄像头坐标系，相对画布视野）
+   *   penDown     握拳 = true / 张开 = false
+   *   color       当前画笔颜色（hex）
+   *   gaze.x/y    注视点归一化坐标（0~1，相对整个视口）
+   *   gaze.dir    注视方向量化值：up / down / left / right / center
+   *   signal      信号可用性 → 决定 双条件 / 纯手势 / 待机 模式
+   * ============================================================ */
+  const Input = {
+    x: 0.5,
+    y: 0.5,
+    penDown: false,
+    color: PALETTE[0].hex,
+    gaze: { x: 0.5, y: 0.5, dir: 'center' },
+    signal: { hand: false, face: true }
+  };
+
+  /* ============================================================
+   * 4. 开发期模拟输入源
+   *    真实接入时整块替换为 MediaPipe 数据源，Input 字段保持不变。
+   * ============================================================ */
+  const raw = {
+    handX: 0.5,        // 手掌：摄像头坐标（0~1，相对画布视野）
+    handY: 0.5,
+    gazeX: 0.5,        // 注视：摄像头坐标（0~1，相对整个视口）
+    gazeY: 0.5,
+    down: false,       // 握拳
+    inside: false,     // 鼠标是否位于画布区域内
+    lastActive: -1e9   // 最近一次有效输入时间
+  };
+
+  let faceSimOk = true;   // G 键：模拟人脸/注视信号丢失 → 降级为纯手势
+  let stageRect = stage.getBoundingClientRect();
+
+  /* ---- 鼠标：手掌位置 + 注视点 + 握拳 ---- */
+  window.addEventListener('mousemove', (e) => {
+    const nx = (e.clientX - stageRect.left) / stageRect.width;
+    const ny = (e.clientY - stageRect.top) / stageRect.height;
+    raw.inside = nx >= 0 && nx <= 1 && ny >= 0 && ny <= 1;
+
+    // TODO: 替换为 MediaPipe HandLandmarker —— 取手掌中心
+    //       （landmark 0/5/9/13/17 的均值，或直接用 9 号点）的归一化坐标。
+    //       摄像头原始画面与屏幕左右相反，因此这里先把鼠标方向取反，
+    //       使下游 x_canvas = (1 - x_norm) × 画布宽 的镜像公式与真实接入完全一致。
+    raw.handX = 1 - clamp01(nx);
+    raw.handY = clamp01(ny);
+
+    // TODO: 替换为 MediaPipe FaceLandmarker —— 由虹膜 / 面部朝向推算出的
+    //       注视点在镜头画面中的归一化坐标。
+    raw.gazeX = 1 - clamp01(e.clientX / window.innerWidth);
+    raw.gazeY = clamp01(e.clientY / window.innerHeight);
+
+    raw.lastActive = performance.now();
+  }, { passive: true });
+
+  window.addEventListener('mousedown', (e) => {
+    // TODO: 替换为 MediaPipe GestureRecognizer 的 Closed_Fist 分类结果
+    if (e.button === 0) raw.down = true;
+    raw.lastActive = performance.now();
+  });
+
+  window.addEventListener('mouseup', (e) => {
+    // TODO: 替换为 GestureRecognizer 的非握拳（Open_Palm）分类结果
+    if (e.button === 0) raw.down = false;
+    raw.lastActive = performance.now();
+  });
+
+  window.addEventListener('blur', () => { raw.down = false; });
+
+  /* ---- 键盘：开发期快捷键 ---- */
+  window.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = e.key;
+    raw.lastActive = performance.now();
+
+    if (k >= '1' && k <= '6') {
+      selectColor(Number(k) - 1, true);
+      e.preventDefault();
+    } else if (k === 'c' || k === 'C') {
+      requestHighCost('clear', true);
+      e.preventDefault();
+    } else if (k === 's' || k === 'S') {
+      requestHighCost('save', true);
+      e.preventDefault();
+    } else if (k === 'g' || k === 'G') {
+      faceSimOk = !faceSimOk;
+      toast(faceSimOk ? '注视信号已恢复 · 双条件模式' : '注视信号丢失 · 降级为纯手势模式');
+    } else if (k === 'v' || k === 'V') {
+      // TODO: 接入 GestureRecognizer 的 Victory 手势后，由算法层在
+      //       纯手势模式下调用本函数实现 DB-10 兜底切色。
+      cycleColorByGesture();
+    }
+  });
+
+  /* ============================================================
+   * 5. 运行状态
+   * ============================================================ */
+  const state = {
+    cssW: 1,
+    cssH: 1,
+    strokes: [],        // 已完成笔画（点坐标为画布归一化 0~1）
+    live: null,         // 当前笔画
+    liveDirty: false,
+    smoothX: 0.5,
+    smoothY: 0.5,
+    penDown: false,
+    penChangedAt: -1e9,
+    rawDown: false,
+    rawDownEdge: false,
+    lastFrame: 0,
+    fps: 0,
+    frames: 0,
+    fpsAt: 0,
+    // 选色
+    selecting: false,
+    hoverIndex: -1,
+    dwellStart: 0,
+    dwellFired: false,
+    // 模式与注视
+    mode: 'idle',
+    gazeDir: 'center',
+    gazeScreenX: 0,
+    gazeScreenY: 0,
+    // 高代价操作
+    armed: null
+  };
+
+  let activeIndex = 0;
+  const swatchEls = [];
+  const dwellBars = [];
+  let lastHover = -2;
+  let lastActive = -2;
+  let toastTimer = 0;
+
+  /* ============================================================
+   * 6. 调色板构建
+   * ============================================================ */
+  function buildPalette() {
+    PALETTE.forEach((item, i) => {
+      const el = document.createElement('div');
+      el.className = 'swatch';
+      el.style.setProperty('--c', item.hex);
+      el.setAttribute('role', 'option');
+      el.setAttribute('aria-label', item.name);
+      el.title = item.name + '（快捷键 ' + item.key + '）';
+
+      const tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.textContent = item.key + ' · ' + item.name;
+      el.appendChild(tag);
+
+      const dwell = document.createElement('span');
+      dwell.className = 'dwell';
+      el.appendChild(dwell);
+
+      // 开发模拟：点击色块直接选色；真实场景由"注视停留 1 秒"触发
+      el.addEventListener('click', () => selectColor(i, true));
+
+      paletteEl.appendChild(el);
+      swatchEls.push(el);
+      dwellBars.push(dwell);
+    });
+  }
+
+  /* ============================================================
+   * 7. 画布尺寸同步（devicePixelRatio 上限 2 + resize 自适应）
+   * ============================================================ */
+  function syncSize() {
+    const rect = stage.getBoundingClientRect();
+    stageRect = rect;
+    state.cssW = Math.max(1, rect.width);
+    state.cssH = Math.max(1, rect.height);
+
+    const ratio = Math.min(window.devicePixelRatio || 1, CFG.maxDpr);
+    for (const key of ['bg', 'stat', 'live']) {
+      const c = canvases[key];
+      const w = Math.round(state.cssW * ratio);
+      const h = Math.round(state.cssH * ratio);
+      if (c.width !== w || c.height !== h) {
+        c.width = w;
+        c.height = h;
+      }
+      ctxs[key].setTransform(ratio, 0, 0, ratio, 0, 0);
+    }
+
+    drawBackdrop();
+    redrawStatic();
+    redrawLive();
+  }
+
+  /* ---- 背景层：底色 + 径向渐变 + 网格线 + 暗角 ---- */
+  function drawBackdrop() {
+    const ctx = ctxs.bg;
+    const W = state.cssW;
+    const H = state.cssH;
+
+    ctx.clearRect(0, 0, W, H);
+
+    ctx.fillStyle = '#0a0e17';
+    ctx.fillRect(0, 0, W, H);
+
+    const glow = ctx.createRadialGradient(
+      W * 0.5, H * 0.42, 0,
+      W * 0.5, H * 0.42, Math.max(W, H) * 0.75
+    );
+    glow.addColorStop(0, 'rgba(76,201,240,.10)');
+    glow.addColorStop(.55, 'rgba(76,201,240,.03)');
+    glow.addColorStop(1, 'rgba(10,14,23,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+
+    const step = 48;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(31,43,69,.78)';
+    ctx.beginPath();
+    for (let x = step + .5; x < W; x += step) {
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, H);
+    }
+    for (let y = step + .5; y < H; y += step) {
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y);
+    }
+    ctx.stroke();
+
+    const vignette = ctx.createRadialGradient(
+      W * 0.5, H * 0.5, Math.min(W, H) * 0.32,
+      W * 0.5, H * 0.5, Math.max(W, H) * 0.78
+    );
+    vignette.addColorStop(0, 'rgba(0,0,0,0)');
+    vignette.addColorStop(1, 'rgba(0,0,0,.55)');
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  /* ============================================================
+   * 8. 笔迹绘制（霓虹发光 + 二次贝塞尔中点法平滑）
+   * ============================================================ */
+  function paintStroke(ctx, stroke) {
+    const pts = stroke.points;
+    if (pts.length < 2) return;   // 落笔期间无移动不画点，避免"点状墨迹"堆积
+
+    const W = state.cssW;
+    const H = state.cssH;
+
+    ctx.save();
+    ctx.lineWidth = CFG.penWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = stroke.color;
+    ctx.shadowColor = stroke.color;
+    ctx.shadowBlur = CFG.glowBlur;
+
+    // 单条路径一次 stroke：既保证平滑，又避免逐段叠加导致的发光斑块
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x * W, pts[0].y * H);
+
+    if (pts.length === 2) {
+      ctx.lineTo(pts[1].x * W, pts[1].y * H);
+    } else {
+      for (let i = 1; i < pts.length - 1; i++) {
+        const mx = (pts[i].x + pts[i + 1].x) * 0.5 * W;
+        const my = (pts[i].y + pts[i + 1].y) * 0.5 * H;
+        ctx.quadraticCurveTo(pts[i].x * W, pts[i].y * H, mx, my);
+      }
+      const n = pts.length;
+      ctx.quadraticCurveTo(
+        pts[n - 2].x * W, pts[n - 2].y * H,
+        pts[n - 1].x * W, pts[n - 1].y * H
+      );
+    }
+
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function redrawStatic() {
+    ctxs.stat.clearRect(0, 0, state.cssW, state.cssH);
+    for (let i = 0; i < state.strokes.length; i++) {
+      paintStroke(ctxs.stat, state.strokes[i]);
+    }
+  }
+
+  function redrawLive() {
+    ctxs.live.clearRect(0, 0, state.cssW, state.cssH);
+    if (state.live) paintStroke(ctxs.live, state.live);
+  }
+
+  /* ============================================================
+   * 9. 画笔状态机（DB-02）
+   * ============================================================ */
+  function beginStroke() {
+    if (state.selecting) return;   // 选色模式下不落笔
+    const cx = clamp01(1 - Input.x);
+    const cy = clamp01(Input.y);
+    state.live = { color: Input.color, points: [{ x: cx, y: cy }] };
+    state.liveDirty = true;
+  }
+
+  function endStroke() {
+    if (!state.live) return;
+    const stroke = state.live;
+    state.live = null;
+    if (stroke.points.length >= 2) {
+      state.strokes.push(stroke);
+      paintStroke(ctxs.stat, stroke);   // 增量落到静态层，避免每笔全量重绘
+    }
+    state.liveDirty = true;
+  }
+
+  function sampleLive() {
+    if (!state.penDown || !state.live || !raw.inside) return;
+    const cx = clamp01(1 - Input.x);
+    const cy = clamp01(Input.y);
+    const pts = state.live.points;
+    const last = pts[pts.length - 1];
+    const dx = (cx - last.x) * state.cssW;
+    const dy = (cy - last.y) * state.cssH;
+    if (Math.hypot(dx, dy) < CFG.minStep) return;
+    pts.push({ x: cx, y: cy });
+    state.liveDirty = true;
+  }
+
+  /* ============================================================
+   * 10. 逐帧更新
+   * ============================================================ */
+  function updateInput(now, dt) {
+    Input.signal.hand = (now - raw.lastActive) < CFG.idleMs;
+    Input.signal.face = faceSimOk;
+
+    // 指数平滑：按帧时长归一，保证不同刷新率下手感一致（防抖）
+    const k = 1 - Math.pow(1 - CFG.smooth, dt / 16.667);
+    state.smoothX += (raw.handX - state.smoothX) * k;
+    state.smoothY += (raw.handY - state.smoothY) * k;
+
+    Input.x = state.smoothX;
+    Input.y = state.smoothY;
+    Input.gaze.x = raw.gazeX;
+    Input.gaze.y = raw.gazeY;
+
+    // 握拳上升沿：用于高代价操作的"双条件"判定
+    // （鼠标停在按钮上按下时手掌不在画布内，因此与落笔判定解耦）
+    if (raw.down && !state.rawDown) state.rawDownEdge = true;
+    state.rawDown = raw.down;
+
+    // 落笔 / 抬笔：仅当手掌位于画布范围内才可落笔；切换带 300ms 冷却
+    const wantDown = raw.down && raw.inside;
+    if (wantDown !== state.penDown && (now - state.penChangedAt) >= CFG.penCooldown) {
+      const rising = wantDown && !state.penDown;
+      state.penDown = wantDown;
+      state.penChangedAt = now;
+      if (rising) beginStroke();
+      else endStroke();
+    }
+    Input.penDown = state.penDown;
+
+    sampleLive();
+  }
+
+  function updateGaze(now) {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // 注视点映射到屏幕坐标（同样按 X 轴镜像约定还原）
+    const gx = clamp01(1 - Input.gaze.x) * vw;
+    const gy = clamp01(Input.gaze.y) * vh;
+    state.gazeScreenX = gx;
+    state.gazeScreenY = gy;
+
+    // 方向量化（带死区，防抖）
+    const dx = gx - vw * 0.5;
+    const dy = gy - vh * 0.5;
+    const dead = Math.min(vw, vh) * 0.14;
+    let dir = 'center';
+    if (Math.hypot(dx, dy) > dead) {
+      if (Math.abs(dy) >= Math.abs(dx)) dir = dy < 0 ? 'up' : 'down';
+      else dir = dx < 0 ? 'left' : 'right';
+    }
+    // 顶部条带（颜色条及其上方）一律视为"注视上"，保证选色区稳定可复现
+    const paletteRect = paletteEl.getBoundingClientRect();
+    if (gy < paletteRect.bottom + 12) dir = 'up';
+    state.gazeDir = dir;
+    Input.gaze.dir = dir;
+
+    const canGaze = Input.signal.face && Input.signal.hand;
+    const wantSelect = canGaze && dir === 'up';
+
+    if (wantSelect) {
+      if (!state.selecting) {
+        state.selecting = true;
+        state.hoverIndex = -1;
+        state.dwellStart = now;
+        state.dwellFired = false;
+      }
+      const t = clamp((gx - paletteRect.left) / Math.max(1, paletteRect.width), 0, 0.9999);
+      const idx = Math.min(PALETTE.length - 1, Math.floor(t * PALETTE.length));
+
+      if (idx !== state.hoverIndex) {
+        state.hoverIndex = idx;
+        state.dwellStart = now;
+        state.dwellFired = false;
+      } else if (!state.dwellFired && (now - state.dwellStart) >= CFG.dwellMs) {
+        state.dwellFired = true;
+        selectColor(idx, false);
+      }
+    } else if (state.selecting) {
+      state.selecting = false;
+      state.hoverIndex = -1;
+      state.dwellFired = false;
+    }
+  }
+
+  function updateMode() {
+    state.mode = Input.signal.hand
+      ? (Input.signal.face ? 'dual' : 'gesture')
+      : 'idle';
+  }
+
+  /** DB-04 / DB-05：注视按钮 ＋ 握拳，二条件同时满足才触发；执行前闪烁二次确认 */
+  function updateArmed(now) {
+    const gx = state.gazeScreenX;
+    const gy = state.gazeScreenY;
+    const canGaze = Input.signal.face && Input.signal.hand && state.mode === 'dual';
+
+    const onClear = canGaze && hitRect(btnClear.getBoundingClientRect(), gx, gy);
+    const onSave = canGaze && hitRect(btnSave.getBoundingClientRect(), gx, gy);
+
+    btnClear.classList.toggle('is-gazed', onClear && state.armed === null);
+    btnSave.classList.toggle('is-gazed', onSave && state.armed === null);
+
+    if (state.rawDownEdge) {
+      if (onClear) requestHighCost('clear', false);
+      else if (onSave) requestHighCost('save', false);
+    }
+
+    if (state.armed) {
+      const a = state.armed;
+      const stillOn = a.bypass || (a.type === 'clear' ? onClear : onSave);
+      if (!stillOn) cancelArmed();
+      else if (now >= a.until) finishArmed();
+    }
+
+    state.rawDownEdge = false;
+  }
+
+  function hitRect(rect, x, y) {
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+  }
+
+  function requestHighCost(type, bypass) {
+    if (state.armed) return;
+    state.armed = { type: type, until: performance.now() + CFG.armMs, bypass: bypass };
+    (type === 'clear' ? btnClear : btnSave).classList.add('is-armed');
+  }
+
+  function cancelArmed() {
+    if (!state.armed) return;
+    (state.armed.type === 'clear' ? btnClear : btnSave).classList.remove('is-armed');
+    state.armed = null;
+  }
+
+  function finishArmed() {
+    const a = state.armed;
+    if (!a) return;
+    (a.type === 'clear' ? btnClear : btnSave).classList.remove('is-armed');
+    state.armed = null;
+    if (a.type === 'clear') {
+      clearCanvas();
+      toast('画布已清空');
+    } else {
+      savePNG();
+      toast('已保存 PNG');
+    }
+  }
+
+  /* ============================================================
+   * 11. 颜色 / 清空 / 保存
+   * ============================================================ */
+  function selectColor(index, byKey) {
+    const item = PALETTE[index];
+    if (!item) return;
+    const changed = Input.color !== item.hex;
+    activeIndex = index;
+    Input.color = item.hex;
+    penCursor.style.color = item.hex;
+    hudColorDot.style.background = item.hex;
+    if (changed || byKey) toast('已切换为' + item.name + '色');
+  }
+
+  function cycleColorByGesture() {
+    selectColor((activeIndex + 1) % PALETTE.length, true);
+  }
+
+  function clearCanvas() {
+    state.strokes.length = 0;
+    state.live = null;
+    redrawStatic();
+    state.liveDirty = true;
+    redrawLive();
+  }
+
+  function savePNG() {
+    const ratio = Math.min(window.devicePixelRatio || 1, CFG.maxDpr);
+    const out = document.createElement('canvas');
+    out.width = Math.max(1, Math.round(state.cssW * ratio));
+    out.height = Math.max(1, Math.round(state.cssH * ratio));
+
+    const ctx = out.getContext('2d');
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.drawImage(canvases.bg, 0, 0, state.cssW, state.cssH);
+    ctx.drawImage(canvases.stat, 0, 0, state.cssW, state.cssH);
+    ctx.drawImage(canvases.live, 0, 0, state.cssW, state.cssH);
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    out.toBlob((blob) => {
+      if (!blob) {
+        toast('保存失败，请重试');
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'air-canvas-' + stamp + '.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }, 'image/png');
+  }
+
+  /* ============================================================
+   * 12. 视图刷新
+   * ============================================================ */
+  function renderPalette(now) {
+    if (state.hoverIndex !== lastHover || activeIndex !== lastActive) {
+      lastHover = state.hoverIndex;
+      lastActive = activeIndex;
+      for (let i = 0; i < swatchEls.length; i++) {
+        swatchEls[i].classList.toggle('is-gazed', i === state.hoverIndex);
+        swatchEls[i].classList.toggle('is-active', i === activeIndex);
+      }
+    }
+    const p = state.hoverIndex >= 0
+      ? (state.dwellFired ? 1 : clamp((now - state.dwellStart) / CFG.dwellMs, 0, 1))
+      : 0;
+    for (let i = 0; i < dwellBars.length; i++) {
+      const v = i === state.hoverIndex ? p : 0;
+      dwellBars[i].style.transform = 'scaleX(' + v.toFixed(3) + ')';
+    }
+  }
+
+  function updateCursor() {
+    const x = clamp01(1 - Input.x) * state.cssW;
+    const y = clamp01(Input.y) * state.cssH;
+    // 用 translate 独立属性承载位移：不在 transition 列表中，逐帧跟随不产生滞后
+    penCursor.style.translate = x.toFixed(1) + 'px ' + y.toFixed(1) + 'px';
+    penCursor.style.opacity = Input.signal.hand ? '1' : '0';
+    penCursor.classList.toggle('is-down', state.penDown);
+  }
+
+  function setText(el, value) {
+    if (el.textContent !== value) el.textContent = value;
+  }
+
+  const MODE_TEXT = {
+    dual: '双条件 · GAZE+GESTURE',
+    gesture: '纯手势 · GESTURE ONLY',
+    idle: '待机 · STANDBY'
+  };
+  const DIR_TEXT = { up: 'UP', down: 'DOWN', left: 'LEFT', right: 'RIGHT', center: 'CENTER' };
+  let lastModeText = '';
+
+  function updateHud() {
+    setText(hudTip, Math.round(clamp01(1 - Input.x) * state.cssW) + ', ' + Math.round(clamp01(Input.y) * state.cssH));
+    setText(hudState, state.penDown ? '落笔 · CLOSED_FIST' : '抬笔 · OPEN_PALM');
+    setText(hudColorName, PALETTE[activeIndex].name);
+
+    const modeText = MODE_TEXT[state.mode];
+    if (modeText !== lastModeText) {
+      lastModeText = modeText;
+      hudMode.textContent = modeText;
+      hudMode.classList.toggle('on', state.mode === 'dual');
+      hudMode.classList.toggle('warn', state.mode === 'gesture');
+    }
+
+    setText(hudGaze, state.selecting ? (DIR_TEXT.up + ' · 选色区') : DIR_TEXT[state.gazeDir]);
+  }
+
+  function toast(text) {
+    toastEl.textContent = text;
+    toastEl.classList.add('is-show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('is-show'), CFG.toastMs);
+  }
+
+  /* ============================================================
+   * 13. 主循环
+   * ============================================================ */
+  function tick(now) {
+    requestAnimationFrame(tick);
+
+    const dt = state.lastFrame ? Math.min(now - state.lastFrame, 100) : 16.667;
+    state.lastFrame = now;
+
+    state.frames++;
+    if (now - state.fpsAt >= 500) {
+      state.fps = Math.round(state.frames * 1000 / (now - state.fpsAt));
+      state.frames = 0;
+      state.fpsAt = now;
+      setText(hudFps, String(state.fps));
+    }
+
+    updateInput(now, dt);
+    updateGaze(now);
+    updateMode();
+    updateArmed(now);
+
+    if (state.liveDirty) {
+      redrawLive();
+      state.liveDirty = false;
+    }
+
+    updateCursor();
+    renderPalette(now);
+    updateHud();
+  }
+
+  /* ============================================================
+   * 14. 启动
+   * ============================================================ */
+  buildPalette();
+  selectColor(0, false);
+  syncSize();
+  setText(hudFps, '--');
+
+  if (typeof ResizeObserver === 'function') {
+    new ResizeObserver(() => syncSize()).observe(stage);
+  }
+  window.addEventListener('resize', syncSize);
+
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
