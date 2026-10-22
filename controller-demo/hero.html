@@ -1,0 +1,1577 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>CREATIVE ✦ DEVELOPER — flow-field hero</title>
+<style>
+  /* ============================================================
+     Creative Developer Hero — flow-field line art + condensed black type
+     Pure HTML/CSS/JS. No external assets, no network, no libraries.
+
+     Reference study: wodniack.dev (Antoine Wodniack), built with Astro.
+     Original uses a <a-waves> custom element emitting SVG <path>, and the
+     typefaces PP Fraktion Mono / PP Editorial New / Bigger Display.
+     The flow field below is a line-for-line port of that element's maths
+     (grid 10x32, perlin wave + per-point spring, both clamped to +/-100) —
+     the folds are pure geometry, never a stroke or a colour change.
+     This reproduction renders it on Canvas 2D instead of SVG and uses a
+     textLength-compressed Arial Black wordmark — see docs/effect-breakdown.md
+     ============================================================ */
+
+  :root{
+    --red:#f20a36;
+    --ink:#160000;
+    --line:rgba(22,0,0,.80);
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --serif:"Times New Roman", Times, Georgia, serif;
+    --display:"Arial Black","Archivo Black","Helvetica Neue",Helvetica,Arial,sans-serif;
+    --rule:1px;
+    --bar:72px;
+  }
+  html[data-theme="dark"]{
+    --red:#160000;
+    --ink:#f20a36;
+    --line:rgba(242,10,54,.80);
+  }
+
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    padding:8px;
+    background:#000;
+    color:var(--ink);
+    font-family:var(--mono);
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  ::selection{background:var(--ink);color:var(--red)}
+
+  .frame{
+    height:100%;
+    background:var(--red);
+    display:grid;
+    grid-template-rows:var(--bar) minmax(0,1fr) auto;
+    overflow:hidden;
+    transition:background .35s ease;
+  }
+
+  /* ---------------- top bar ---------------- */
+  .topbar{
+    display:grid;
+    grid-template-columns:5.5% 27.4% 30.6% 3.1% 2.5% 24.5% 6.4%;
+    border-bottom:var(--rule) solid var(--ink);
+    min-width:0;
+  }
+  .topbar > *{min-width:0;overflow:hidden}
+  .topbar > * + *{border-left:var(--rule) solid var(--ink)}
+
+  .logo{display:flex;align-items:center;padding-left:14px}
+  .logo svg{width:34px;height:34px;display:block;color:var(--ink)}
+
+  .manifesto{
+    display:flex;align-items:flex-start;
+    padding:9px 14px 0;
+  }
+  .typer{font-size:9.5px;line-height:1.42;text-transform:uppercase;letter-spacing:.06em;white-space:pre-wrap}
+  .typer .caret{
+    display:inline-block;width:.36em;height:.72em;
+    background:currentColor;vertical-align:-.06em;margin-left:.12em;
+    animation:blink 1.05s steps(1,end) infinite;
+  }
+  @keyframes blink{0%,50%{opacity:1}50.01%,100%{opacity:0}}
+
+  .nav{
+    display:flex;align-items:center;justify-content:space-around;
+    padding:0 3%;
+  }
+  .nav a{
+    font-size:13px;letter-spacing:.30em;text-transform:uppercase;
+    color:var(--ink);text-decoration:none;position:relative;
+    padding:4px 2px;transition:opacity .18s ease;
+  }
+  .nav a::after{
+    content:"";position:absolute;left:0;right:0;bottom:0;height:1px;
+    background:var(--ink);transform:scaleX(0);transform-origin:left;
+    transition:transform .28s cubic-bezier(.2,.9,.2,1);
+  }
+  .nav a:hover::after,.nav a:focus-visible::after{transform:scaleX(1)}
+
+  .socials{display:grid;grid-template-rows:1fr 1fr}
+  .socials > *{
+    display:flex;align-items:center;justify-content:center;
+    color:var(--ink);
+  }
+  .socials > * + *{border-top:var(--rule) solid var(--ink)}
+  .socials svg{width:15px;height:15px}
+  .socials .badge{font-size:11px;font-weight:700;letter-spacing:-.02em;line-height:1}
+
+  .extras{display:flex;align-items:center;justify-content:center}
+  .extras svg{width:17px;height:17px}
+  .extras .contrast{
+    background:none;border:0;padding:0;cursor:pointer;color:var(--ink);
+    display:flex;align-items:center;justify-content:center;width:100%;height:100%;
+  }
+  .extras .contrast:hover svg{transform:rotate(-180deg)}
+  .extras .contrast svg{transition:transform .45s cubic-bezier(.2,.9,.2,1)}
+
+  .status{
+    display:flex;flex-direction:column;justify-content:center;gap:2px;
+    padding:0 12px;font-family:var(--serif);font-size:15.5px;line-height:1.32;
+  }
+  .status .link{color:inherit;text-decoration:none;border-bottom:1px solid transparent;transition:border-color .2s}
+  .status .link:hover{border-bottom-color:var(--ink)}
+  .status .arrow{display:inline-block;transition:transform .25s cubic-bezier(.2,.9,.2,1)}
+  .status .link:hover .arrow{transform:translateX(4px)}
+
+  .qr{display:flex;align-items:center;justify-content:center}
+  .qr svg{width:min(84%,62px);height:auto;display:block;color:var(--ink)}
+
+  /* ---------------- stage (canvas) ---------------- */
+  .stage{position:relative;overflow:hidden;min-height:0}
+  .stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+  /* ---------------- wordmark ---------------- */
+  .wordmark{position:relative;border-top:var(--rule) solid var(--ink)}
+  .wordmark .bigtype{display:block;width:100%;height:auto}
+  .bigtype text{
+    font-family:var(--display);
+    font-weight:900;
+    fill:var(--ink);
+    stroke:var(--ink);
+    stroke-width:9;
+    stroke-linejoin:round;
+    paint-order:stroke fill;
+  }
+  .bigtype path{fill:var(--ink)}
+
+  .ticker{
+    position:absolute;left:0;right:0;height:16px;line-height:16px;
+    padding:0 9px;font-size:10px;white-space:nowrap;overflow:hidden;
+    color:var(--ink);opacity:.92;letter-spacing:.01em;
+    -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 18px,#000 calc(100% - 18px),transparent 100%);
+            mask-image:linear-gradient(90deg,transparent 0,#000 18px,#000 calc(100% - 18px),transparent 100%);
+  }
+  .ticker--top{top:1.1%}
+  .ticker--bottom{bottom:3.1%}
+  .ticker .tcap{
+    display:inline-block;width:5px;height:6px;background:var(--ink);
+    vertical-align:middle;position:relative;top:-.5px;margin:0 7px;
+    clip-path:polygon(0 0,100% 50%,0 100%);
+  }
+  .ticker .tcap:last-child{transform:rotate(180deg)}
+  .ticker .tbin{opacity:1}
+  .ticker .teq{opacity:1;margin-right:2px}
+  .ticker .tsl{opacity:.5;letter-spacing:-.09em;margin-right:3px}
+
+  /* ---------------- custom cursor ---------------- */
+  #cursor{
+    position:fixed;top:0;left:0;width:9px;height:9px;border-radius:50%;
+    background:var(--ink);pointer-events:none;z-index:99;
+    transform:translate(-50%,-50%);opacity:0;
+    transition:width .18s ease,height .18s ease,opacity .3s ease;
+    mix-blend-mode:normal;
+  }
+  body.cursor-on #cursor{opacity:1}
+  body.cursor-on a,body.cursor-on button{cursor:none}
+  body.cursor-on{cursor:none}
+
+  /* 鼠标箭头：和视线点分工——点跟视线，箭头跟鼠标 */
+  #mpointer{
+    position:fixed;left:0;top:0;width:20px;height:28px;z-index:98;
+    pointer-events:none;opacity:0;transition:opacity .2s ease;
+    will-change:transform;
+    filter:drop-shadow(0 1px 2px rgba(0,0,0,.3));
+  }
+  #mpointer.on{opacity:1}
+
+  /* ---------------- responsive ---------------- */
+  @media (max-width:1100px){
+    :root{--bar:62px}
+    .topbar{grid-template-columns:6% 26% 30% 3.4% 2.8% 24.4% 7.4%}
+    .nav a{font-size:11px;letter-spacing:.26em}
+    .status{font-size:13px}
+  }
+  @media (max-width:860px){
+    :root{--bar:56px}
+    .topbar{grid-template-columns:9% 34% 40% 6% 0 0 11%}
+    .extras,.status{display:none}
+    .manifesto{padding:7px 10px 0}
+    .typer{font-size:8.5px}
+    .nav a{font-size:10px;letter-spacing:.2em}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .ticker,.typer .caret{animation:none}
+  }
+</style>
+<style>
+  /* ---- gaze adapter HUD (added by gaze-hero; the hero itself is untouched) */
+  .gzhud{position:fixed;left:12px;bottom:12px;z-index:60;width:236px;
+    font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:rgba(14,14,16,.86);color:#e9e9ee;border:1px solid rgba(255,255,255,.14);
+    border-radius:10px;padding:8px 10px;backdrop-filter:blur(6px);
+    box-shadow:0 8px 28px rgba(0,0,0,.34);-webkit-user-select:none;user-select:none}
+  .gzhud .gzrow{display:flex;justify-content:space-between;gap:10px;
+    border-bottom:1px solid rgba(255,255,255,.06);padding:1px 0}
+  .gzhud .gzrow:last-of-type{border-bottom:0}
+  .gzhud .gzrow span:first-child{opacity:.62;white-space:nowrap}
+  .gzhud .gzrow span:last-child{text-align:right;font-variant-numeric:tabular-nums;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .gzhud .gztitle{color:#9dc6ff;letter-spacing:.02em}
+  .gzhud .gztitle span{opacity:.85}
+  .gzhud .gzkeys{margin-top:6px;padding-top:5px;border-top:1px solid rgba(255,255,255,.10);
+    font-size:9.5px;line-height:1.45;opacity:.6}
+</style>
+</head>
+<body>
+
+<div class="frame">
+
+  <!-- ===== top bar ===== -->
+  <header class="topbar">
+    <div class="logo">
+      <svg viewBox="0 0 44 44" aria-label="monogram" role="img">
+        <g fill="currentColor">
+          <rect x="0"  y="1"  width="7" height="42"/>
+          <rect x="10" y="1"  width="7" height="19"/>
+          <rect x="10" y="25" width="7" height="18"/>
+          <rect x="20" y="1"  width="7" height="42"/>
+          <rect x="30" y="1"  width="4" height="19"/>
+          <rect x="36" y="1"  width="4" height="19"/>
+          <rect x="30" y="25" width="4" height="18"/>
+          <rect x="36" y="25" width="4" height="18"/>
+        </g>
+      </svg>
+    </div>
+
+    <div class="manifesto"><div class="typer" id="typer"></div></div>
+
+    <nav class="nav">
+      <a href="#about">ABOUT</a>
+      <a href="#work">WORK</a>
+      <a href="#contact">CONTACT</a>
+    </nav>
+
+    <div class="socials">
+      <a href="#codepen" aria-label="CodePen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M12 2.2 21.4 8.4v7.2L12 21.8 2.6 15.6V8.4z"/>
+          <path d="M2.6 8.4 12 14.6l9.4-6.2M12 14.6v7.2M12 14.6 2.6 15.6M12 14.6l9.4 1"/>
+        </svg>
+      </a>
+      <a href="#linkedin" aria-label="LinkedIn" class="badge">in</a>
+    </div>
+
+    <div class="extras">
+      <button class="contrast" id="theme" type="button" aria-label="Change contrast">
+        <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <path d="M10.1 20c-1.38 0-2.68-.26-3.9-.79a10.1 10.1 0 0 1-3.175-2.136A10.1 10.1 0 0 1 .888 13.9 9.72 9.72 0 0 1 .1 10c0-1.383.262-2.683.788-3.9A10.1 10.1 0 0 1 3.025 2.925 10.1 10.1 0 0 1 6.2.788 9.72 9.72 0 0 1 10.1 0c1.382 0 2.682.263 3.9.788a10.1 10.1 0 0 1 3.175 2.137 10.1 10.1 0 0 1 2.137 3.175c.527 1.217.789 2.517.787 3.9a9.9 9.9 0 0 1-.788 3.9 10.1 10.1 0 0 1-2.137 3.175 10.1 10.1 0 0 1-3.175 2.138c-1.215.526-2.515.788-3.9.787Zm1-2.075c1.983-.25 3.646-1.121 4.988-2.613S18.1 12.05 18.1 10c0-2.05-.671-3.82-2.012-5.312C14.745 3.196 13.083 2.325 11.1 2.075Z"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="status">
+      <span>Coding globally from France.</span>
+      <a class="link" href="#hire">Available for freelance work <span class="arrow">&rarr;</span> Hire me</a>
+    </div>
+
+    <div class="qr"><svg id="qrsvg" viewBox="0 0 25 25" aria-hidden="true"></svg></div>
+  </header>
+
+  <!-- ===== stage ===== -->
+  <section class="stage">
+    <canvas id="flow"></canvas>
+  </section>
+
+  <!-- ===== wordmark ===== -->
+  <footer class="wordmark">
+    <div class="ticker ticker--top" id="tickTop"></div>
+
+    <svg class="bigtype" viewBox="0 0 1470 288" preserveAspectRatio="xMidYMid meet" role="img"
+         aria-label="CREATIVE DEVELOPER">
+      <defs>
+        <filter id="grit" x="-6%" y="-14%" width="112%" height="128%"
+                filterUnits="objectBoundingBox" primitiveUnits="userSpaceOnUse">
+          <feTurbulence type="fractalNoise" baseFrequency="0.16" numOctaves="3"
+                        seed="17" result="n"/>
+          <feDisplacementMap in="SourceGraphic" in2="n" scale="2.2"
+                             xChannelSelector="R" yChannelSelector="G"/>
+        </filter>
+      </defs>
+
+      <g filter="url(#grit)">
+        <text x="44" y="255" font-size="286" textLength="586"
+              lengthAdjust="spacingAndGlyphs">CREATIVE</text>
+        <path d="M677 118 C 680 141 686 146 706 150 C 686 154 680 159 677 182
+                 C 674 159 668 154 648 150 C 668 146 674 141 677 118 Z"/>
+        <text x="735" y="255" font-size="286" textLength="690"
+              lengthAdjust="spacingAndGlyphs">DEVELOPER</text>
+      </g>
+    </svg>
+
+    <div class="ticker ticker--bottom" id="tickBot"></div>
+  </footer>
+
+</div>
+
+<div id="cursor" aria-hidden="true"></div>
+<div id="mpointer" aria-hidden="true"><svg width="20" height="28" viewBox="0 0 20 28" fill="none"><path d="M2 1.5 L2 22.2 L7.3 17.4 L10.4 24.8 L14 23.3 L10.9 16 L18.2 15.7 Z" fill="#fff" stroke="#111" stroke-width="1.3" stroke-linejoin="round"/></svg></div>
+
+<script>
+(function(){
+  "use strict";
+  var REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* =========================================================
+     2. FLOW FIELD  —  a woven membrane that folds over itself
+     ---------------------------------------------------------
+     Faithful port of the original <a-waves> custom element
+     (wodniack.dev  →  /_astro/hoisted.*.js  →  class "a-waves").
+
+     The original builds a grid of VERTICAL polylines — a column
+     every 10px, a point every 32px, extending 100px past either
+     side — and gives every point two displacements:
+
+       wave    cos/sin of a perlin sample: up to ±32px across and
+               ±16px down. On its own the field gradient stays just
+               under 1, so columns bunch and swell but never fold.
+
+       cursor  a spring-mass state of its own. The pointer pushes
+               nearby points ALONG ITS DIRECTION OF TRAVEL, scaled
+               by its speed, inside a 175px radius. A spring pulls
+               them home, so the crease lingers and then relaxes.
+
+     Add the two and the local gradient crosses 1. The mapping
+     x → x + dx stops being monotonic, neighbouring columns over-
+     take one another, and the membrane folds over itself into a
+     diamond cross-hatch. Nothing gets thicker and nothing gets
+     highlighted — the fold is pure geometry, and that fold is
+     the feedback.
+     ========================================================= */
+
+  /* ---- Perlin noise: same table, same math as the original ---- */
+  function Vec(x, y, z){ this.x = x; this.y = y; this.z = z; }
+  Vec.prototype.dot2 = function(x, y){ return this.x * x + this.y * y; };
+
+  function Perlin(seed){
+    this.grad3 = [
+      new Vec(1,1,0), new Vec(-1,1,0), new Vec(1,-1,0), new Vec(-1,-1,0),
+      new Vec(1,0,1), new Vec(-1,0,1), new Vec(1,0,-1), new Vec(-1,0,-1),
+      new Vec(0,1,1), new Vec(0,-1,1), new Vec(0,1,-1), new Vec(0,-1,-1)
+    ];
+    this.p = [151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,190,6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,74,165,71,134,139,48,27,166,77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,55,46,245,40,244,102,143,54,65,25,63,161,1,216,80,73,209,76,132,187,208,89,18,169,200,196,135,130,116,188,159,86,164,100,109,198,173,186,3,64,52,217,226,250,124,123,5,202,38,147,118,126,255,82,85,212,207,206,59,227,47,16,58,17,182,189,28,42,223,183,170,213,119,248,152,2,44,154,163,70,221,153,101,155,167,43,172,9,129,22,39,253,19,98,108,110,79,113,224,232,178,185,112,104,218,246,97,228,251,34,242,193,238,210,144,12,191,179,162,241,81,51,145,235,249,14,239,107,49,192,214,31,181,199,106,157,184,84,204,176,115,121,50,45,127,4,150,254,138,236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180];
+    this.perm = new Array(512);
+    this.gradP = new Array(512);
+    this.seed(seed);
+  }
+  Perlin.prototype.seed = function(seed){
+    if (seed > 0 && seed < 1) seed *= 65536;
+    seed = Math.floor(seed);
+    if (seed < 256) seed |= seed << 8;
+    for (var i = 0; i < 256; i++){
+      var v = (i & 1) ? (this.p[i] ^ (seed & 255))
+                      : (this.p[i] ^ ((seed >> 8) & 255));
+      this.perm[i] = this.perm[i + 256] = v;
+      this.gradP[i] = this.gradP[i + 256] = this.grad3[v % 12];
+    }
+  };
+  Perlin.prototype.fade = function(t){ return t*t*t*(t*(t*6-15)+10); };
+  Perlin.prototype.lerp = function(a,b,t){ return (1-t)*a + t*b; };
+  Perlin.prototype.perlin2 = function(x,y){
+    var X = Math.floor(x), Y = Math.floor(y);
+    x -= X; y -= Y; X &= 255; Y &= 255;
+    var g = this.gradP, pm = this.perm;
+    var r = g[X + pm[Y]].dot2(x, y);
+    var n = g[X + pm[Y + 1]].dot2(x, y - 1);
+    var o = g[X + 1 + pm[Y]].dot2(x - 1, y);
+    var a = g[X + 1 + pm[Y + 1]].dot2(x - 1, y - 1);
+    var u = this.fade(x);
+    return this.lerp(this.lerp(r, o, u), this.lerp(n, a, u), this.fade(y));
+  };
+
+  var W = 0, H = 0, DPR = 1;
+  var noise = new Perlin(Math.random());
+
+  /* Every number the original hard-codes, in one place. */
+  var WAVE = {
+    colGap:  10,      // column pitch (px)      — original: 10
+    rowGap:  32,      // point pitch (px)       — original: 32
+    padX:    100,     // grid overhang, each side (px)
+    padY:    15,
+
+    ampX:    32,      // wave.x = cos(angle) * ampX
+    ampY:    16,      // wave.y = sin(angle) * ampY
+    angle:   12,      // angle  = perlin2(...) * 12
+    freqX:   0.002,
+    freqY:   0.0015,
+    driftX:  0.0125,  // the "t * ..." multipliers of the original
+    driftY:  0.005,
+    drift:   1,       // 1 = the original's rate; time is in milliseconds
+
+    radius:  175,     // pointer influence radius (px)  — never below 175
+    force:   0.00065, // impulse, per px of pointer travel
+    spring:  0.005,   // pull back to rest
+    damp:    0.925,   // velocity damping
+    clamp:   100,     // hard displacement cap per point (px)
+
+    mouseSmooth: 0.1,
+    speedSmooth: 0.1,
+    maxSpeed:    100,
+    lineWidth:   1
+  };
+
+  var canvas = document.getElementById("flow");
+  var ctx = canvas.getContext("2d", { alpha: true });
+  var strokeColor = "rgba(22,0,0,.80)";
+
+  var cols = [];
+  var mouse = { x: -10, y: 0, lx: 0, ly: 0, sx: 0, sy: 0, v: 0, vs: 0, a: 0, set: false };
+  var interactive = false;
+  var time = 0;
+
+  function readColor(){
+    strokeColor = getComputedStyle(document.documentElement)
+                    .getPropertyValue("--line").trim() || strokeColor;
+  }
+
+  /* ---- build the grid ---- */
+  function setLines(){
+    cols.length = 0;
+    var n = Math.ceil((W + WAVE.padX * 2) / WAVE.colGap);
+    var m = Math.ceil((H + WAVE.padY * 2) / WAVE.rowGap);
+    var ox = (W - WAVE.colGap * n) / 2;
+    var oy = (H - WAVE.rowGap * m) / 2;
+    for (var c = 0; c <= n; c++){
+      var col = new Array(m + 1);
+      for (var g = 0; g <= m; g++){
+        col[g] = {
+          x: ox + WAVE.colGap * c,
+          y: oy + WAVE.rowGap * g,
+          wx: 0, wy: 0,          // wave displacement
+          cx: 0, cy: 0,          // cursor displacement (spring state)
+          vx: 0, vy: 0           // cursor velocity
+        };
+      }
+      cols.push(col);
+    }
+  }
+
+  var lastW = -1, lastH = -1;
+  function resize(){
+    var r = canvas.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return;
+    /* a ResizeObserver fires once on observe() with an unchanged size —
+       rebuilding the grid there would wipe every in-flight crease */
+    if (Math.abs(r.width - lastW) < 0.5 && Math.abs(r.height - lastH) < 0.5){
+      readColor();
+      return;
+    }
+    lastW = r.width; lastH = r.height;
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = r.width; H = r.height;
+    canvas.width  = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.lineJoin = "miter";
+    ctx.miterLimit = 2;
+    ctx.lineCap = "butt";
+    readColor();
+    setLines();
+    movePoints(time);
+    drawLines();
+  }
+
+  /* ---- the physics ---- */
+  function movePoints(t){
+    var f = WAVE, i, j, col, p;
+    for (i = 0; i < cols.length; i++){
+      col = cols[i];
+      for (j = 0; j < col.length; j++){
+        p = col[j];
+
+        /* 1. the standing wave — perlin angle swung into a circle */
+        var ang = noise.perlin2((p.x + t * f.driftX) * f.freqX,
+                                (p.y + t * f.driftY) * f.freqY) * f.angle;
+        p.wx = Math.cos(ang) * f.ampX;
+        p.wy = Math.sin(ang) * f.ampY;
+
+        if (!interactive) continue;
+
+        /* 2. the pointer drag — an impulse along the direction of travel */
+        var dx = p.x - mouse.sx, dy = p.y - mouse.sy;
+        var d  = Math.sqrt(dx * dx + dy * dy);
+        var R  = Math.max(f.radius, mouse.vs);
+        if (d < R){
+          var att = (1 - d / R) * Math.cos(d * 0.001);
+          p.vx += Math.cos(mouse.a) * att * R * mouse.vs * f.force;
+          p.vy += Math.sin(mouse.a) * att * R * mouse.vs * f.force;
+        }
+
+        /* 3. spring home, damp, integrate, clamp */
+        p.vx += -p.cx * f.spring;
+        p.vy += -p.cy * f.spring;
+        p.vx *= f.damp;
+        p.vy *= f.damp;
+        p.cx += p.vx * 2;
+        p.cy += p.vy * 2;
+        if (p.cx >  f.clamp) p.cx =  f.clamp;
+        if (p.cx < -f.clamp) p.cx = -f.clamp;
+        if (p.cy >  f.clamp) p.cy =  f.clamp;
+        if (p.cy < -f.clamp) p.cy = -f.clamp;
+      }
+    }
+  }
+
+  function drawLines(){
+    ctx.clearRect(0, 0, W, H);
+    ctx.beginPath();
+    for (var i = 0; i < cols.length; i++){
+      var col = cols[i], last = col.length - 1;
+      for (var j = 0; j <= last; j++){
+        var p = col[j];
+        /* the original pins the first and last point of every column */
+        var pinned = (j === 0 || j === last);
+        var px = p.x + p.wx + (pinned ? 0 : p.cx);
+        var py = p.y + p.wy + (pinned ? 0 : p.cy);
+        if (j === 0) ctx.moveTo(px, py);
+        else         ctx.lineTo(px, py);
+      }
+    }
+    ctx.lineWidth = WAVE.lineWidth;
+    ctx.strokeStyle = strokeColor;
+    ctx.stroke();
+  }
+
+  /* The original is driven by a 60Hz ticker, and EVERY constant in the physics
+     below — damp .925, spring .005, the .1 filters — is a per-FRAME value, not
+     a per-second one. Stepping it with a raw rAF delta would make creases decay
+     twice as fast on a 120Hz display, so the loop runs on a fixed 1/60
+     accumulator and renders once per rAF. */
+  var STEP = 1 / 60;
+
+  function tick(dt){
+    /* `time` is elapsed MILLISECONDS, matching the original's
+       $.emit("tick", t * 1e3) off the GSAP ticker — which is what makes
+       driftX / driftY below mean exactly what they mean there. */
+    time += dt * 1000 * (REDUCED ? 0 : WAVE.drift);
+
+    mouse.sx += (mouse.x - mouse.sx) * WAVE.mouseSmooth;
+    mouse.sy += (mouse.y - mouse.sy) * WAVE.mouseSmooth;
+
+    var dx = mouse.x - mouse.lx, dy = mouse.y - mouse.ly;
+    var d  = Math.sqrt(dx * dx + dy * dy);
+    mouse.v = d;
+    mouse.vs += (d - mouse.vs) * WAVE.speedSmooth;
+    if (mouse.vs > WAVE.maxSpeed) mouse.vs = WAVE.maxSpeed;
+    mouse.lx = mouse.x;
+    mouse.ly = mouse.y;
+    mouse.a  = Math.atan2(dy, dx);
+
+    movePoints(time);
+  }
+
+  /* ---- input ---- */
+  function feed(clientX, clientY){
+    var r = canvas.getBoundingClientRect();
+    mouse.x = clientX - r.left;
+    mouse.y = clientY - r.top;
+    if (!mouse.set){
+      mouse.sx = mouse.x; mouse.sy = mouse.y;
+      mouse.lx = mouse.x; mouse.ly = mouse.y;
+      mouse.set = true;
+    }
+    kick();
+  }
+
+  var raf = 0, last = 0, acc = 0;
+  /* When an external driver owns the clock — a webcam eye-tracker sampling at
+     30fps, or a 120Hz display — the internal loop must stay out of the way.
+     The physics runs on a fixed 1/60 step and its speed term is measured
+     per tick, so a driver that feeds at a different rate would silently change
+     the crease strength. heroGaze.drive(true) hands the clock over. */
+  var external = false;
+  function frame(now){
+    raf = 0;
+    acc += last ? Math.min((now - last) / 1000, 0.1) : STEP;
+    last = now;
+    var n = 0;
+    while (acc >= STEP && n++ < 6){ tick(STEP); acc -= STEP; }
+    drawLines();
+    raf = requestAnimationFrame(frame);
+  }
+  function kick(){
+    if (raf || W <= 2 || external) return;
+    last = 0; acc = 0;
+    raf = requestAnimationFrame(frame);
+  }
+
+  window.addEventListener("pointermove", function(e){
+    feed(e.clientX, e.clientY);
+  }, { passive: true });
+
+  /* Drive it from a mouse, a webcam eye-tracker, anything:
+       heroGaze.set(clientX, clientY)   // viewport coordinates
+     The effect is velocity driven, so keep the points coming —
+     a fast sweep leaves a crease, a slow one barely moves it. */
+  window.heroGaze = {
+    set:    function(cx, cy){ feed(cx, cy); },
+    point:  function(cx, cy){ feed(cx, cy); },
+    moveTo: function(cx, cy){ feed(cx, cy); },
+    local:  function(x, y){
+      mouse.x = x; mouse.y = y;
+      if (!mouse.set){
+        mouse.sx = x; mouse.sy = y; mouse.lx = x; mouse.ly = y; mouse.set = true;
+      }
+      kick();
+    },
+    /* re-seat the pointer with NO motion impulse. An eye-tracker needs this
+       every time it re-acquires after a blink or a lost face: jumping the
+       pointer there with set() would read as a full-speed flick and slam a
+       crease into a place you never actually looked. */
+    seat: function(cx, cy){
+      var r = canvas.getBoundingClientRect();
+      mouse.x = mouse.sx = mouse.lx = cx - r.left;
+      mouse.y = mouse.sy = mouse.ly = cy - r.top;
+      mouse.vs = mouse.v = 0;
+      mouse.a = 0;
+      mouse.set = true;
+    },
+    /* let go — the creases spring back on their own */
+    leave: function(){ mouse.x = mouse.lx; mouse.y = mouse.ly; mouse.vs = 0; },
+    /* flatten everything right now */
+    clear: function(){
+      for (var i = 0; i < cols.length; i++){
+        for (var j = 0; j < cols[i].length; j++){
+          var p = cols[i][j];
+          p.cx = p.cy = p.vx = p.vy = 0;
+        }
+      }
+      mouse.vs = 0;
+      drawLines();
+    },
+    redraw: function(){ drawLines(); },
+    rebuild: function(){ lastW = lastH = -1; resize(); },
+    /* Hand the clock over to an external driver (eye-tracker, replay):
+       pair every set(x,y) with step(1) so each fed position lands on exactly
+       one physics tick. drive(false) resumes the internal loop / mouse path. */
+    drive: function(own){
+      external = !!own;
+      if (external){ if (raf) cancelAnimationFrame(raf); raf = 0; }
+      else kick();
+    },
+    /* deterministic time-stepping — for headless tests and for replaying
+       a recorded gaze track at an exact frame rate */
+    step: function(n, dt){
+      n = n || 1; dt = dt || STEP;
+      for (var i = 0; i < n; i++) tick(dt);
+      drawLines();
+    },
+    now: function(){ return time; },
+    /* read-only view of the pointer state — for tuning a driver (e.g. an
+       eye-tracker) you need to watch the speed term `vs`, since it is what
+       the whole effect is actually a function of */
+    state: function(){
+      return { x: mouse.x, y: mouse.y, sx: mouse.sx, sy: mouse.sy,
+               v: mouse.v, vs: mouse.vs, a: mouse.a, interactive: interactive };
+    },
+    config: WAVE,
+    grid: cols,
+    perlin: noise
+  };
+
+  window.addEventListener("resize", function(){
+    resize();
+  });
+
+
+  /* =========================================================
+     3. 指针：小黑点跟视线，鼠标另画一个箭头
+     ========================================================= */
+  (function(){
+    var dot = document.getElementById("cursor");
+    var arrow = document.getElementById("mpointer");
+    if (!window.matchMedia("(pointer: fine)").matches) return;
+    var cx = 0, cy = 0, tx = 0, ty = 0, on = false;   // 视线点（缓动）
+    var mx = 0, my = 0, mOn = false;                  // 鼠标箭头（1:1）
+
+    // 鼠标只驱动箭头；#cursor 的位置由 GazeHero 的视线输出决定
+    window.addEventListener("pointermove", function(e){
+      mx = e.clientX; my = e.clientY;
+      if (!mOn){ mOn = true; document.body.classList.add("cursor-on"); }
+    }, { passive: true });
+
+    (function follow(){
+      var st = window.GazeHero && window.GazeHero.stats ? window.GazeHero.stats() : null;
+      var p = st && st.in;
+      if (p && p.x != null && p.y != null){
+        tx = p.x; ty = p.y;
+        if (!on){ on = true; cx = tx; cy = ty; document.body.classList.add("cursor-on"); }
+      }
+      cx += (tx - cx) * 0.22;
+      cy += (ty - cy) * 0.22;
+      dot.style.transform = "translate(" + cx + "px," + cy + "px) translate(-50%,-50%)";
+      if (mOn && arrow){
+        arrow.style.transform = "translate(" + (mx - 2) + "px," + (my - 2) + "px)";
+        // 鼠标自己驱动视线时点和箭头重合，只留点
+        arrow.classList.toggle("on", !(st && st.source === "mouse"));
+      }
+      requestAnimationFrame(follow);
+    })();
+  })();
+
+  /* =========================================================
+     4. Terminal-style typewriter block
+     ========================================================= */
+  (function(){
+    var POOL = [
+      "CRAFTING MAGIC, PIXEL BY PIXEL.",
+      "FINDING COLORS.",
+      "BUT WHY BLUSH?",
+      "PLEASE WAIT",
+      "LOADING...",
+      "BUT WHY RUSH?",
+      "RUNNING CREATIVITY PROTOCOLS",
+      "NO TEMPLATES WERE HARMED",
+      "SHIPPING SINCE 2009",
+      "PLEASE WAIT, I AM NOT CRAZY"
+    ];
+    var LINES = 4;
+    var host = document.getElementById("typer");
+    var els = [], i;
+    for (i = 0; i < LINES; i++){
+      var d = document.createElement("div");
+      d.innerHTML = '<span class="txt"></span>' +
+                    (i === LINES - 1 ? '<span class="caret"></span>' : '');
+      host.appendChild(d);
+      els.push(d.querySelector(".txt"));
+    }
+    function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+
+    function run(el, delay){
+      var seq = 0;
+      function next(prev){
+        var pick = POOL[(Math.random() * POOL.length) | 0];
+        if (POOL.length > 1 && pick === prev) pick = POOL[(Math.random() * POOL.length) | 0];
+        return pick;
+      }
+      function cycle(prev){
+        var txt = next(prev);
+        return (function(){
+          var p = Promise.resolve(), k;
+          for (k = 0; k <= txt.length; k++){
+            (function(k){
+              p = p.then(function(){
+                el.textContent = txt.slice(0, k);
+                return REDUCED ? null : sleep(26 + Math.random() * 46);
+              });
+            })(k);
+          }
+          return p.then(function(){ return sleep(850 + Math.random() * 1900); })
+                  .then(function(){ return cycle(txt); });
+        })();
+      }
+      setTimeout(function(){ cycle(""); }, delay);
+    }
+
+    els.forEach(function(el, idx){ run(el, idx * 260); });
+  })();
+
+  /* =========================================================
+     5. Binary ticker strips
+     ========================================================= */
+  (function(){
+    var top = document.getElementById("tickTop");
+    var bot = document.getElementById("tickBot");
+
+    function bits(){
+      var s = "", n = 8 + ((Math.random() * 14) | 0), i;
+      for (i = 0; i < n; i++) s += Math.random() < 0.5 ? "0" : "1";
+      return s;
+    }
+    function build(el){
+      var html = '<i class="tcap"></i>', len = 0;
+      while (len < 230){
+        var b = bits();
+        var sl = new Array(7 + ((Math.random() * 38) | 0)).join("/");
+        html += '<span class="tbin">' + b + '</span>';
+        if (Math.random() < 0.2) html += '<span class="teq">==</span>';
+        html += '<span class="tsl">' + sl + '</span>';
+        len += b.length + sl.length;
+      }
+      html += '<i class="tcap"></i>';
+      el.innerHTML = html;
+    }
+    function refresh(){ build(top); build(bot); }
+    refresh();
+    if (!REDUCED) setInterval(refresh, 780);
+  })();
+
+  /* =========================================================
+     6. Decorative QR block (visual placeholder, not scannable)
+     ========================================================= */
+  (function(){
+    var svg = document.getElementById("qrsvg");
+    if (!svg) return;
+    var N = 25, out = [], x, y, seed = 7;
+    function rnd(){ seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }
+
+    function finder(ox, oy){
+      out.push('<rect x="'+ox+'" y="'+oy+'" width="7" height="7"/>');
+      out.push('<rect x="'+(ox+1)+'" y="'+(oy+1)+'" width="5" height="5" style="fill:var(--red)"/>');
+      out.push('<rect x="'+(ox+2)+'" y="'+(oy+2)+'" width="3" height="3"/>');
+    }
+    for (y = 0; y < N; y++){
+      for (x = 0; x < N; x++){
+        var inFinder =
+          (x < 8 && y < 8) || (x > N - 9 && y < 8) || (x < 8 && y > N - 9);
+        if (inFinder) continue;
+        if (rnd() < 0.47) out.push('<rect x="'+x+'" y="'+y+'" width="1" height="1"/>');
+      }
+    }
+    finder(0, 0); finder(N - 7, 0); finder(0, N - 7);
+    svg.innerHTML = '<g fill="currentColor">' + out.join("") + '</g>';
+  })();
+
+  /* =========================================================
+     7. Theme toggle
+     ========================================================= */
+  (function(){
+    var btn = document.getElementById("theme");
+    btn.addEventListener("click", function(){
+      var html = document.documentElement;
+      html.setAttribute("data-theme",
+        html.getAttribute("data-theme") === "dark" ? "light" : "dark");
+      readColor();
+      drawLines();
+    });
+  })();
+
+  /* =========================================================
+     boot
+     ========================================================= */
+  resize();
+  interactive = true;
+  kick();
+
+  if (window.ResizeObserver){
+    var ro = new ResizeObserver(function(){ resize(); });
+    ro.observe(canvas.parentElement);
+  }
+  document.addEventListener("visibilitychange", function(){
+    if (document.hidden){ cancelAnimationFrame(raf); raf = 0; }
+    else if (!raf) kick();
+  });
+})();
+</script>
+
+<!-- ===== gaze adapter: any gaze source -> shaper -> hero ===== -->
+<script>
+/* ============================================================================
+   gaze-hero — drive the flow-field hero from ANY gaze source
+   ============================================================================
+   This is the ADAPTER LAYER, not the model. It expects to be handed gaze
+   positions by whatever tracker you have (a webcam model, a served demo page,
+   a recorded track) and turns them into something the hero physics can take.
+
+   The hero itself is untouched: every constant of its physics, and the
+   fixed 1/60 timestep, stay exactly as they are. All signal conditioning
+   lives here, in front of the pointer.
+
+   Four ways to get gaze in — switch with the M key, or programmatically
+   with GazeHero.source("api"):
+
+     demo    a synthetic eye, so this page is self-demonstrating with no
+             camera and no network. Saccades on the main sequence, fixation
+             drift, blinks, and a 30fps sample-and-hold detector (the
+             staircase is part of why a naive feed breaks).
+     api     GazeHero.feed(x, y, {...}) from the console or from any script.
+     postmsg anything that does window.postMessage({type:"gaze", x, y}, "*")
+             at this window — including a page opened next to this one.
+     mouse   the mouse, routed through the same shaper. Useful to SEE what
+             the shaper does to a signal you already trust.
+
+   Coordinates: sources hand over CLIENT pixels (viewport space) by default.
+   Values in [-1.5, 1.5] are read as normalised [0,1] screen coords and scaled
+   up, because that is what a webcam model normally emits. cfg.mirrorX is on
+   by default: a webcam sees you mirrored, so "look right" arrives as a
+   leftward value unless you flip it.
+
+   What the shaper does, and why (all of it measured on the real hero):
+     - the physics is OVER-sensitive, not under-sensitive: |cx| saturates at
+       vs ~= 4.4px/tick, which is only 5.5 deg/s, five times slower than the
+       slowest real saccade. So "fix this" = gate, hold, seat — NOT stretch.
+     - fixation drift is correlated, so following it charges a crease by
+       itself (measured 32.5px median over 12 drift seeds, raw).
+     - the gate is a VELOCITY gate (per tick, or per 33ms detection sample).
+       An accumulated-distance gate leaks: drift walks the gap past the
+       threshold and trickles micro-steps through (~18px of false crease).
+     - gate=8px/tick: 12 of 12 drift seeds stay at 0.0px. gate=6 leaks
+       12-16px on some seeds, and a sample-domain gate of 8-12px leaks too.
+       Do not lower it without re-running the multi-seed fixation test.
+     - after a blink the eye is somewhere else entirely. seat() silently
+       re-seats the pointer with no motion impulse (set() would slam a full
+       100px crease into a spot that was never looked at). But seating on the
+       first frame back is STILL not enough: One-Euro is mid-catch-up and its
+       own ramp reads as a saccade (48.5px of false crease). Wait for
+       cfg.reacqSamples genuinely fresh samples, clear the filter, then seat.
+   ============================================================================ */
+(function(){
+"use strict";
+if (!window.heroGaze){ console.error("[gaze] window.heroGaze not found — aborting"); return; }
+var hero = window.heroGaze;
+
+var TAU = Math.PI * 2, TICK_MS = 1000 / 60, TICK_S = 1 / 60;
+
+function clamp(v, a, b){ return v < a ? a : (v > b ? b : v); }
+function hypot(dx, dy){ return Math.sqrt(dx * dx + dy * dy); }
+function smoothstep(x){ return x * x * (3 - 2 * x); }
+
+/* seeded, so demo mode is reproducible: you cannot tell a tuning effect from
+   luck otherwise. A real tracker is not reproducible, which is exactly why
+   the fixation test below has to be run over many seeds. */
+var _seed = 20261022;
+function rnd(){ _seed = (_seed * 1664525 + 1013904223) >>> 0; return _seed / 4294967296; }
+function gauss(){ var u = 1 - rnd(), v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); }
+
+/* ---------------------------------------------------------------- config */
+var cfg = {
+  mode: "shaped",        // raw | filter | shaped
+  /* The gate. "tick" = per 1/60 render tick, "sample" = per detection sample.
+     Both held fixation at 0.0px over 12 drift seeds; "tick" keeps a stronger
+     low end (a 1deg saccade: tick/8 -> 37.8px vs sample/16 -> 8.1px), which
+     is why it is the default. Equivalents at 30fps input: 8px/tick = 16px/33ms. */
+  gateUnit: "tick",
+  gate: 8,               // px/tick
+  gateSample: 16,        // px per detection sample when gateUnit === "sample"
+  reanchor: 10,          // px of silent seat() correction while holding
+  /* 0 = auto: replay the saccade over the source's OWN sample interval.
+     This matters. The hero measures speed per 1/60 tick (vs += (d-vs)*.1),
+     so crease strength depends on how many ticks a movement is spread over.
+     A 60Hz source moves the pointer every tick -> N=1. A 30fps tracker moves
+     it every 2nd tick, so N=2 reproduces the same crease -- the same reason
+     gate 8px/tick == 16px/sample at 30fps. Hard-code >1 only to soften a
+     jittery tracker, at the cost of amplitude. */
+  replayN: 0,            // 0 = auto from the measured sample interval
+  sustain: false,        // optional breathing hold (keeps a small crease alive)
+  reacqSamples: 2,       // fresh detections to wait for before seating again
+  /* The detector rate we assume when a source does not tell us. Two places
+     need it: the demo's sample-and-hold (it must reproduce a 30fps
+     staircase, that is the failure mode this whole adapter exists for) and
+     adopt()'s default poll throttle. Declared late once, so 1/undefined
+     silently disabled BOTH -- adopt() never polled and the demo ran at 60. */
+  sampleFps: 30,
+  mirrorX: true, mirrorY: false,
+  unit: "auto",          // auto | norm | px
+  calib: { ax: 1, bx: 0, ay: 1, by: 0 },   // screen = calib.a * g + calib.b
+  lostMs: 400,           // silence before we let go (face/tracker lost)
+  cx: 0, cy: 0, pxPerDeg: 48
+};
+
+/* ------------------------------------------------------------------------ */
+/* One-Euro: position level, adaptive. Strong smoothing while the eye is
+   still (kills drift), weak while it moves (does not lag the saccade).
+   A plain low-pass can only do one of the two, which is the trap.
+   Measured on its own it is NOT the answer: it only takes fixation from
+   32.5px to 19.4px median (worst 30.3). It is here to feed the gate a clean
+   signal, not to solve the problem. */
+function OneEuro(minCutoff, beta, dCutoff){
+  this.minCutoff = minCutoff; this.beta = beta; this.dCutoff = dCutoff;
+  this.x = null; this.dx = 0;
+}
+OneEuro.prototype.alpha = function(cutoff, dt){
+  var te = 1 / (TAU * cutoff);
+  return 1 / (1 + te / dt);
+};
+OneEuro.prototype.filter = function(x, dt){
+  if (this.x === null){ this.x = x; this.dx = 0; return x; }
+  var dxRaw = (x - this.x) / dt;
+  var aD = this.alpha(this.dCutoff, dt);
+  this.dx = aD * dxRaw + (1 - aD) * this.dx;
+  var cutoff = this.minCutoff + this.beta * Math.abs(this.dx);
+  var a = this.alpha(cutoff, dt);
+  this.x = a * x + (1 - a) * this.x;
+  return this.x;
+};
+
+/* ----------------------------------------------------------------------- */
+var shaper = {
+  x: 0, y: 0, queue: null, i: 0, from: null, phase: 0,
+  lastFx: null, lastFy: null, holdTicks: 0, dTick: 0, lastSample: null,
+  inited: false, qn: 1,
+  reset: function(x, y){
+    this.x = x; this.y = y; this.queue = null; this.i = 0;
+    this.lastFx = null; this.lastFy = null;
+    this.holdTicks = 0; this.dTick = 0; this.lastSample = null;
+    this.inited = false; this.qn = 1;
+  },
+  /* fx, fy: filtered gaze in client px.  dSample: px moved since the previous
+     fresh detection (0 when the sample is a hold, not a new measurement). */
+  /* isFresh=false marks a tick that carries NO new detection. Those ticks
+     must still deliver a replay that is already in flight: a 30fps tracker
+     only has a sample every 2nd tick, and freezing the replay in between
+     made the pointer limp (measured: a 100px saccade delivered 7px). It also
+     keeps lastFx/dTick meaning "last DETECTED position", never an
+     interpolation of our own making, or the next gate test would compare
+     against our own output and fire a false saccade. */
+  step: function(fx, fy, dSample, isFresh){
+    if (isFresh === undefined) isFresh = true;
+    if (!this.inited){                 // first position: seat, do not set
+      if (!isFresh) return { moved: false };
+      this.inited = true;
+      this.lastFx = fx; this.lastFy = fy;
+      this.x = fx; this.y = fy;
+      return { init: true, seat: true };
+    }
+
+    if (isFresh){
+      this.dTick = hypot(fx - this.lastFx, fy - this.lastFy);
+      this.lastFx = fx; this.lastFy = fy;
+
+      var speed = (cfg.gateUnit === "sample") ? dSample : this.dTick;
+      var lim   = (cfg.gateUnit === "sample") ? cfg.gateSample : cfg.gate;
+
+      if (speed >= lim){
+        var dx = fx - this.x, dy = fy - this.y;   // newest target wins
+        var d = hypot(dx, dy);
+        this.holdTicks = 0;
+        if (d < 2){ this.queue = null; return { moved: false }; }
+        this.from = { x: this.x, y: this.y };
+        this.qn = autoN();
+        this.queue = { dx: dx, dy: dy, n: this.qn };
+        this.i = 0;
+        return { saccade: d };
+      }
+    }
+
+    /* a replay in flight outranks a gated-out sample: keep delivering it */
+    if (this.queue){
+      this.i++;
+      var n = this.queue.n;
+      var k = 1 - Math.pow(1 - this.i / n, 2);
+      this.x = this.from.x + this.queue.dx * k;
+      this.y = this.from.y + this.queue.dy * k;
+      if (this.i >= n) this.queue = null;
+      return { moved: true, replay: true };
+    }
+
+    if (!isFresh) return { moved: false, hold: true };
+
+    /* fixation: hold. Following the drift is precisely what pumps the crease,
+       so we don't. The error that piles up is corrected silently with seat(). */
+    this.holdTicks++;
+    var err = hypot(fx - this.x, fy - this.y);
+    if (this.holdTicks % 30 === 0 && err > cfg.reanchor){
+      hero.seat(fx, fy);
+      this.x = fx; this.y = fy;
+      return { moved: true, reanchor: err };
+    }
+    if (cfg.sustain){
+      this.phase += 0.044;
+      this.x += Math.cos(this.phase) * 1.5;
+      this.y += Math.sin(this.phase) * 1.5;
+      return { moved: true, sustain: true };
+    }
+    return { moved: false, hold: true, err: err };
+  }
+};
+
+/* How many ticks does one incoming sample represent? The median gap between
+   fresh detections -- the bridge between a silent 30fps tracker and the
+   hero's per-tick speed term. */
+var gaps = [], gapRef = 0;
+function autoN(){
+  if (cfg.replayN > 0) return Math.max(1, Math.min(10, cfg.replayN | 0));
+  if (!gaps.length) return 2;                     // assume a 30fps tracker
+  var b = gaps.slice().sort(function(a, c){ return a - c; });
+  return Math.max(1, Math.min(10, Math.round(b[(b.length - 1) >> 1])));
+}
+function medianGap(){
+  if (!gaps.length) return 0;
+  var b = gaps.slice().sort(function(a, c){ return a - c; });
+  return b[(b.length - 1) >> 1];
+}
+function noteSample(when){
+  if (gapRef) { gaps.push(when - gapRef); if (gaps.length > 9) gaps.shift(); }
+  gapRef = when;
+}
+
+/* ============================================================ coordinates */
+function stage(){
+  var el = document.getElementById("flow") || document.body;
+  var r = el.getBoundingClientRect();
+  cfg.cx = r.left + r.width / 2;
+  cfg.cy = r.top + r.height / 2;
+  cfg.pxPerDeg = Math.round(r.width / 30);
+  return { l: r.left, t: r.top, w: r.width, h: r.height };
+}
+/* normalised [0,1] (what a webcam model normally emits) -> client px */
+function toClient(x, y, unit){
+  var u = unit || cfg.unit;
+  var norm = (u === "norm") || (u === "auto" && Math.abs(x) <= 1.5 && Math.abs(y) <= 1.5);
+  if (norm){
+    if (cfg.mirrorX) x = 1 - x;
+    if (cfg.mirrorY) y = 1 - y;
+    x = cfg.calib.ax * x + cfg.calib.bx;
+    y = cfg.calib.ay * y + cfg.calib.by;
+    return { x: x * window.innerWidth, y: y * window.innerHeight, norm: true };
+  }
+  return { x: x, y: y, norm: false };
+}
+/* auto-detect the gaze fields of a foreign object, so nobody has to agree on
+   a schema before this works: {x,y} {gx,gy} {nx,ny} {px,py} [x,y] all pass. */
+function pick(o){
+  if (o == null) return null;
+  if (Array.isArray(o)) return (typeof o[0] === "number") ? { x: o[0], y: o[1] } : null;
+  if (typeof o !== "object") return null;
+  if (o.blink === true || o.state === "blink" || o.state === "closed") return { blink: true };
+  if (o.state === "lost" || o.face === false) return { lost: true };
+  var keys = [["x","y"],["gx","gy"],["nx","ny"],["px","py"],["sx","sy"],["cx","cy"],["u","v"]];
+  for (var i = 0; i < keys.length; i++){
+    var a = o[keys[i][0]], b = o[keys[i][1]];
+    if (typeof a === "number" && typeof b === "number") return { x: a, y: b, unit: o.unit };
+  }
+  return null;
+}
+
+/* ================================================================ sources */
+var src = null, srcName = "";
+
+/* ---- demo: a synthetic eye + a 30fps sample-and-hold detector ---------- */
+function DemoSource(){
+  this.t = 0; this.mode = "fix";
+  this.ax = 0; this.ay = 0; this.tx = 0; this.ty = 0; this.dx = 0; this.dy = 0;
+  this.sac = null; this.nextEvent = 250; this.nextBlink = 2600; this.blinkUntil = -1;
+  this.acc = 0; this.hold = null; this.nx = 0; this.ny = 0;
+  this.frozen = false;
+}
+DemoSource.prototype.schedule = function(){
+  var far = rnd() < 0.18;
+  var A = far ? (6 + rnd() * 8) : (1.5 + rnd() * 3.5);
+  var dir = rnd() * TAU;
+  var tx = clamp(this.tx + Math.cos(dir) * A, -16, 16);
+  var ty = clamp(this.ty + Math.sin(dir) * A * 0.55, -9, 9);
+  this.sac = { fx: this.tx, fy: this.ty, tx: tx, ty: ty, t0: this.t, dur: 2.2 * A + 21 };
+  this.mode = "sac";
+};
+DemoSource.prototype.poll = function(dtMs){
+  var out = null;
+  this.t += dtMs;
+
+  if (this.mode === "blink"){
+    if (this.t >= this.blinkUntil){ this.mode = "fix"; this.nextEvent = this.t + 200 + rnd() * 400; }
+    else return { blink: true };
+  }
+  if (!this.frozen && this.t > this.nextBlink){
+    this.mode = "blink"; this.blinkUntil = this.t + 90 + rnd() * 60;
+    this.nextBlink = this.t + 4000 + rnd() * 5000;
+    return { blink: true };
+  }
+  if (this.mode === "sac"){
+    var k = clamp((this.t - this.sac.t0) / this.sac.dur, 0, 1);
+    var e = smoothstep(k);
+    this.ax = this.sac.fx + (this.sac.tx - this.sac.fx) * e;
+    this.ay = this.sac.fy + (this.sac.ty - this.sac.fy) * e;
+    if (k >= 1){ this.tx = this.sac.tx; this.ty = this.sac.ty; this.sac = null; this.mode = "fix"; this.nextEvent = this.t + 380 + rnd() * 900; }
+  } else {
+    if (!this.frozen && this.t > this.nextEvent) this.schedule();
+    var rho = 0.97, amp = 0.10;                 // OU fixation drift, sd 0.1deg
+    this.dx = rho * this.dx + Math.sqrt(1 - rho * rho) * gauss() * amp;
+    this.dy = rho * this.dy + Math.sqrt(1 - rho * rho) * gauss() * amp;
+    this.ax = this.tx + this.dx;
+    this.ay = this.ty + this.dy;
+  }
+
+  /* the detector: 30fps, OU iris localisation noise sd 0.16deg, value held
+     in between. The staircase is real and it is part of what breaks a naive
+     feed, so the demo reproduces it rather than hiding it. */
+  this.acc += dtMs;
+  if (this.hold && this.acc < 1000 / cfg.sampleFps) return null;
+  this.acc = 0;
+  var r2 = 0.9, a2 = 0.16;
+  this.nx = r2 * this.nx + Math.sqrt(1 - r2 * r2) * gauss() * a2;
+  this.ny = r2 * this.ny + Math.sqrt(1 - r2 * r2) * gauss() * a2;
+  this.hold = {
+    x: cfg.cx + (this.ax + this.nx) * cfg.pxPerDeg,
+    y: cfg.cy + (this.ay + this.ny) * cfg.pxPerDeg
+  };
+  return { x: this.hold.x, y: this.hold.y, unit: "px" };
+};
+DemoSource.prototype.blinkNow = function(){ this.mode = "blink"; this.blinkUntil = this.t + 120; };
+
+/* ---- api: GazeHero.feed(...) / GazeHero.adopt(fn) ---------------------- */
+function ApiSource(){}
+ApiSource.prototype.poll = function(){ var p = pending; pending = null; return p; };
+
+/* ---- postmsg: window.postMessage({type:"gaze", x, y}, "*") -------------- */
+function MessageSource(){ this.q = null; }
+MessageSource.prototype.poll = function(){ var q = this.q; this.q = null; return q; };
+
+/* ---- mouse: the pointer, through the SAME shaper ----------------------- */
+function MouseSource(){ this.p = null; }
+MouseSource.prototype.poll = function(){ var p = this.p; this.p = null; return p; };
+
+var SOURCES = {};
+var pending = null;                 // newest api sample, if any
+var msgSrc, mouseSrc, demoSrc = new DemoSource();
+var stageRect = null;
+
+function makeSources(){
+  SOURCES.demo = demoSrc;
+  msgSrc = new MessageSource();  SOURCES.postmsg = msgSrc;
+  SOURCES.api = new ApiSource();
+  mouseSrc = new MouseSource();  SOURCES.mouse = mouseSrc;
+
+  window.addEventListener("message", function(e){
+    var d = e.data, g = null;
+    if (typeof d === "string"){
+      if (d === "gaze-blink"){ msgSrc.q = { blink: true }; return; }
+      if (d === "gaze-lost"){ msgSrc.q = { lost: true }; return; }
+      try { d = JSON.parse(d); } catch(err){ return; }
+    }
+    if (!d) return;
+    if (d.type === "gaze-blink"){ msgSrc.q = { blink: true }; return; }
+    if (d.type === "gaze-lost"){ msgSrc.q = { lost: true }; return; }
+    if (d.type && d.type !== "gaze" && d.type !== "gaze-sample") return;
+    g = pick(d);
+    if (!g) return;
+    msgSrc.q = g;
+    /* If a page is feeding us gaze over postMessage, honour it: switching
+       here is what makes a zero-config embed work. */
+    if (srcName !== "postmsg") setSource("postmsg");
+  });
+
+  window.addEventListener("pointermove", function(e){
+    mouseSrc.p = { x: e.clientX, y: e.clientY, unit: "px" };
+  }, { passive: true });
+}
+
+function setSource(name){
+  if (!SOURCES[name]) return false;
+  src = SOURCES[name]; srcName = name;
+  em = null;                      // force a fresh One-Euro state
+  shaper.reset(-1, -1);
+  gaps.length = 0; gapRef = 0;
+  needSeat = true;
+  if (name === "demo") stage();   // needs cx/cy/pxPerDeg
+  return true;
+}
+
+/* ================================================================== loop */
+var em = null;                     // {fX, fY}
+var raf = 0, last = 0, acc = 0, ticks = 0, adoptRaf = 0, adoptGen = 0;
+var wasBlink = false, reacq = 0, lastSampleAt = 0, silence = 0, needSeat = true;
+var peakHold = 0, ring = new Float32Array(96), ringI = 0, peakRecent = 0;
+var nSamples = 0, rateWin = [], hud = { state: "-", out: null, in: null };
+var nowMs = 0;
+
+function measure(){ return stageRect || (stageRect = stage()); }
+
+function tick(){
+  nowMs += TICK_MS;
+  ticks++;
+
+  if (!em){ em = { fX: new OneEuro(0.6, 0.02, 1.0), fY: new OneEuro(0.6, 0.02, 1.0) }; }
+
+  var s = src ? src.poll(TICK_MS) : null;
+  var fresh = false, dSample = 0;
+
+  if (s && s.blink){
+    if (!wasBlink){ hero.leave(); wasBlink = true; }
+    hud.state = "blink · 松手"; hud.in = null;
+    hero.step(1); track(); return;
+  }
+  if (s && s.lost){ silence += TICK_MS; if (silence > cfg.lostMs && !wasBlink){ hero.leave(); wasBlink = true; } hud.state = "lost · 松手"; hero.step(1); track(); return; }
+
+  if (s){
+    silence = 0;
+    var p = toClient(s.x, s.y, s.unit);
+    s = { x: p.x, y: p.y };
+    fresh = true; nSamples++;
+    noteSample(ticks);
+    rateWin.push(nowMs); if (rateWin.length > 90) rateWin.shift();
+  }
+
+  if (wasBlink){
+    /* re-acquisition. Wait for cfg.reacqSamples genuinely fresh detections,
+       clear the filter, THEN seat. Seating on the first frame back leaves
+       48.5px of false crease, because One-Euro is still catching up and its
+       own ramp gets re-detected as a saccade. */
+    wasBlink = false; reacq = cfg.reacqSamples;
+    hero.leave();
+  }
+  if (reacq > 0){
+    if (fresh) reacq--;
+    if (reacq === 0 && s){
+      em.fX.x = null; em.fY.x = null;
+      var nfx = em.fX.filter(s.x, TICK_S), nfy = em.fY.filter(s.y, TICK_S);
+      shaper.reset(nfx, nfy);
+      hero.seat(nfx, nfy);
+      needSeat = false;
+      hud.state = "重捕获 · seat"; hud.out = { x: nfx, y: nfy };
+    } else {
+      hud.state = "重捕获 等新鲜采样 " + reacq;
+    }
+    hero.step(1); track(); return;
+  }
+
+  if (!s){
+    /* Between detections: never invent motion — but a replay already in
+       flight is not invented motion, it is the motion the last detection
+       asked for, and it has to be delivered on every tick or a 30fps
+       tracker loses most of its crease. */
+    var queued = false;
+    if (cfg.mode === "shaped" && shaper.queue){
+      var ra = shaper.step(0, 0, 0, false);
+      if (ra && ra.replay){
+        queued = true;
+        hud.state = "软化 " + shaper.i + "/" + shaper.qn;
+        hud.out = { x: shaper.x, y: shaper.y };
+        hero.set(shaper.x, shaper.y);
+      }
+    }
+    if (!queued) hud.state = "固视 · 保持";
+    hero.step(1); track(); return;
+  }
+
+  lastSampleAt = nowMs;
+
+  /* dSample = movement between two consecutive FRESH detections. In tick mode
+     the tick-domain velocity is the one that was measured to give the stronger
+     low end; in sample mode this is the value the gate compares. */
+  if (shaper.lastSample) dSample = hypot(s.x - shaper.lastSample.x, s.y - shaper.lastSample.y);
+  shaper.lastSample = { x: s.x, y: s.y };
+
+  var fx, fy, r = null;
+  if (cfg.mode === "raw"){
+    fx = s.x; fy = s.y;
+    hud.state = "raw 直连";
+  } else {
+    fx = em.fX.filter(s.x, TICK_S);
+    fy = em.fY.filter(s.y, TICK_S);
+    if (cfg.mode === "filter"){ hud.state = "filter 仅滤波"; }
+  }
+
+  var ex, ey;
+  if (cfg.mode === "shaped"){
+    r = shaper.step(fx, fy, dSample, true);
+    ex = shaper.x; ey = shaper.y;
+    if (r.saccade)       hud.state = "扫视 " + r.saccade.toFixed(0) + "px";
+    else if (r.replay)   hud.state = "软化 " + shaper.i + "/" + shaper.qn;
+    else if (r.reanchor) hud.state = "静默重锚 " + r.reanchor.toFixed(0) + "px";
+    else if (r.sustain)  hud.state = "呼吸保持";
+    else if (r.init)     hud.state = "就位";
+    else                 hud.state = "固视 · 保持";
+  } else {
+    ex = fx; ey = fy;
+  }
+
+  hud.in = { x: fx, y: fy }; hud.out = { x: ex, y: ey };
+  if (needSeat){ hero.seat(ex, ey); needSeat = false; } else { hero.set(ex, ey); }
+  hero.step(1);
+  track();
+}
+
+/* measured physics: this is the number that decides whether it "does
+   anything" — the crease ceiling |cx|, read straight off the grid */
+function gridMax(){
+  var g = hero.grid, m = 0, i, j, row;
+  for (i = 0; i < g.length; i++){
+    row = g[i];
+    for (j = 0; j < row.length; j++){
+      if (Math.abs(row[j].cx) > m) m = Math.abs(row[j].cx);
+      if (Math.abs(row[j].cy) > m) m = Math.abs(row[j].cy);
+    }
+  }
+  return m;
+}
+function track(){
+  var m = gridMax();
+  if (m > peakHold) peakHold = m;
+  ring[ringI] = m; ringI = (ringI + 1) % ring.length;
+  var p = 0, i;
+  for (i = 0; i < ring.length; i++) if (ring[i] > p) p = ring[i];
+  peakRecent = p;
+  if (ticks % 6 === 0) drawHud();
+}
+
+function frame(now){
+  raf = 0;
+  acc += last ? Math.min((now - last) / 1000, 0.25) : TICK_S;
+  last = now;
+  var n = 0;
+  while (acc >= TICK_S && n++ < 6){ tick(); acc -= TICK_S; }
+  raf = requestAnimationFrame(frame);
+}
+
+/* =================================================================== hud */
+var panel = null, hudEls = {};
+function buildHud(){
+  panel = document.createElement("div");
+  panel.className = "gzhud";
+  panel.innerHTML =
+    '<div class="gzrow gztitle"><b>gaze → hero</b><span id="gz-src"></span></div>' +
+    '<div class="gzrow"><span>状态</span><span id="gz-state">-</span></div>' +
+    '<div class="gzrow"><span>采样</span><span id="gz-rate">-</span></div>' +
+    '<div class="gzrow"><span>vs (hero)</span><span id="gz-vs">-</span></div>' +
+    '<div class="gzrow"><span>峰值 |cx|</span><span id="gz-peak">0</span></div>' +
+    '<div class="gzrow"><span>近 1.6s 峰</span><span id="gz-recent">0</span></div>' +
+    '<div class="gzrow"><span>重放 N</span><span id="gz-replay">-</span></div>' +
+    '<div class="gzrow"><span>门限</span><span id="gz-gate">-</span></div>' +
+    '<div class="gzrow"><span>送入</span><span id="gz-in">-</span></div>' +
+    '<div class="gzrow"><span>校准</span><span id="gz-cal">-</span></div>' +
+    '<div class="gzkeys">M 换源 · B 眨眼 · C 重锚 · 1/2/3 模式 · U 门限域 · G 门限 · R 清零 · H 收起</div>';
+  document.body.appendChild(panel);
+  var ids = ["gz-src","gz-state","gz-rate","gz-vs","gz-peak","gz-recent","gz-replay","gz-gate","gz-in","gz-cal"];
+  for (var i = 0; i < ids.length; i++) hudEls[ids[i]] = document.getElementById(ids[i]);
+}
+function rate(){
+  if (rateWin.length < 2) return 0;
+  var dt = (rateWin[rateWin.length - 1] - rateWin[0]) / 1000;
+  return dt > 0 ? (rateWin.length - 1) / dt : 0;
+}
+function drawHud(){
+  if (!panel) return;
+  var st = hero.state();
+  hudEls["gz-src"].textContent = srcName;
+  hudEls["gz-state"].textContent = hud.state;
+  hudEls["gz-rate"].textContent = rate().toFixed(1) + " /s";
+  hudEls["gz-vs"].textContent = st.vs.toFixed(1);
+  hudEls["gz-peak"].textContent = Math.round(peakHold);
+  hudEls["gz-recent"].textContent = Math.round(peakRecent);
+  hudEls["gz-replay"].textContent = autoN() + (cfg.replayN > 0 ? " (固定)" : " (自动·间隔" + (medianGap() || "?") + "tick)");
+  hudEls["gz-gate"].textContent = (cfg.gateUnit === "sample" ? cfg.gateSample + "px/样本" : cfg.gate + "px/tick") + " · " + cfg.mode;
+  hudEls["gz-in"].textContent = hud.in ? (Math.round(hud.in.x) + "," + Math.round(hud.in.y)) : "-";
+  hudEls["gz-cal"].textContent = "ax" + cfg.calib.ax.toFixed(2) + " ay" + cfg.calib.ay.toFixed(2) + " · 镜像" + (cfg.mirrorX ? "X" : "–");
+}
+
+/* =================================================================== api */
+window.GazeHero = {
+  cfg: cfg,
+  shaper: shaper,
+  /* the pure input mapping, no filter and no gate — hand it a coordinate and
+     a unit and it tells you the client px that will reach the hero. Unit-test
+     this instead of reading the HUD, which always shows a FILTERED value. */
+  toClient: toClient,
+  mapPoint: toClient,
+  /* the main entry point for an external model: hand over ONE gaze position */
+  feed: function(x, y, opt){
+    pending = { x: x, y: y, unit: (opt && opt.unit) || undefined };
+    if (opt && opt.blink) pending = { blink: true };
+    if (opt && opt.lost)  pending = { lost: true };
+    if (srcName !== "api") setSource("api");
+    return true;
+  },
+  blink: function(){
+    pending = null; if (msgSrc) msgSrc.q = { blink: true };
+    wasBlink = true; hero.leave(); hud.state = "眨眼 · 松手"; return true;
+  },
+  lost: function(){
+    if (msgSrc) msgSrc.q = { lost: true };
+    wasBlink = true; hero.leave(); hud.state = "lost · 松手"; return true;
+  },
+  /* Auto-adapter: poll a function or a foreign object for gaze and feed it.
+     Field names are auto-detected (x/y, gx/gy, nx/ny, [x,y], ...), so a model
+     does not have to be rewritten to fit this page. */
+  adopt: function(target, opt){
+    var every = (opt && opt.every) || 1 / (cfg.sampleFps || 30);
+    var read = (typeof target === "function") ? target : function(){
+      return target.current || target.gaze || target.point || target.latest ||
+             target.lastResult || target.result || target;
+    };
+    setSource("api");
+    /* Re-adopting replaces the poller instead of stacking another one: two
+       pollers would both write `pending` and the winner would be queue order,
+       which is not something a page can debug. */
+    if (adoptRaf) cancelAnimationFrame(adoptRaf), adoptRaf = 0;
+    var lastT = 0, gen = ++adoptGen;
+    var poll = function(t){
+      if (gen !== adoptGen) return;
+      if (t - lastT >= every * 1000){
+        lastT = t;
+        var o = read();
+        var g = pick(o);
+        if (g){
+          if (g.blink) pending = { blink: true };
+          else if (g.lost) pending = { lost: true };
+          else pending = { x: g.x, y: g.y, unit: g.unit };
+        }
+      }
+      adoptRaf = requestAnimationFrame(poll);
+    };
+    adoptRaf = requestAnimationFrame(poll);
+    return true;
+  },
+  source: function(name){ if (setSource(name)) hud.state = "源 → " + name; return srcName; },
+  /* status + the numbers used to judge a tuning change */
+  stats: function(){
+    var st = hero.state();
+    return {
+      source: srcName, mode: cfg.mode, state: hud.state,
+      rate: rate(), samples: nSamples, ticks: ticks,
+      vs: st.vs, gate: cfg.gate, gateUnit: cfg.gateUnit, gateSample: cfg.gateSample,
+      reanchor: cfg.reanchor, replayN: cfg.replayN, reacqSamples: cfg.reacqSamples,
+      replayAuto: autoN(), gapTicks: medianGap(),
+      peakHold: peakHold, peakRecent: peakRecent,
+      cols: hero.grid.length, rows: hero.grid[0] ? hero.grid[0].length : 0,
+      pxPerDeg: cfg.pxPerDeg, calib: cfg.calib,
+      in: hud.in, out: hud.out
+    };
+  },
+  seat: function(){ var s = shaper; hero.seat(s.x, s.y); hud.state = "静默重锚"; },
+  clearPeak: function(){ peakHold = 0; ring.fill(0); peakRecent = 0; },
+  /* headless / scripted driving: advance the whole pipeline deterministically.
+     stop() first, otherwise the rAF clock and pump() both advance the physics. */
+  pump: function(n){ for (var i = 0; i < (n || 1); i++) tick(); },
+  stop: function(){ if (raf) cancelAnimationFrame(raf); raf = 0; return true; },
+  demo: {
+    blink: function(){ demoSrc.blinkNow(); },
+    freeze: function(on){ demoSrc.frozen = !!on; },
+    seed: function(v){ _seed = (v >>> 0) || 1; return _seed; },
+    reset: function(){ demoSrc.mode = "fix"; demoSrc.t = 0;
+      demoSrc.ax = demoSrc.ay = demoSrc.tx = demoSrc.ty = demoSrc.dx = demoSrc.dy = 0;
+      demoSrc.sac = null; demoSrc.hold = null; demoSrc.acc = 0;
+      demoSrc.nextEvent = 250; demoSrc.nextBlink = 1e9; demoSrc.blinkUntil = -1; }
+  },
+  start: function(){
+    if (started) return true;
+    started = true;
+    measure(); buildHud(); makeSources(); setSource("demo");
+    hero.drive(true);
+    shaper.reset(window.innerWidth / 2, window.innerHeight / 2);
+    acc = 0; last = 0;
+    if (!raf) raf = requestAnimationFrame(frame);
+    return true;
+  }
+};
+
+/* ================================================================ keys */
+var started = false;
+
+window.addEventListener("keydown", function(e){
+  var k = e.key;
+  if (k === "h" || k === "H"){ if (panel) panel.style.display = panel.style.display === "none" ? "" : "none"; }
+  else if (k === "m" || k === "M"){
+    var names = ["demo","api","postmsg","mouse"], i = names.indexOf(srcName);
+    setSource(names[(i + 1) % names.length]);
+  }
+  else if (k === "b" || k === "B"){ window.GazeHero.blink(); }
+  else if (k === "c" || k === "C"){ window.GazeHero.seat(); stageRect = null; measure(); }
+  else if (k === "1"){ cfg.mode = "raw"; }
+  else if (k === "2"){ cfg.mode = "filter"; }
+  else if (k === "3"){ cfg.mode = "shaped"; }
+  else if (k === "u" || k === "U"){ cfg.gateUnit = (cfg.gateUnit === "tick") ? "sample" : "tick"; }
+  else if (k === "g" || k === "G"){ cfg.gate = clamp(cfg.gate + 1, 1, 40); cfg.gateSample = cfg.gate * 2; }
+  else if (k === "r" || k === "R"){ window.GazeHero.clearPeak(); shaper.reset(-1, -1); em = null; }
+});
+window.addEventListener("resize", function(){ stageRect = null; measure(); });
+
+if (document.readyState === "complete" || document.readyState === "interactive"){
+  setTimeout(function(){ window.GazeHero.start(); }, 0);
+} else {
+  window.addEventListener("DOMContentLoaded", function(){ window.GazeHero.start(); });
+}
+})();
+</script>
+</body>
+</html>

@@ -157,6 +157,33 @@
     main { grid-template-columns: 1fr; }
     .btn-grid { grid-template-columns: repeat(3, 1fr); }
   }
+
+  /* ============================================================
+   * hero 模式（?mode=hero）
+   * WebGazer 的原始视线直接灌进 iframe 里的 hero 页，不做任何
+   * 低通 / 磁吸 / 惯性整形——hero 的折痕强度由逐 tick 位移决定，
+   * 任何整形都会把扫视抹平，或把视线拽向控件中心造出假位移。
+   * ============================================================ */
+  #heroWrap {
+    display: none;
+    position: fixed; left: 0; right: 0; bottom: 0; top: 56px;
+    z-index: 45; background: #0a0e17;
+  }
+  #heroWrap iframe { width: 100%; height: 100%; border: 0; display: block; }
+  .hero-only { display: none; }
+  body.hero-mode { grid-template-rows: 56px 1fr; }
+  body.hero-mode header {
+    position: fixed; left: 0; right: 0; top: 0; height: 56px;
+    z-index: 95; box-sizing: border-box; padding: 8px 20px;
+  }
+  body.hero-mode #heroWrap { display: block; }
+  body.hero-mode .hero-only { display: inline-flex; }
+  body.hero-mode main,
+  body.hero-mode footer,
+  body.hero-mode .cam-wrap,
+  body.hero-mode .cam-off,
+  body.hero-mode .gaze-cursor { display: none !important; }
+  body.hero-mode .dbg-line { top: 60px; z-index: 96; }
 </style>
 </head>
 <body>
@@ -177,7 +204,11 @@
   <div class="pill" id="pillHand"><span class="dot"></span>手部</div>
   <div class="pill"><span class="dot"></span><span id="fpsVal">0</span> FPS</div>
   <div class="pill" id="pillBackend"><span class="dot off"></span>后端未连接</div>
+  <button class="smooth-btn hero-only" id="heroCalib" title="9 点标定：眼睛盯住白点，用鼠标点它">开始标定</button>
+  <button class="smooth-btn hero-only" id="heroExit" title="回到控制器测试台">返回控制器</button>
 </header>
+
+<div id="heroWrap"><iframe id="heroFrame" title="hero 视线效果" src="hero.html"></iframe></div>
 
 <div class="dbg-line" id="dbgLine">诊断：初始化中…</div>
 
@@ -276,6 +307,11 @@
     dwellMs: 800, calibDone: false, speed: 1.0,
     dbg: { gazes: 0, handSend: 0, handRes: 0, handErr: "", gazeErr: "" },
   };
+
+  // ---------- hero 模式（?mode=hero）----------
+  // 必须在桥接代码之前声明：heroSend / onGaze 都引用它。
+  const heroMode = new URLSearchParams(location.search).get("mode") === "hero";
+  if (heroMode) document.body.classList.add("hero-mode");
 
   // ---------- 视线意图吸附（gravity well + lazy cursor）----------
   const SNAP_PRESETS = {
@@ -454,18 +490,56 @@
     setTimeout(() => $("overlay").classList.remove("show"), 600);
   }
   $("calibStart").addEventListener("click", startCalib);
+  if (heroMode) {
+    $("heroCalib").addEventListener("click", startCalib);
+    $("heroExit").addEventListener("click", () => { location.href = location.pathname; });
+  }
   $("calibSkip").addEventListener("click", () => {
     $("calibStatus").innerHTML = "<b>已跳过标定。</b> WebGazer 会在你移动/点击鼠标时持续自标定，精度会逐步提升。";
   });
+
+  // ---------- hero 桥：把 WebGazer 的原始视线直灌 iframe ----------
+  // hero 的折痕强度来自「相邻两次采样之间的位移」，所以这一层只搬运坐标：
+  // 窗口 client px -> iframe 内 client px。低通 / 磁吸 / 惯性一律不做，
+  // 否则扫视会被 ema 抹平、gravity 会把视线拽向控件中心造出假位移。
+  const heroFrame = $("heroFrame");
+  let heroWin = null, heroOX = 0, heroOY = 0;
+  function heroMeasure() {
+    if (!heroFrame) return;
+    const r = heroFrame.getBoundingClientRect();
+    heroOX = r.left; heroOY = r.top;
+    heroWin = heroFrame.contentWindow;
+  }
+  if (heroFrame) {
+    heroFrame.addEventListener("load", heroMeasure);
+    window.addEventListener("resize", heroMeasure);
+    setTimeout(heroMeasure, 200);
+    setTimeout(heroMeasure, 1200);
+  }
+  function heroSend(x, y) {
+    if (!heroWin) return;
+    heroWin.postMessage({ type: "gaze", x: x - heroOX, y: y - heroOY, unit: "px" }, "*");
+  }
+  function heroLost() { if (heroWin) heroWin.postMessage({ type: "gaze-lost" }, "*"); }
+  // 调试钩子：控制台里 __hero.send(800, 500) 可手动喂一个窗口坐标
+  if (heroMode) window.__hero = { send: heroSend, lost: heroLost, measure: heroMeasure };
 
   // ---------- WebGazer 眼动回调（视线平滑 + 按钮磁吸）----------
   let gazeInit = false, gsx = 0, gsy = 0;
   function onGaze(data, elapsedTime) {
     S.dbg.gazes++;
-    if (!data) { setPill($("pillFace"), false); return; }
+    if (!data) {
+      setPill($("pillFace"), false);
+      if (heroMode) heroLost();      // 丢脸 = 松手，hero 走重捕获而不是硬跳
+      return;
+    }
     setPill($("pillFace"), true);
     const rx = clamp(data.x, 0, window.innerWidth);
     const ry = clamp(data.y, 0, window.innerHeight);
+
+    // hero 模式：原样转发，交给 hero 自己的 One-Euro + 速度门 + 扫视重放
+    if (heroMode) { heroSend(rx, ry); return; }
+
     if (!gazeInit) { gsx = rx; gsy = ry; S.cursor.x = rx; S.cursor.y = ry; gazeInit = true; }
     // 1) 视线点强低通，只保留「大致在看哪里」的意图
     gsx += (rx - gsx) * snap.ema;
@@ -529,9 +603,11 @@
 
   // ---------- 模式解析 ----------
   const qp = new URLSearchParams(location.search);
-  const mode = qp.get("mode") || "both"; // gaze | hand | both
+  const mode = qp.get("mode") || "both"; // gaze | hand | both | hero
   const runGaze = mode !== "hand";
-  const runHand = mode !== "gaze";
+  const runHand = mode !== "gaze" && mode !== "hero";
+  // ?mode=hero&hero=../some-hero.html 可换掉 iframe 里的目标页
+  if (heroMode && qp.get("hero")) $("heroFrame").src = qp.get("hero");
 
   // ---------- 初始化 ----------
   let handImg = null; // hands 的输入源（video 元素 或 WebGazer 的 video canvas）
@@ -557,7 +633,7 @@
         await webgazer.begin();
         setPill($("pillCam"), true);
         $("camOff").style.display = "none";
-        cursorEl.classList.add("live");
+        if (!heroMode) cursorEl.classList.add("live");  // hero 有自己的画面，不叠假光标
         markLibReady();
         if (runHand) handImg = webgazer.getVideoElementCanvas();
       } catch (e) {
@@ -644,7 +720,7 @@
 
   // ---------- 启动 ----------
   connectBackend();
-  updateCursor();
+  if (!heroMode) updateCursor();
   setCalibPill();
   if (typeof webgazer === "undefined" && runGaze) {
     setLibPill("fail");
