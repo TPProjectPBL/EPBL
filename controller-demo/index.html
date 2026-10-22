@@ -4,6 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>隔空控制器 · 测试台</title>
+<!-- WebGazer 2.1.2（已 patch：模型指向本地 vendor/webgazer/facemesh_model） -->
+<script src="vendor/webgazer/webgazer.js"></script>
 <style>
   :root {
     --bg: #ffffff;
@@ -71,6 +73,12 @@
   .panel .desc { font-size: 13px; color: var(--muted); margin: 0 0 18px; }
   .hint { font-size: 12px; color: var(--muted); margin-top: 12px; }
 
+  .smooth-row { display: flex; align-items: center; gap: 8px; margin: 18px 0 0; flex-wrap: wrap; }
+  .smooth-label { font-size: 12px; color: var(--muted); margin-right: 2px; }
+  .smooth-btn { border: 1px solid var(--line); background: var(--soft); color: var(--ink); border-radius: 8px; padding: 6px 14px; font-size: 12px; cursor: pointer; font-family: inherit; }
+  .smooth-btn.on { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .smooth-hint { font-size: 11px; color: var(--muted); margin-left: auto; }
+
   .btn-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
   .key {
     position: relative; background: var(--btn); color: #fff; border: none; border-radius: var(--radius);
@@ -83,6 +91,15 @@
   .key .glyph { display: block; font-size: 20px; margin-bottom: 6px; }
   .key.hovered { background: #515154; box-shadow: 0 0 0 3px rgba(0,113,227,.35); }
   .key.triggered { background: var(--blue); }
+
+  .calib-panel { display: flex; flex-direction: column; gap: 14px; }
+  .big-btn { background: var(--blue); color: #fff; border: none; border-radius: var(--radius); padding: 16px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background .18s ease, transform .12s ease; }
+  .big-btn:hover { background: #1a5fc0; }
+  .big-btn:active { transform: scale(.98); }
+  .big-btn.ghost { background: var(--soft); color: var(--ink); border: 1px solid var(--line); }
+  .big-btn.ghost:hover { background: #eaeaee; }
+  .calib-status { font-size: 13px; color: var(--muted); }
+  .calib-status b { color: var(--ink); }
 
   .zoom-stage {
     position: relative; overflow: hidden; background: var(--soft); border-radius: 16px;
@@ -111,7 +128,7 @@
   footer .note { font-size: 12px; color: var(--muted); margin-left: auto; }
 
   .gaze-cursor {
-    position: fixed; left: 50%; top: 50%; z-index: 30; width: 34px; height: 34px; margin: -17px 0 0 -17px;
+    position: fixed; left: 50%; top: 50%; z-index: 110; width: 34px; height: 34px; margin: -17px 0 0 -17px;
     border: 2px solid var(--blue); border-radius: 50%; pointer-events: none; display: none;
   }
   .gaze-cursor::after {
@@ -124,6 +141,17 @@
   .cam-wrap video { display: block; width: 150px; height: 113px; object-fit: cover; transform: scaleX(-1); }
   .cam-wrap .cam-label { position: absolute; left: 0; bottom: 0; font-size: 10px; color: #fff; background: rgba(0,0,0,.45); padding: 2px 8px; border-radius: 0 8px 0 0; }
   .cam-off { position: fixed; right: 20px; bottom: 20px; z-index: 25; font-size: 12px; color: var(--muted); background: var(--soft); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; }
+
+  /* 标定覆盖层 */
+  .overlay { position: fixed; inset: 0; z-index: 100; background: rgba(15,23,40,.96); display: none; flex-direction: column; align-items: center; justify-content: center; color: #fff; }
+  .overlay.show { display: flex; }
+  .overlay h2 { font-size: 20px; margin: 0 0 6px; }
+  .overlay .sub { font-size: 13px; opacity: .8; margin: 0 0 20px; }
+  .overlay .stage { position: relative; width: 100%; height: 100%; }
+  .calib-dot { position: absolute; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: #fff; border: 3px solid var(--blue); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--blue); font-weight: 700; font-size: 13px; transition: transform .12s ease, background .15s ease; }
+  .calib-dot:hover { transform: scale(1.12); }
+  .calib-dot.done { background: #34c759; border-color: #34c759; color: #fff; pointer-events: none; }
+  .overlay .bar { position: absolute; left: 0; right: 0; bottom: 26px; text-align: center; font-size: 13px; opacity: .85; }
 
   @media (max-width: 860px) {
     main { grid-template-columns: 1fr; }
@@ -138,13 +166,14 @@
     <div class="logo">◉</div>
     <div>
       <h1>隔空控制器</h1>
-      <div class="sub">眼动控制鼠标 · 手势控制缩放</div>
+      <div class="sub">眼动控制鼠标（WebGazer） · 手势控制缩放（MediaPipe Hands）</div>
     </div>
   </div>
   <div class="spacer"></div>
   <div class="pill" id="pillLib"><span class="dot"></span>检测库加载中…</div>
   <div class="pill" id="pillCam"><span class="dot"></span>摄像头</div>
   <div class="pill" id="pillFace"><span class="dot"></span>人脸</div>
+  <div class="pill" id="pillCalib"><span class="dot"></span>标定</div>
   <div class="pill" id="pillHand"><span class="dot"></span>手部</div>
   <div class="pill"><span class="dot"></span><span id="fpsVal">0</span> FPS</div>
   <div class="pill" id="pillBackend"><span class="dot off"></span>后端未连接</div>
@@ -160,7 +189,7 @@
 <main>
   <section class="panel">
     <h2>眼动追踪</h2>
-    <p class="desc">保持头部稳定，转动眼球——视线光标会随注视方向移动。悬停按键高亮，驻留约 0.8 s 触发点击。</p>
+    <p class="desc">保持头部稳定，转动眼球——视线光标会随注视方向移动。悬停按键高亮，驻留约 0.8 s 触发点击。建议先完成 9 点标定。</p>
     <div class="btn-grid" id="btnGrid">
       <button class="key" data-label="上一页"><span class="glyph">‹</span>上一页</button>
       <button class="key" data-label="下一页"><span class="glyph">›</span>下一页</button>
@@ -175,7 +204,25 @@
       <button class="key" data-label="确认"><span class="glyph">✓</span>确认</button>
       <button class="key" data-label="关闭"><span class="glyph">✕</span>关闭</button>
     </div>
+    <div class="smooth-row">
+      <span class="smooth-label">视线吸附</span>
+      <button class="smooth-btn on" data-p="medium">中</button>
+      <button class="smooth-btn" data-p="low">低</button>
+      <button class="smooth-btn" data-p="high">高</button>
+      <span class="smooth-hint">视线靠近按钮自动吸附，无需精确对准</span>
+    </div>
     <div class="hint">提示：点击页面任意按键可直接验证按钮交互（无需摄像头也可测试 UI）。</div>
+  </section>
+
+  <section class="panel">
+    <h2>眼动标定</h2>
+    <p class="desc">9 点标定：依次注视并点击屏幕上的 9 个点，让回归模型学习「眼睛特征 → 屏幕位置」的映射。</p>
+    <div class="calib-panel">
+      <button class="big-btn" id="calibStart">开始 9 点标定</button>
+      <button class="big-btn ghost" id="calibSkip">跳过标定（直接使用，精度较低）</button>
+      <div class="calib-status" id="calibStatus">尚未标定。建议先完成 9 点标定以获得稳定精度。</div>
+    </div>
+    <div class="hint">标定期间请保持头部位置稳定，眼睛盯着目标点再用鼠标点击。</div>
   </section>
 
   <section class="panel">
@@ -200,7 +247,7 @@
 
 <footer>
   <span class="pill"><span class="dot"></span>隐私：画面与特征仅本地处理，不上传</span>
-  <span class="note">隔空控制器 · 测试台 v0.2 · 需通过 localhost / HTTPS 访问以使用摄像头</span>
+  <span class="note">隔空控制器 · 测试台 v0.3 · 眼动=WebGazer · 手势=MediaPipe Hands · 需通过 localhost / HTTPS 访问以使用摄像头</span>
 </footer>
 
 <div class="gaze-cursor" id="gazeCursor"></div>
@@ -209,6 +256,13 @@
   <span class="cam-label">摄像头预览</span>
 </div>
 <div class="cam-off" id="camOff">摄像头未启动</div>
+
+<div class="overlay" id="overlay">
+  <h2>9 点标定</h2>
+  <div class="sub">眼睛注视当前点，用鼠标点击它。逐个点完即可。</div>
+  <div class="stage" id="calibStage"></div>
+  <div class="bar" id="calibBar">已标定 0 / 9</div>
+</div>
 
 <script>
 (function () {
@@ -219,26 +273,38 @@
     cursor: { x: window.innerWidth / 2, y: window.innerHeight / 2 },
     scale: 1.0, scaleMin: 0.6, scaleMax: 2.4,
     gesture: "none", faceSeen: false, handSeen: false, backend: false,
-    speed: 18, deadzone: 0.06, dwellMs: 800,
-    irisOk: true,
-    dbg: { faceSend: 0, faceRes: 0, handSend: 0, handRes: 0, faceErr: "", handErr: "" },
+    dwellMs: 800, calibDone: false, speed: 1.0,
+    dbg: { gazes: 0, handSend: 0, handRes: 0, handErr: "", gazeErr: "" },
   };
+
+  // ---------- 视线意图吸附（gravity well + lazy cursor）----------
+  const SNAP_PRESETS = {
+    low:    { ema: 0.22, gravity: 50, followSnap: 0.55, followFree: 0.18 },
+    medium: { ema: 0.14, gravity: 70, followSnap: 0.45, followFree: 0.10 },
+    high:   { ema: 0.10, gravity: 95, followSnap: 0.35, followFree: 0.06 },
+  };
+  const snap = { ema: 0.14, gravity: 70, followSnap: 0.45, followFree: 0.10, kalman: false, preset: "medium" };
+  function applySnapPreset(name) {
+    const p = SNAP_PRESETS[name];
+    if (!p) return;
+    Object.assign(snap, p, { preset: name });
+    document.querySelectorAll(".smooth-btn").forEach(b => b.classList.toggle("on", b.dataset.p === name));
+  }
 
   const $ = (id) => document.getElementById(id);
   const cursorEl = $("gazeCursor");
   const zoomCard = $("zoomCard");
   const keys = Array.from(document.querySelectorAll(".key"));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
   // ---------- 诊断横幅 ----------
-  let bannerVisible = false;
   function showBanner(html) {
     $("bannerText").innerHTML = html;
     $("banner").style.display = "flex";
-    bannerVisible = true;
   }
-  $("bannerClose").addEventListener("click", () => { $("banner").style.display = "none"; bannerVisible = false; });
+  $("bannerClose").addEventListener("click", () => { $("banner").style.display = "none"; });
 
-  // ---------- 视线光标 ----------
+  // ---------- 视线光标 + 驻留点击 ----------
   function updateCursor() {
     cursorEl.style.left = S.cursor.x + "px";
     cursorEl.style.top = S.cursor.y + "px";
@@ -253,10 +319,7 @@
 
   let dwellKey = null, dwellStart = 0;
   function dwellOn(key) {
-    keys.forEach(k => {
-      k.classList.remove("hovered");
-      if (k !== key) { k.classList.remove("triggered"); }
-    });
+    keys.forEach(k => { k.classList.remove("hovered"); if (k !== key) k.classList.remove("triggered"); });
     if (!key) { dwellKey = null; return; }
     key.classList.add("hovered");
     if (dwellKey !== key) { dwellKey = key; dwellStart = performance.now(); }
@@ -265,7 +328,6 @@
       dwellKey = null; dwellStart = performance.now() + 600;
     }
   }
-
   function triggerKey(key) {
     key.classList.add("triggered");
     setTimeout(() => key.classList.remove("triggered"), 300);
@@ -273,7 +335,7 @@
   }
   keys.forEach(k => k.addEventListener("click", () => triggerKey(k)));
 
-  // ---------- 缩放 ----------
+  // ---------- 手势缩放 ----------
   function applyScale() {
     S.scale = Math.max(S.scaleMin, Math.min(S.scaleMax, S.scale));
     zoomCard.style.transform = "scale(" + S.scale + ")";
@@ -314,54 +376,6 @@
   }
   requestAnimationFrame(tickGesture);
 
-  // ---------- 眼动判定（含虹膜缺失兜底）----------
-  function onFaceResults(results) {
-    S.dbg.faceRes++;
-    S.faceSeen = !!(results.multiFaceLandmarks && results.multiFaceLandmarks.length);
-    setPill($("pillFace"), S.faceSeen);
-    if (!S.faceSeen) return;
-    const lm = results.multiFaceLandmarks[0];
-    let ox = 0, oy = 0;
-
-    // 虹膜方案（refineLandmarks 提供 468/473）
-    if (lm[468] && lm[473]) {
-      const L = { iris: lm[468], out: lm[33], inn: lm[133], top: lm[159], bot: lm[145] };
-      const R = { iris: lm[473], out: lm[263], inn: lm[362], top: lm[386], bot: lm[374] };
-      const off = (e) => {
-        const cx = (e.out.x + e.inn.x) / 2, cy = (e.top.y + e.bot.y) / 2;
-        const w = Math.max(Math.abs(e.out.x - e.inn.x), 1e-4);
-        const h = Math.max(Math.abs(e.top.y - e.bot.y), 1e-4);
-        return { x: (e.iris.x - cx) / w, y: (e.iris.y - cy) / h };
-      };
-      const oL = off(L), oR = off(R);
-      // 双眼注视同向 → 水平取平均；预览镜像(scaleX(-1))使水平反向，故取反
-      ox = -(oL.x + oR.x) / 2;
-      oy = (oL.y + oR.y) / 2;
-    } else {
-      // 兜底：眼睛中心相对鼻子的粗略偏移（精度较低，仅保底演示）
-      if (S.irisOk) {
-        S.irisOk = false;
-        showBanner("当前模型未提供虹膜关键点（468/473），已降级为粗略眼动。如需更高精度，请使用支持 refineLandmarks 的模型。");
-      }
-      const Lc = { x: (lm[33].x + lm[133].x) / 2, y: (lm[159].y + lm[145].y) / 2 };
-      const Rc = { x: (lm[263].x + lm[362].x) / 2, y: (lm[386].y + lm[374].y) / 2 };
-      const nose = lm[1];
-      ox = ((Lc.x + Rc.x) / 2 - nose.x) * 3;
-      oy = ((Lc.y + Rc.y) / 2 - nose.y) * 3;
-    }
-
-    if (Math.abs(ox) < S.deadzone) ox = 0;
-    if (Math.abs(oy) < S.deadzone) oy = 0;
-    S.cursor.x = clamp(S.cursor.x + ox * S.speed, 0, window.innerWidth);
-    S.cursor.y = clamp(S.cursor.y + oy * S.speed, 0, window.innerHeight);
-    sendToBackend({ type: "move", dx: ox * S.speed, dy: oy * S.speed });
-    updateCursor();
-  }
-
-  // ---------- 工具 ----------
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  function setPill(el, on) { el.classList.toggle("on", on); el.classList.toggle("off", !on); el.classList.remove("warn"); }
-
   // ---------- 后端 WebSocket（可选）----------
   let ws = null;
   function connectBackend() {
@@ -370,7 +384,7 @@
       ws.onopen = () => { S.backend = true; setBackendPill(true); };
       ws.onclose = () => { S.backend = false; setBackendPill(false); setTimeout(connectBackend, 3000); };
       ws.onerror = () => ws.close();
-    } catch (e) { /* 无后端，网页内演示模式 */ }
+    } catch (e) { /* 无后端，网页内演示 */ }
   }
   function setBackendPill(on) {
     const p = $("pillBackend");
@@ -379,7 +393,103 @@
   }
   function sendToBackend(obj) { if (S.backend && ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
 
-  // ---------- 检测库动态加载（多 CDN 自动降级）----------
+  // ---------- 状态 pill ----------
+  function setPill(el, on) { el.classList.toggle("on", on); el.classList.toggle("off", !on); el.classList.remove("warn"); }
+  function setLibPill(state) {
+    const p = $("pillLib"), dot = p.querySelector(".dot");
+    if (state === "ready") { dot.className = "dot on"; p.lastChild.textContent = " 检测库就绪"; }
+    else if (state === "fail") { dot.className = "dot off"; p.lastChild.textContent = " 检测库加载失败"; }
+    else { dot.className = "dot warn"; p.lastChild.textContent = " 模型加载中…（需数秒）"; }
+  }
+  function setCalibPill() {
+    const p = $("pillCalib"), dot = p.querySelector(".dot");
+    if (S.calibDone) { dot.className = "dot on"; p.lastChild.textContent = " 已标定"; }
+    else { dot.className = "dot warn"; p.lastChild.textContent = " 未标定"; }
+  }
+
+  // ---------- 9 点标定 ----------
+  const CALIB_POINTS = [
+    { x: 0.10, y: 0.16 }, { x: 0.50, y: 0.16 }, { x: 0.90, y: 0.16 },
+    { x: 0.10, y: 0.50 }, { x: 0.50, y: 0.50 }, { x: 0.90, y: 0.50 },
+    { x: 0.10, y: 0.84 }, { x: 0.50, y: 0.84 }, { x: 0.90, y: 0.84 },
+  ];
+  let calibDoneCount = 0;
+
+  function buildCalibStage() {
+    const stage = $("calibStage");
+    stage.innerHTML = "";
+    CALIB_POINTS.forEach((pt, i) => {
+      const d = document.createElement("button");
+      d.className = "calib-dot";
+      d.textContent = String(i + 1);
+      d.style.left = (pt.x * 100) + "%";
+      d.style.top = (pt.y * 100) + "%";
+      d.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const r = d.getBoundingClientRect();
+        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        webgazer.recordScreenPosition(cx, cy, "click");
+        d.classList.add("done");
+        calibDoneCount++;
+        $("calibBar").textContent = "已标定 " + calibDoneCount + " / 9";
+        if (calibDoneCount >= CALIB_POINTS.length) finishCalib();
+      });
+      stage.appendChild(d);
+    });
+  }
+  function startCalib() {
+    if (typeof webgazer === "undefined" || !runGaze) {
+      showBanner("当前模式未启用眼动追踪（WebGazer），无法标定。");
+      return;
+    }
+    calibDoneCount = 0;
+    $("calibBar").textContent = "已标定 0 / 9";
+    buildCalibStage();
+    $("overlay").classList.add("show");
+  }
+  function finishCalib() {
+    S.calibDone = true;
+    setCalibPill();
+    $("calibStatus").innerHTML = "<b>标定完成。</b> 现在转动眼球，观察视线光标是否跟随。若要重新标定，可刷新页面后重来。";
+    setTimeout(() => $("overlay").classList.remove("show"), 600);
+  }
+  $("calibStart").addEventListener("click", startCalib);
+  $("calibSkip").addEventListener("click", () => {
+    $("calibStatus").innerHTML = "<b>已跳过标定。</b> WebGazer 会在你移动/点击鼠标时持续自标定，精度会逐步提升。";
+  });
+
+  // ---------- WebGazer 眼动回调（视线平滑 + 按钮磁吸）----------
+  let gazeInit = false, gsx = 0, gsy = 0;
+  function onGaze(data, elapsedTime) {
+    S.dbg.gazes++;
+    if (!data) { setPill($("pillFace"), false); return; }
+    setPill($("pillFace"), true);
+    const rx = clamp(data.x, 0, window.innerWidth);
+    const ry = clamp(data.y, 0, window.innerHeight);
+    if (!gazeInit) { gsx = rx; gsy = ry; S.cursor.x = rx; S.cursor.y = ry; gazeInit = true; }
+    // 1) 视线点强低通，只保留「大致在看哪里」的意图
+    gsx += (rx - gsx) * snap.ema;
+    gsy += (ry - gsy) * snap.ema;
+    // 2) 磁吸：找距离最近且在吸附半径内的按钮中心
+    let tx = gsx, ty = gsy, snapped = false;
+    let bestD = snap.gravity;
+    for (const k of keys) {
+      const r = k.getBoundingClientRect();
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      const d = Math.hypot(gsx - cx, gsy - cy);
+      if (d < bestD) { bestD = d; tx = cx; ty = cy; snapped = true; }
+    }
+    // 3) 光标惯性趋向目标：有吸附目标就果断过去，空白区就懒懒漂移
+    const follow = snapped ? snap.followSnap : snap.followFree;
+    const ox = S.cursor.x, oy = S.cursor.y;
+    S.cursor.x += (tx - S.cursor.x) * follow;
+    S.cursor.y += (ty - S.cursor.y) * follow;
+    const dx = S.cursor.x - ox, dy = S.cursor.y - oy;
+    if (Math.hypot(dx, dy) > 2.0) sendToBackend({ type: "move", dx: dx * S.speed, dy: dy * S.speed });
+    updateCursor();
+  }
+
+  // ---------- 检测库动态加载（仅 MediaPipe Hands，多 CDN 自动降级）----------
   const CDN_SOURCES = [
     { name: "本地", base: "vendor/mediapipe", local: true },
     { name: "jsdelivr", base: "https://cdn.jsdelivr.net/npm" },
@@ -398,8 +508,7 @@
     });
   }
 
-  // npmmirror 需要带版本号，其余 CDN 走 /npm/ 或根路径
-  const PKG_VER = { face_mesh: "0.4.1657299874", hands: "0.4.1675469240" };
+  const PKG_VER = { hands: "0.4.1675469240" };
   function fileUrl(src, pkg, file) {
     if (src.local) return `${src.base}/${pkg}/${file}`;
     if (src.name === "npmmirror") {
@@ -408,118 +517,141 @@
     return `${src.base}/@mediapipe/${pkg}/${file}`;
   }
 
-  async function loadDeps() {
+  async function loadHands() {
     for (const src of CDN_SOURCES) {
       try {
-        await loadScript(fileUrl(src, "face_mesh", "face_mesh.js"));
         await loadScript(fileUrl(src, "hands", "hands.js"));
-        if (typeof window.FaceMesh !== "undefined" && typeof window.Hands !== "undefined") {
-          CURRENT_CDN = src;
-          return true;
-        }
+        if (typeof window.Hands !== "undefined") { CURRENT_CDN = src; return true; }
       } catch (e) { /* 尝试下一个源 */ }
     }
     return false;
   }
 
-  // ---------- 摄像头 + 检测循环 ----------
+  // ---------- 模式解析 ----------
+  const qp = new URLSearchParams(location.search);
+  const mode = qp.get("mode") || "both"; // gaze | hand | both
+  const runGaze = mode !== "hand";
+  const runHand = mode !== "gaze";
+
+  // ---------- 初始化 ----------
+  let handImg = null; // hands 的输入源（video 元素 或 WebGazer 的 video canvas）
+
   async function init() {
-    const video = $("video");
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
-      video.srcObject = stream;
-      await video.play();
-      $("camWrap").style.display = "block";
-      $("camOff").style.display = "none";
-      setPill($("pillCam"), true);
-      cursorEl.classList.add("live");
-    } catch (e) {
-      setPill($("pillCam"), false);
-      $("camOff").textContent = "摄像头未启动（授权被拒或无摄像头）";
-      showBanner("<b>摄像头无法启动。</b> 请检查：1) 是否点击了「允许」授权摄像头；2) 浏览器是否允许该站点访问摄像头（地址栏摄像头图标）；3) 摄像头是否被其他应用占用。按键仍可用鼠标直接测试。");
-      return;
-    }
+    // URL 覆盖吸附参数：?ema=0.14&gravity=70&kalman=1
+    if (qp.has("ema")) snap.ema = parseFloat(qp.get("ema")) || snap.ema;
+    if (qp.has("gravity")) snap.gravity = parseFloat(qp.get("gravity")) || snap.gravity;
+    if (qp.has("kalman")) snap.kalman = qp.get("kalman") === "1";
 
-    try {
-      // 诊断模式：?mode=face 只跑人脸、?mode=hand 只跑手部、默认 both 交替跑
-      const qp = new URLSearchParams(location.search);
-      const mode = qp.get("mode") || "both";
-      const runFace = mode !== "hand";
-      const runHand = mode !== "face";
-
-      const faceMesh = new FaceMesh({ locateFile: (f) => fileUrl(CURRENT_CDN, "face_mesh", f) });
-      faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: false, useCpuInference: true, minDetectionConfidence: 0.4, minTrackingConfidence: 0.4 });
-      faceMesh.onResults(onFaceResults);
-
-      const hands = new Hands({ locateFile: (f) => fileUrl(CURRENT_CDN, "hands", f) });
-      hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.4, minTrackingConfidence: 0.4 });
-      hands.onResults(onHandResults);
-
-      // 显式初始化：下载 wasm 与模型（失败会抛出明确错误）。
-      // 关键：MediaPipe 不允许并行初始化多个模型——两个 wasm glue 共享全局
-      // 变量 createMediapipeSolutionsWasm，并行加载会互相覆盖，触发
-      // "Module.arguments has been replaced with plain arguments_" 崩溃。
-      // 必须逐个 await（先 faceMesh 完成，再 hands）。
-      setLibPill("loading");
-      if (runFace) await faceMesh.initialize();
-      if (runHand) await hands.initialize();
-      setLibPill("ready");
-
-      let frames = 0, last = performance.now(), tick = 0;
-      function loop() {
-        if (video.readyState >= 2) {
-          if (runFace && runHand) {
-            if (tick % 2 === 0) {
-              S.dbg.faceSend++;
-              faceMesh.send({ image: video }).catch(e => { S.dbg.faceErr = (e && e.message) || String(e); });
-            } else {
-              S.dbg.handSend++;
-              hands.send({ image: video }).catch(e => { S.dbg.handErr = (e && e.message) || String(e); });
-            }
-          } else if (runFace) {
-            S.dbg.faceSend++;
-            faceMesh.send({ image: video }).catch(e => { S.dbg.faceErr = (e && e.message) || String(e); });
-          } else if (runHand) {
-            S.dbg.handSend++;
-            hands.send({ image: video }).catch(e => { S.dbg.handErr = (e && e.message) || String(e); });
-          }
-        }
-        tick++;
-        frames++;
-        const now = performance.now();
-        if (now - last >= 1000) {
-          $("fpsVal").textContent = frames; frames = 0; last = now;
-          $("dbgLine").textContent = "诊断[mode=" + mode + ",faceCPU,noRefine] · face " + S.dbg.faceSend + "/" + S.dbg.faceRes + " · hand " + S.dbg.handSend + "/" + S.dbg.handRes + (S.dbg.faceErr ? " · faceErr: " + S.dbg.faceErr : "") + (S.dbg.handErr ? " · handErr: " + S.dbg.handErr : "");
-        }
-        requestAnimationFrame(loop);
+    // --- 摄像头 + 眼动（WebGazer 独占摄像头；hand-only 由页面独占）---
+    if (runGaze) {
+      if (typeof webgazer === "undefined") {
+        setLibPill("fail");
+        showBanner("<b>WebGazer 库加载失败。</b> 请确认 vendor/webgazer/webgazer.js 存在且可访问。");
+        return;
       }
-      requestAnimationFrame(loop);
-    } catch (e) {
-      setLibPill("fail");
-      showBanner("<b>检测模型加载失败：</b>" + (e && e.message ? e.message : e) + "<br>请打开浏览器控制台（F12 → Console / Network）查看具体是哪个文件加载失败，并确认可访问 " + CURRENT_CDN.base);
+      webgazer.setRegression("ridge");
+      webgazer.showPredictionPoints(false);
+      if (snap.kalman) webgazer.applyKalmanFilter(true);
+      webgazer.setGazeListener(onGaze);
+      try {
+        await webgazer.begin();
+        setPill($("pillCam"), true);
+        $("camOff").style.display = "none";
+        cursorEl.classList.add("live");
+        markLibReady();
+        if (runHand) handImg = webgazer.getVideoElementCanvas();
+      } catch (e) {
+        setPill($("pillCam"), false);
+        setLibPill("fail");
+        S.dbg.gazeErr = (e && e.message) || String(e);
+        showBanner("<b>WebGazer 启动失败：</b>" + S.dbg.gazeErr + "<br>请确认：1) 已授权摄像头；2) 通过 localhost/127.0.0.1 访问；3) F12 Network/Console 中 facemesh 模型是否加载成功（vendor/webgazer/facemesh_model/model.json）。");
+        return;
+      }
+    } else {
+      // hand-only：页面自己获取摄像头
+      const video = $("video");
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+        video.srcObject = stream;
+        await video.play();
+        $("camWrap").style.display = "block";
+        $("camOff").style.display = "none";
+        setPill($("pillCam"), true);
+        cursorEl.classList.add("live");
+        handImg = video;
+      } catch (e) {
+        setPill($("pillCam"), false);
+        $("camOff").textContent = "摄像头未启动（授权被拒或无摄像头）";
+        showBanner("<b>摄像头无法启动。</b> 请检查：1) 是否点击了「允许」授权摄像头；2) 浏览器是否允许该站点访问摄像头；3) 摄像头是否被其他应用占用。按键仍可用鼠标直接测试。");
+        return;
+      }
+    }
+
+    // --- MediaPipe Hands ---
+    if (runHand) {
+      setLibPill("loading");
+      const ok = await loadHands();
+      if (!ok) {
+        setLibPill("fail");
+        showBanner("<b>检测库（MediaPipe Hands）加载失败。</b> 可能原因：网络无法访问 jsdelivr/unpkg/npmmirror，或被广告拦截插件拦截。请：1) 检查网络；2) 关闭广告拦截器；3) 打开控制台（F12）查看具体报错。");
+        return;
+      }
+      try {
+        const hands = new Hands({ locateFile: (f) => fileUrl(CURRENT_CDN, "hands", f) });
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.4, minTrackingConfidence: 0.4 });
+        hands.onResults(onHandResults);
+        await hands.initialize();
+        markLibReady();
+
+        function handLoop() {
+          if (handImg && handImg.width > 0) {
+            S.dbg.handSend++;
+            hands.send({ image: handImg }).catch(e => { S.dbg.handErr = (e && e.message) || String(e); });
+          }
+          requestAnimationFrame(handLoop);
+        }
+        requestAnimationFrame(handLoop);
+      } catch (e) {
+        setLibPill("fail");
+        showBanner("<b>检测模型加载失败：</b>" + (e && e.message ? e.message : e));
+      }
+    } else {
+      // gaze-only：无 hands，库就绪即标记
+      if (runGaze) markLibReady();
     }
   }
 
-  function setLibPill(state) {
-    const p = $("pillLib");
-    const dot = p.querySelector(".dot");
-    if (state === "ready") { dot.className = "dot on"; p.lastChild.textContent = " 检测库就绪"; }
-    else if (state === "fail") { dot.className = "dot off"; p.lastChild.textContent = " 检测库加载失败"; }
-    else { dot.className = "dot warn"; p.lastChild.textContent = " 模型加载中…（需数秒）"; }
-  }
+  let libReadyCount = 0;
+  const libNeeded = (runGaze ? 1 : 0) + (runHand ? 1 : 0);
+  function markLibReady() { if (++libReadyCount >= libNeeded) setLibPill("ready"); }
+
+  // ---------- FPS + 诊断 ----------
+  let lastT = performance.now(), lastG = 0, lastH = 0;
+  setInterval(() => {
+    const now = performance.now();
+    const fps = Math.round((S.dbg.gazes - lastG) * 1000 / (now - lastT));
+    lastG = S.dbg.gazes; lastT = now;
+    $("fpsVal").textContent = fps;
+    $("dbgLine").textContent = "mode=" + mode + " · 吸附 " + snap.preset + "(g " + snap.gravity + "/ema " + snap.ema + ")" +
+      " · gaze " + S.dbg.gazes + " · hand " + S.dbg.handSend + "/" + S.dbg.handRes +
+      " · 标定 " + (S.calibDone ? "完成" : "未完成") +
+      (S.dbg.gazeErr ? " · gazeErr: " + S.dbg.gazeErr : "") +
+      (S.dbg.handErr ? " · handErr: " + S.dbg.handErr : "");
+  }, 1000);
+
+  // ---------- 平滑档位按钮 ----------
+  document.querySelectorAll(".smooth-btn").forEach(b => b.addEventListener("click", () => applySnapPreset(b.dataset.p)));
 
   // ---------- 启动 ----------
   connectBackend();
   updateCursor();
-
-  loadDeps().then((ok) => {
-    if (!ok) {
-      setLibPill("fail");
-      showBanner("<b>检测库（MediaPipe）加载失败。</b> 可能原因：网络无法访问 jsdelivr/unpkg/npmmirror，或被广告拦截插件拦截。请：1) 检查网络；2) 关闭广告拦截器；3) 打开控制台（F12）查看具体报错。");
-      return;
-    }
+  setCalibPill();
+  if (typeof webgazer === "undefined" && runGaze) {
+    setLibPill("fail");
+    showBanner("<b>WebGazer 库加载失败。</b> 请确认 vendor/webgazer/webgazer.js 存在且可访问。");
+  } else {
     init();
-  });
+  }
 })();
 </script>
 </body>

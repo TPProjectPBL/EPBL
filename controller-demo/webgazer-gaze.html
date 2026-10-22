@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>眼动标定 · WebGazer 对照页</title>
+<!-- WebGazer 2.1.2（已 patch：模型指向本地 vendor/webgazer/facemesh_model） -->
+<script src="vendor/webgazer/webgazer.js"></script>
+<style>
+  :root {
+    --bg: #ffffff; --ink: #1d1d1f; --muted: #6e6e73; --line: #e8e8ed;
+    --btn: #1d1d1f; --btn-hover: #3a3a3c; --blue: #0071e3; --soft: #f5f5f7;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--ink); font-size: 15px; line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    position: sticky; top: 0; z-index: 20; background: rgba(255,255,255,.82);
+    backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid var(--line); padding: 14px 28px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  }
+  header .brand { display: flex; align-items: center; gap: 12px; }
+  header .logo { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg,#0f1728,#2f4aa8); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 15px; }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: .2px; }
+  header .sub { font-size: 12px; color: var(--muted); }
+  .spacer { flex: 1; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink); background: var(--soft); border: 1px solid var(--line); padding: 5px 13px; border-radius: 20px; white-space: nowrap; }
+  .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: #c7c7cc; }
+  .pill.on .dot { background: #34c759; }
+  .pill.warn .dot { background: #ff9500; }
+  .pill.off .dot { background: #ff3b30; }
+
+  .banner { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); z-index: 50; background: #fff3f3; border: 1px solid #ffcccc; color: #b3261e; border-radius: 12px; padding: 12px 18px; font-size: 13px; max-width: 760px; width: calc(100% - 40px); box-shadow: 0 8px 24px rgba(0,0,0,.14); display: flex; align-items: flex-start; gap: 12px; }
+  .banner .msg { flex: 1; }
+  .banner button { border: none; background: none; cursor: pointer; font-size: 14px; color: inherit; padding: 0 2px; }
+
+  .dbg-line { position: fixed; top: 80px; right: 12px; z-index: 60; font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #b3261e; background: #fff3f3; border: 1px solid #ffcccc; border-radius: 8px; padding: 4px 8px; max-width: 680px; white-space: normal; word-break: break-all; }
+
+  main { max-width: 1120px; margin: 0 auto; padding: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .panel { background: var(--bg); border: 1px solid var(--line); border-radius: 20px; padding: 24px; min-width: 0; }
+  .panel h2 { font-size: 19px; margin: 0 0 4px; letter-spacing: -.2px; }
+  .panel .desc { font-size: 13px; color: var(--muted); margin: 0 0 18px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 12px; }
+
+  .btn-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .key { position: relative; background: var(--btn); color: #fff; border: none; border-radius: var(--radius); padding: 20px 8px; font-size: 14px; font-weight: 500; cursor: pointer; text-align: center; letter-spacing: .2px; transition: background .18s ease, transform .12s ease, box-shadow .18s ease; box-shadow: 0 1px 2px rgba(0,0,0,.08); font-family: inherit; -webkit-user-select: none; user-select: none; }
+  .key:hover { background: var(--btn-hover); }
+  .key:active { transform: scale(.96); }
+  .key .glyph { display: block; font-size: 20px; margin-bottom: 6px; }
+  .key.hovered { background: #515154; box-shadow: 0 0 0 3px rgba(0,113,227,.35); }
+  .key.triggered { background: var(--blue); }
+
+  .calib-panel { display: flex; flex-direction: column; gap: 14px; }
+  .big-btn { background: var(--blue); color: #fff; border: none; border-radius: var(--radius); padding: 16px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background .18s ease, transform .12s ease; }
+  .big-btn:hover { background: #1a5fc0; }
+  .big-btn:active { transform: scale(.98); }
+  .big-btn.ghost { background: var(--soft); color: var(--ink); border: 1px solid var(--line); }
+  .big-btn.ghost:hover { background: #eaeaee; }
+  .calib-status { font-size: 13px; color: var(--muted); }
+  .calib-status b { color: var(--ink); }
+
+  .gaze-cursor { position: fixed; left: 50%; top: 50%; z-index: 110; width: 34px; height: 34px; margin: -17px 0 0 -17px; border: 2px solid var(--blue); border-radius: 50%; pointer-events: none; display: none; }
+  .gaze-cursor::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; background: var(--blue); border-radius: 50%; }
+  .gaze-cursor.live { display: block; }
+
+  /* 标定覆盖层 */
+  .overlay { position: fixed; inset: 0; z-index: 100; background: rgba(15,23,40,.96); display: none; flex-direction: column; align-items: center; justify-content: center; color: #fff; }
+  .overlay.show { display: flex; }
+  .overlay h2 { font-size: 20px; margin: 0 0 6px; }
+  .overlay .sub { font-size: 13px; opacity: .8; margin: 0 0 20px; }
+  .overlay .stage { position: relative; width: 100%; height: 100%; }
+  .calib-dot { position: absolute; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: #fff; border: 3px solid var(--blue); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--blue); font-weight: 700; font-size: 13px; transition: transform .12s ease, background .15s ease; }
+  .calib-dot:hover { transform: scale(1.12); }
+  .calib-dot.done { background: #34c759; border-color: #34c759; color: #fff; pointer-events: none; }
+  .overlay .bar { position: absolute; left: 0; right: 0; bottom: 26px; text-align: center; font-size: 13px; opacity: .85; }
+
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } .btn-grid { grid-template-columns: repeat(3, 1fr); } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="logo">◉</div>
+    <div>
+      <h1>眼动标定 · WebGazer 对照页</h1>
+      <div class="sub">纯 TF.js FaceMesh 眼动（替代 MediaPipe face_mesh）</div>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <div class="pill" id="pillLib"><span class="dot"></span>WebGazer</div>
+  <div class="pill" id="pillCam"><span class="dot"></span>摄像头</div>
+  <div class="pill" id="pillFace"><span class="dot"></span>人脸</div>
+  <div class="pill" id="pillCalib"><span class="dot"></span>标定</div>
+  <div class="pill"><span class="dot"></span><span id="fpsVal">0</span> FPS</div>
+  <div class="pill" id="pillBackend"><span class="dot off"></span>后端未连接</div>
+</header>
+
+<div class="dbg-line" id="dbgLine">诊断：初始化中…</div>
+<div class="banner" id="banner" style="display:none;">
+  <div class="msg" id="bannerText"></div>
+  <button id="bannerClose" aria-label="关闭">✕</button>
+</div>
+
+<main>
+  <section class="panel">
+    <h2>眼动追踪</h2>
+    <p class="desc">标定后保持头部稳定，转动眼球——视线光标随注视点移动，悬停按键高亮，驻留约 0.8 s 触发点击。</p>
+    <div class="btn-grid" id="btnGrid">
+      <button class="key" data-label="上一页"><span class="glyph">‹</span>上一页</button>
+      <button class="key" data-label="下一页"><span class="glyph">›</span>下一页</button>
+      <button class="key" data-label="播放/暂停"><span class="glyph">▶</span>播放</button>
+      <button class="key" data-label="音量+"><span class="glyph">＋</span>音量</button>
+      <button class="key" data-label="音量-"><span class="glyph">－</span>静音</button>
+      <button class="key" data-label="刷新"><span class="glyph">↻</span>刷新</button>
+      <button class="key" data-label="收藏"><span class="glyph">☆</span>收藏</button>
+      <button class="key" data-label="分享"><span class="glyph">↗</span>分享</button>
+      <button class="key" data-label="全屏"><span class="glyph">⤢</span>全屏</button>
+      <button class="key" data-label="返回"><span class="glyph">←</span>返回</button>
+      <button class="key" data-label="确认"><span class="glyph">✓</span>确认</button>
+      <button class="key" data-label="关闭"><span class="glyph">✕</span>关闭</button>
+    </div>
+    <div class="hint">提示：点击任意按键可直接测试按钮交互，也会被 WebGazer 作为自标定数据吸收。</div>
+  </section>
+
+  <section class="panel">
+    <h2>标定</h2>
+    <p class="desc">9 点标定：依次注视并点击屏幕上的 9 个点，让回归模型学习「眼睛特征 → 屏幕位置」的映射。</p>
+    <div class="calib-panel">
+      <button class="big-btn" id="calibStart">开始 9 点标定</button>
+      <button class="big-btn ghost" id="calibSkip">跳过标定（直接使用，精度较低）</button>
+      <div class="calib-status" id="calibStatus">尚未标定。建议先完成 9 点标定以获得稳定精度。</div>
+    </div>
+    <div class="hint">标定期间请保持头部位置稳定，眼睛盯着目标点再用鼠标点击。</div>
+  </section>
+</main>
+
+<div class="gaze-cursor" id="gazeCursor"></div>
+
+<div class="overlay" id="overlay">
+  <h2>9 点标定</h2>
+  <div class="sub">眼睛注视当前点，用鼠标点击它。逐个点完即可。</div>
+  <div class="stage" id="calibStage"></div>
+  <div class="bar" id="calibBar">已标定 0 / 9</div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  const S = {
+    cursor: { x: window.innerWidth / 2, y: window.innerHeight / 2 },
+    backend: false, calibDone: false, faceSeen: false,
+    dwellMs: 800, speed: 1.0,
+    dbg: { gazes: 0, err: "" },
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const cursorEl = $("gazeCursor");
+  const keys = Array.from(document.querySelectorAll(".key"));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- 诊断横幅 ----------
+  function showBanner(html) {
+    $("bannerText").innerHTML = html;
+    $("banner").style.display = "flex";
+  }
+  $("bannerClose").addEventListener("click", () => { $("banner").style.display = "none"; });
+
+  // ---------- 视线光标 + 驻留点击 ----------
+  function updateCursor() {
+    cursorEl.style.left = S.cursor.x + "px";
+    cursorEl.style.top = S.cursor.y + "px";
+    const cx = S.cursor.x, cy = S.cursor.y;
+    let hovered = null;
+    for (const k of keys) {
+      const r = k.getBoundingClientRect();
+      if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) { hovered = k; break; }
+    }
+    dwellOn(hovered);
+  }
+
+  let dwellKey = null, dwellStart = 0;
+  function dwellOn(key) {
+    keys.forEach(k => { k.classList.remove("hovered"); if (k !== key) k.classList.remove("triggered"); });
+    if (!key) { dwellKey = null; return; }
+    key.classList.add("hovered");
+    if (dwellKey !== key) { dwellKey = key; dwellStart = performance.now(); }
+    if (performance.now() - dwellStart >= S.dwellMs) {
+      triggerKey(key);
+      dwellKey = null; dwellStart = performance.now() + 600;
+    }
+  }
+  function triggerKey(key) {
+    key.classList.add("triggered");
+    setTimeout(() => key.classList.remove("triggered"), 300);
+    sendToBackend({ type: "click", label: key.dataset.label });
+  }
+  keys.forEach(k => k.addEventListener("click", () => triggerKey(k)));
+
+  // ---------- 后端 WebSocket（可选）----------
+  let ws = null;
+  function connectBackend() {
+    try {
+      ws = new WebSocket("ws://127.0.0.1:8899");
+      ws.onopen = () => { S.backend = true; setBackendPill(true); };
+      ws.onclose = () => { S.backend = false; setBackendPill(false); setTimeout(connectBackend, 3000); };
+      ws.onerror = () => ws.close();
+    } catch (e) { /* 无后端，网页内演示 */ }
+  }
+  function setBackendPill(on) {
+    const p = $("pillBackend");
+    p.querySelector(".dot").className = "dot " + (on ? "on" : "off");
+    p.lastChild.textContent = on ? " 后端已连接" : " 后端未连接";
+  }
+  function sendToBackend(obj) { if (S.backend && ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
+
+  // ---------- 状态 pill ----------
+  function setPill(el, on) { el.classList.toggle("on", on); el.classList.toggle("off", !on); el.classList.remove("warn"); }
+  function setLibPill(state) {
+    const p = $("pillLib"), dot = p.querySelector(".dot");
+    if (state === "ready") { dot.className = "dot on"; p.lastChild.textContent = " WebGazer 就绪"; }
+    else if (state === "fail") { dot.className = "dot off"; p.lastChild.textContent = " WebGazer 失败"; }
+    else { dot.className = "dot warn"; p.lastChild.textContent = " WebGazer 加载中…"; }
+  }
+  function setCalibPill() {
+    const p = $("pillCalib"), dot = p.querySelector(".dot");
+    if (S.calibDone) { dot.className = "dot on"; p.lastChild.textContent = " 已标定"; }
+    else { dot.className = "dot warn"; p.lastChild.textContent = " 未标定"; }
+  }
+
+  // ---------- 9 点标定 ----------
+  const CALIB_POINTS = [
+    { x: 0.10, y: 0.16 }, { x: 0.50, y: 0.16 }, { x: 0.90, y: 0.16 },
+    { x: 0.10, y: 0.50 }, { x: 0.50, y: 0.50 }, { x: 0.90, y: 0.50 },
+    { x: 0.10, y: 0.84 }, { x: 0.50, y: 0.84 }, { x: 0.90, y: 0.84 },
+  ];
+  let calibDoneCount = 0;
+
+  function buildCalibStage() {
+    const stage = $("calibStage");
+    stage.innerHTML = "";
+    CALIB_POINTS.forEach((pt, i) => {
+      const d = document.createElement("button");
+      d.className = "calib-dot";
+      d.textContent = String(i + 1);
+      d.style.left = (pt.x * 100) + "%";
+      d.style.top = (pt.y * 100) + "%";
+      d.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        // 记录「点中心」作为注视目标（clientX/clientY 视口坐标）
+        const r = d.getBoundingClientRect();
+        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        webgazer.recordScreenPosition(cx, cy, "click");
+        d.classList.add("done");
+        calibDoneCount++;
+        $("calibBar").textContent = "已标定 " + calibDoneCount + " / 9";
+        if (calibDoneCount >= CALIB_POINTS.length) finishCalib();
+      });
+      stage.appendChild(d);
+    });
+  }
+
+  function startCalib() {
+    calibDoneCount = 0;
+    $("calibBar").textContent = "已标定 0 / 9";
+    buildCalibStage();
+    $("overlay").classList.add("show");
+  }
+  function finishCalib() {
+    S.calibDone = true;
+    setCalibPill();
+    $("calibStatus").innerHTML = "<b>标定完成。</b> 现在转动眼球，观察视线光标是否跟随。若精度下降可重新标定（刷新页面后重来）。";
+    setTimeout(() => $("overlay").classList.remove("show"), 600);
+  }
+
+  $("calibStart").addEventListener("click", startCalib);
+  $("calibSkip").addEventListener("click", () => {
+    $("calibStatus").innerHTML = "<b>已跳过标定。</b> WebGazer 会在你移动/点击鼠标时持续自标定，精度会逐步提升。";
+  });
+
+  // ---------- 视线回调（视线平滑 + 按钮磁吸）----------
+  const snap = { ema: 0.14, gravity: 70, followSnap: 0.45, followFree: 0.10 };
+  const qp2 = new URLSearchParams(location.search);
+  if (qp2.has("ema")) snap.ema = parseFloat(qp2.get("ema")) || snap.ema;
+  if (qp2.has("gravity")) snap.gravity = parseFloat(qp2.get("gravity")) || snap.gravity;
+  let gazeInit = false, gsx = 0, gsy = 0;
+  webgazer.setGazeListener((data, elapsedTime) => {
+    S.dbg.gazes++;
+    if (!data) return;
+    const rx = clamp(data.x, 0, window.innerWidth);
+    const ry = clamp(data.y, 0, window.innerHeight);
+    if (!gazeInit) { gsx = rx; gsy = ry; S.cursor.x = rx; S.cursor.y = ry; gazeInit = true; }
+    gsx += (rx - gsx) * snap.ema;
+    gsy += (ry - gsy) * snap.ema;
+    let tx = gsx, ty = gsy, snapped = false;
+    let bestD = snap.gravity;
+    for (const k of keys) {
+      const r = k.getBoundingClientRect();
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      const d = Math.hypot(gsx - cx, gsy - cy);
+      if (d < bestD) { bestD = d; tx = cx; ty = cy; snapped = true; }
+    }
+    const follow = snapped ? snap.followSnap : snap.followFree;
+    const ox = S.cursor.x, oy = S.cursor.y;
+    S.cursor.x += (tx - S.cursor.x) * follow;
+    S.cursor.y += (ty - S.cursor.y) * follow;
+    const dx = S.cursor.x - ox, dy = S.cursor.y - oy;
+    if (Math.hypot(dx, dy) > 2.0) sendToBackend({ type: "move", dx: dx * S.speed, dy: dy * S.speed });
+    updateCursor();
+  });
+
+  // ---------- 启动 ----------
+  connectBackend();
+  updateCursor();
+  setLibPill("loading");
+  setCalibPill();
+
+  // 人脸检测状态：用 getStoredPoints / 或简单轮询 currentPrediction 是否出现
+  webgazer.setRegression("ridge");
+  webgazer.showPredictionPoints(false); // 隐藏 WebGazer 自带的红色预测点
+
+  webgazer.begin()
+    .then(() => {
+      setLibPill("ready");
+      cursorEl.classList.add("live");
+      $("dbgLine").textContent = "WebGazer 就绪 · 建议先「开始 9 点标定」";
+    })
+    .catch((err) => {
+      setLibPill("fail");
+      S.dbg.err = (err && err.message) || String(err);
+      showBanner("<b>WebGazer 启动失败：</b>" + S.dbg.err + "<br>请确认：1) 已授权摄像头；2) 通过 localhost/127.0.0.1 访问；3) 打开 F12 查看 Network/Console 中 facemesh 模型是否加载成功（vendor/webgazer/facemesh_model/model.json）。");
+    });
+
+  // FPS：统计 gaze 回调频率
+  let lastT = performance.now(), lastG = 0;
+  setInterval(() => {
+    const now = performance.now();
+    const fps = Math.round((S.dbg.gazes - lastG) * 1000 / (now - lastT));
+    lastG = S.dbg.gazes; lastT = now;
+    $("fpsVal").textContent = fps;
+    $("dbgLine").textContent = "gazes " + S.dbg.gazes + " · 标定 " + (S.calibDone ? "完成" : "未完成") + (S.dbg.err ? " · err: " + S.dbg.err : "");
+  }, 1000);
+})();
+</script>
+</body>
+</html>
