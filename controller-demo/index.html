@@ -101,20 +101,6 @@
   .calib-status { font-size: 13px; color: var(--muted); }
   .calib-status b { color: var(--ink); }
 
-  .zoom-stage {
-    position: relative; overflow: hidden; background: var(--soft); border-radius: 16px;
-    height: 340px; display: flex; align-items: center; justify-content: center;
-  }
-  .zoom-card {
-    width: 260px; padding: 28px 24px; border-radius: 20px;
-    background: linear-gradient(150deg, #0f1728 0%, #2f4aa8 100%); color: #fff; text-align: center;
-    transform: scale(1); transform-origin: center; transition: transform .06s linear;
-    box-shadow: 0 12px 32px rgba(15,23,40,.28); will-change: transform;
-  }
-  .zoom-card .big { font-size: 44px; font-weight: 700; margin: 6px 0 2px; letter-spacing: -.5px; }
-  .zoom-card .unit { font-size: 13px; opacity: .75; }
-  .zoom-card .divider { height: 1px; background: rgba(255,255,255,.22); margin: 16px 0; }
-  .zoom-card .label { font-size: 13px; opacity: .9; }
   .zoom-meta { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
   .zoom-meta .val { font-size: 15px; font-weight: 600; }
   .gesture-tag {
@@ -123,6 +109,19 @@
   }
   .gesture-tag.open { background: #e6f4ea; color: #1a7f37; border-color: #bfe3c9; }
   .gesture-tag.close { background: #ffe8e0; color: #b33a1e; border-color: #ffcfbf; }
+  .gesture-tag.action { background: #e8f1fd; color: #1a56c4; border-color: #cfe0f6; }
+  .gesture-tag.scroll { background: #ede9fe; color: #6d28d9; border-color: #ddd6fe; }
+  .gesture-map { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 2px; }
+  .gmap-item { font-size: 12px; color: var(--muted); background: var(--soft); border: 1px solid var(--line); border-radius: 20px; padding: 5px 12px; }
+  .gmap-item b { color: var(--ink); margin-right: 4px; font-size: 13px; }
+  .scroll-demo {
+    margin-top: 14px; height: 240px; overflow-y: auto; background: var(--soft);
+    border: 1px solid var(--line); border-radius: 16px; padding: 10px;
+  }
+  .scroll-demo::-webkit-scrollbar { width: 8px; }
+  .scroll-demo::-webkit-scrollbar-thumb { background: #c7ccd6; border-radius: 8px; }
+  .sd-item { padding: 10px 14px; margin: 4px 0; border-radius: 10px; background: #fff; border: 1px solid var(--line); font-size: 13px; color: var(--ink); }
+  .sd-item.active { background: #e8f1fd; border-color: var(--blue); }
 
   footer { max-width: 1120px; margin: 0 auto 40px; padding: 0 28px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   footer .note { font-size: 12px; color: var(--muted); margin-left: auto; }
@@ -258,21 +257,20 @@
 
   <section class="panel">
     <h2>隔空手势</h2>
-    <p class="desc">对镜头<strong>张开手掌</strong>放大，<strong>握拳</strong>缩小；移开手掌则停止缩放。</p>
-    <div class="zoom-stage" id="zoomStage">
-      <div class="zoom-card" id="zoomCard">
-        <div class="label">缩放级别</div>
-        <div class="big" id="zoomNum">100</div>
-        <div class="unit">%</div>
-        <div class="divider"></div>
-        <div class="label">张开手 ⇧ 放大 · 握拳 ⇩ 缩小</div>
-      </div>
+    <p class="desc">对镜头比<strong>静态手势</strong>触发按键；<strong>手掌朝前、手指朝上</strong>向上滚动，<strong>手指朝下</strong>向下滚动。需手掌朝前、手指伸直。</p>
+    <div class="gesture-map">
+      <span class="gmap-item"><b>✊</b>握拳 确认</span>
+      <span class="gmap-item"><b>👍</b>拇指 返回</span>
+      <span class="gmap-item"><b>☝️</b>食指 主页</span>
+      <span class="gmap-item"><b>✌️</b>二指 菜单</span>
+      <span class="gmap-item"><b>🖐↑</b>指尖向上 上滚</span>
+      <span class="gmap-item"><b>🖐↓</b>指尖向下 下滚</span>
     </div>
     <div class="zoom-meta">
       <span class="gesture-tag" id="gestureTag">未检测到手</span>
-      <span class="val">缩放 <span id="scaleVal">100%</span></span>
     </div>
-    <div class="hint">缩放范围 60% – 240%，超过范围自动停止（限幅保护）。</div>
+    <div class="scroll-demo" id="scrollDemo"></div>
+    <div class="hint">手势连续 3 帧确认后触发，按键触发后有短暂冷却；手掌离开镜头自动复位。</div>
   </section>
 </main>
 
@@ -302,7 +300,6 @@
   // ---------- 状态 ----------
   const S = {
     cursor: { x: window.innerWidth / 2, y: window.innerHeight / 2 },
-    scale: 1.0, scaleMin: 0.6, scaleMax: 2.4,
     gesture: "none", faceSeen: false, handSeen: false, backend: false,
     dwellMs: 800, calibDone: false, speed: 1.0,
     dbg: { gazes: 0, handSend: 0, handRes: 0, handErr: "", gazeErr: "" },
@@ -329,7 +326,6 @@
 
   const $ = (id) => document.getElementById(id);
   const cursorEl = $("gazeCursor");
-  const zoomCard = $("zoomCard");
   const keys = Array.from(document.querySelectorAll(".key"));
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -371,46 +367,125 @@
   }
   keys.forEach(k => k.addEventListener("click", () => triggerKey(k)));
 
-  // ---------- 手势缩放 ----------
-  function applyScale() {
-    S.scale = Math.max(S.scaleMin, Math.min(S.scaleMax, S.scale));
-    zoomCard.style.transform = "scale(" + S.scale + ")";
-    const pct = Math.round(S.scale * 100);
-    $("scaleVal").textContent = pct + "%";
-    $("zoomNum").textContent = pct;
+  // ---------- 手势识别 + 状态机 ----------
+  const GESTURE_TEXT = {
+    "fist":        "✊ 握拳 · 确认",
+    "thumb":       "👍 拇指 · 返回",
+    "point":       "☝️ 食指 · 主页",
+    "two":         "✌️ 二指 · 菜单",
+    "scroll-up":   "🖐 指尖向上 · 上滚",
+    "scroll-down": "🖐 指尖向下 · 下滚",
+    "open":        "🖐 张开手掌",
+    "none":        "未检测到手 / 无手势",
+  };
+  const GESTURE_CLASS = {
+    "fist": "action", "thumb": "action", "point": "action", "two": "action",
+    "scroll-up": "scroll", "scroll-down": "scroll", "open": "open", "none": "",
+  };
+  const GESTURE_ACTION = {
+    fist:  { label: "确认" },
+    thumb: { label: "返回" },
+    point: { label: "主页" },
+    two:   { label: "菜单" },
+  };
+
+  // 滚动演示区内容
+  const scrollDemo = $("scrollDemo");
+  for (let i = 1; i <= 30; i++) {
+    const d = document.createElement("div");
+    d.className = "sd-item";
+    d.textContent = String(i).padStart(2, "0") + "  ·  列表项目 " + i;
+    scrollDemo.appendChild(d);
   }
+  scrollDemo.scrollTop = 200; // 初始居中，上下两个方向都能演示
+
+  const d2 = (lm, a, b) => Math.hypot(lm[a].x - lm[b].x, lm[a].y - lm[b].y);
+  const FINGERS = [
+    { tip: 8, mcp: 5 }, { tip: 12, mcp: 9 }, { tip: 16, mcp: 13 }, { tip: 20, mcp: 17 },
+  ];
+  function fingerUp(lm, tip, mcp) {
+    // 伸直：指尖到手腕(0)距离 > 指根(MCP)到手腕距离 * 1.2（对朝向鲁棒）
+    return d2(lm, tip, 0) > d2(lm, mcp, 0) * 1.2;
+  }
+  function thumbUp(lm) {
+    // 拇指伸直：拇指尖(4)到掌心(9)距离 > 拇指 MCP(2)到掌心距离 * 1.25
+    return d2(lm, 4, 9) > d2(lm, 2, 9) * 1.25;
+  }
+
+  function classifyHand(lm) {
+    const ext = FINGERS.map(f => fingerUp(lm, f.tip, f.mcp));
+    const n = ext.filter(Boolean).length;
+    const thumb = thumbUp(lm);
+    if (n === 4) {
+      // 张开手掌 → 按指尖方向判定滚动
+      const tipsY = (lm[8].y + lm[12].y + lm[16].y + lm[20].y) / 4;
+      const palmY = lm[9].y;
+      if (tipsY < palmY - 0.12) return "scroll-up";
+      if (tipsY > palmY + 0.12) return "scroll-down";
+      return "open";
+    }
+    if (n === 0) return thumb ? "thumb" : "fist";
+    if (n === 1 && ext[0]) return "point";
+    if (n === 2 && ext[0] && ext[1]) return "two";
+    return "none";
+  }
+
+  // 状态机：候选连续 ENTER 帧确认切换；离散动作带冷却
+  const GS = { current: "none", pending: "none", pendingCnt: 0, enter: 3, cooldownUntil: 0, scrollAt: 0 };
 
   function onHandResults(results) {
     S.dbg.handRes++;
     S.handSeen = !!(results.multiHandLandmarks && results.multiHandLandmarks.length);
     setPill($("pillHand"), S.handSeen);
-    if (!S.handSeen) { setGesture("none"); return; }
-    const lm = results.multiHandLandmarks[0];
-    const tips = [4, 8, 12, 16, 20];
-    const d = (a, b) => Math.hypot(lm[a].x - lm[b].x, lm[a].y - lm[b].y, lm[a].z - lm[b].z);
-    let sum = 0;
-    for (const t of tips) sum += d(t, 9);
-    const norm = (sum / tips.length) / Math.max(d(0, 9), 1e-4);
-    if (norm > 1.25) setGesture("open");
-    else if (norm < 0.95) setGesture("close");
-    else setGesture("none");
+    const cand = S.handSeen ? classifyHand(results.multiHandLandmarks[0]) : "none";
+    if (cand === GS.pending) GS.pendingCnt++;
+    else { GS.pending = cand; GS.pendingCnt = 1; }
+    if (GS.pendingCnt >= GS.enter && GS.pending !== GS.current) {
+      const prev = GS.current;
+      GS.current = GS.pending;
+      GS.pendingCnt = 0;
+      onGestureEnter(prev);
+    }
+    S.gesture = GS.current;
+    updateGestureTag();
+    actContinuous();
   }
 
-  function setGesture(g) {
-    if (g === S.gesture) return;
-    S.gesture = g;
+  function onGestureEnter(prev) {
+    const act = GESTURE_ACTION[GS.current];
+    if (!act) return;
+    const now = performance.now();
+    if (now < GS.cooldownUntil) return;
+    GS.cooldownUntil = now + 900;
+    highlightKey(act.label);
+    sendToBackend({ type: "click", label: act.label });
+  }
+
+  function actContinuous() {
+    const g = GS.current;
+    if (g !== "scroll-up" && g !== "scroll-down") return;
+    const now = performance.now();
+    if (now - GS.scrollAt < 120) return;
+    GS.scrollAt = now;
+    const dir = g === "scroll-up" ? -1 : 1;
+    scrollDemo.scrollTop += dir * 40;
+    sendToBackend({ type: "scroll", dir });
+  }
+
+  function highlightKey(label) {
+    const k = keys.find(x => x.dataset.label === label);
+    if (k) {
+      k.classList.add("triggered");
+      setTimeout(() => k.classList.remove("triggered"), 300);
+    }
+  }
+
+  function updateGestureTag() {
     const tag = $("gestureTag");
-    if (g === "open") { tag.textContent = "张开手 · 放大"; tag.className = "gesture-tag open"; }
-    else if (g === "close") { tag.textContent = "握拳 · 缩小"; tag.className = "gesture-tag close"; }
-    else { tag.textContent = "未检测到手"; tag.className = "gesture-tag"; }
+    const g = GS.current;
+    tag.textContent = GESTURE_TEXT[g] || g;
+    tag.className = "gesture-tag " + (GESTURE_CLASS[g] || "");
   }
-
-  function tickGesture() {
-    if (S.gesture === "open") { S.scale += 0.012; applyScale(); sendToBackend({ type: "zoom", dir: 1 }); }
-    else if (S.gesture === "close") { S.scale -= 0.012; applyScale(); sendToBackend({ type: "zoom", dir: -1 }); }
-    requestAnimationFrame(tickGesture);
-  }
-  requestAnimationFrame(tickGesture);
 
   // ---------- 后端 WebSocket（可选）----------
   let ws = null;
@@ -710,6 +785,7 @@
     $("fpsVal").textContent = fps;
     $("dbgLine").textContent = "mode=" + mode + " · 吸附 " + snap.preset + "(g " + snap.gravity + "/ema " + snap.ema + ")" +
       " · gaze " + S.dbg.gazes + " · hand " + S.dbg.handSend + "/" + S.dbg.handRes +
+      " · 手势 " + (S.gesture === "none" ? "无" : S.gesture) +
       " · 标定 " + (S.calibDone ? "完成" : "未完成") +
       (S.dbg.gazeErr ? " · gazeErr: " + S.dbg.gazeErr : "") +
       (S.dbg.handErr ? " · handErr: " + S.dbg.handErr : "");
