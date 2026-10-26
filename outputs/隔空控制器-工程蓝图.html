@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>隔空控制器 · 工程蓝图（按阶段）</title>
+<style>
+  :root {
+    --bg: #f6f8fb;
+    --card: #ffffff;
+    --ink: #0f172a;
+    --muted: #64748b;
+    --line: #e2e8f0;
+    --brand: #4f46e5;
+    --brand-soft: #eef2ff;
+    --done: #16a34a;
+    --done-soft: #ecfdf3;
+    --active: #f59e0b;
+    --active-soft: #fffbeb;
+    --todo: #94a3b8;
+    --todo-soft: #f1f5f9;
+    --goal: #7c3aed;
+    --goal-soft: #f5f3ff;
+    --danger: #dc2626;
+    --danger-soft: #fef2f2;
+    --code-bg: #0f172a;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4f46e5 100%);
+    color: #fff;
+    padding: 72px 0 64px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::after {
+    content: "";
+    position: absolute;
+    right: -120px; top: -120px;
+    width: 420px; height: 420px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,.18), transparent 65%);
+  }
+  .kicker {
+    display: inline-block;
+    font-size: 12px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    background: rgba(255,255,255,.14);
+    border: 1px solid rgba(255,255,255,.25);
+    padding: 5px 12px;
+    border-radius: 999px;
+    margin-bottom: 18px;
+  }
+  .hero h1 { font-size: 44px; margin: 0 0 12px; letter-spacing: -.02em; }
+  .hero .lead { font-size: 18px; color: #dbe4ff; margin: 0 0 36px; max-width: 680px; }
+  .stats { display: flex; gap: 40px; flex-wrap: wrap; }
+  .stats > div { display: flex; flex-direction: column; }
+  .stats b { font-size: 32px; line-height: 1.1; }
+  .stats span { font-size: 13px; color: #c7d2fe; margin-top: 4px; }
+
+  /* ---------- Section ---------- */
+  section { padding: 56px 0 8px; }
+  section > .wrap > h2 {
+    font-size: 26px;
+    margin: 0 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  section > .wrap > h2 .num {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--brand);
+    background: var(--brand-soft);
+    border-radius: 8px;
+    padding: 3px 9px;
+    letter-spacing: .08em;
+  }
+  .sub { color: var(--muted); margin: 0 0 28px; font-size: 15px; }
+
+  /* ---------- Flow ---------- */
+  .flow { display: grid; gap: 14px; }
+  .lane {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 20px 22px;
+    box-shadow: 0 1px 2px rgba(15,23,42,.04);
+  }
+  .lane-title {
+    font-size: 13px; font-weight: 700; color: var(--muted);
+    letter-spacing: .06em; margin-bottom: 14px;
+  }
+  .pipe { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .node {
+    background: #f8fafc;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 8px 13px;
+    font-size: 13.5px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .node.key { background: var(--brand-soft); border-color: #c7d2fe; color: #3730a3; }
+  .node.done { background: var(--done-soft); border-color: #bbf7d0; color: #166534; }
+  .arrow { color: #94a3b8; font-size: 15px; }
+
+  /* ---------- Timeline ---------- */
+  .timeline { position: relative; padding-top: 6px; }
+  .timeline::before {
+    content: "";
+    position: absolute;
+    left: 27px; top: 10px; bottom: 20px;
+    width: 2px;
+    background: linear-gradient(var(--line), var(--line));
+  }
+  .stage { position: relative; padding-left: 74px; margin-bottom: 22px; }
+  .dot {
+    position: absolute;
+    left: 12px; top: 2px;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 14px; font-weight: 800; color: #fff;
+    box-shadow: 0 0 0 5px var(--bg);
+  }
+  .stage.done .dot { background: var(--done); }
+  .stage.active .dot { background: var(--active); }
+  .stage.todo .dot { background: var(--todo); }
+  .stage.goal .dot { background: var(--goal); }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 22px 24px;
+    box-shadow: 0 1px 2px rgba(15,23,42,.04);
+  }
+  .stage-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+  .stage-head h3 { margin: 0; font-size: 19px; }
+  .badge {
+    font-size: 12px; font-weight: 700;
+    padding: 3px 10px; border-radius: 999px;
+    white-space: nowrap;
+  }
+  .badge.done { background: var(--done-soft); color: #166534; }
+  .badge.active { background: var(--active-soft); color: #92400e; }
+  .badge.todo { background: var(--todo-soft); color: #475569; }
+  .badge.goal { background: var(--goal-soft); color: #5b21b6; }
+  .goal-line { color: var(--muted); font-size: 14.5px; margin: 2px 0 14px; }
+  .goal-line b { color: var(--ink); }
+
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+
+  ul.checks { list-style: none; margin: 0; padding: 0; }
+  ul.checks li {
+    position: relative;
+    padding-left: 26px;
+    margin: 7px 0;
+    font-size: 14px;
+    color: #334155;
+  }
+  ul.checks li::before {
+    content: "✓";
+    position: absolute; left: 0; top: 0;
+    color: var(--done); font-weight: 800;
+  }
+  ul.todos { list-style: none; margin: 0; padding: 0; }
+  ul.todos li {
+    position: relative; padding-left: 26px; margin: 7px 0;
+    font-size: 14px; color: #334155;
+  }
+  ul.todos li::before {
+    content: "○"; position: absolute; left: 0; top: 1px;
+    color: var(--active); font-weight: 800;
+  }
+  .meta { margin-top: 14px; font-size: 12.5px; color: var(--muted); }
+  .meta code { background: #f1f5f9; padding: 1px 6px; border-radius: 5px; font-size: 12px; }
+
+  /* ---------- Scenarios ---------- */
+  .scenes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  @media (max-width: 760px) { .scenes { grid-template-columns: 1fr; } }
+  .scene {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 22px;
+  }
+  .scene .icon { font-size: 26px; margin-bottom: 10px; display: block; }
+  .scene h4 { margin: 0 0 6px; font-size: 16px; }
+  .scene p { margin: 0; font-size: 13.5px; color: var(--muted); }
+  .scene kbd {
+    background: #f1f5f9; border: 1px solid var(--line);
+    border-bottom-width: 2px; border-radius: 6px;
+    padding: 1px 6px; font-size: 12px; font-family: inherit;
+  }
+
+  /* ---------- File tree ---------- */
+  pre.tree {
+    background: var(--code-bg);
+    color: #e2e8f0;
+    border-radius: 16px;
+    padding: 24px 26px;
+    overflow-x: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.75;
+    margin: 0 0 22px;
+  }
+  pre.tree .c { color: #94a3b8; }
+  pre.tree .s { color: #86efac; }
+
+  table.roles {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
+    font-size: 13.5px;
+  }
+  table.roles th, table.roles td {
+    text-align: left;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  table.roles th { background: #f8fafc; font-size: 12.5px; color: var(--muted); letter-spacing: .04em; }
+  table.roles tr:last-child td { border-bottom: 0; }
+  table.roles code { background: #f1f5f9; padding: 1px 6px; border-radius: 5px; font-size: 12px; }
+
+  /* ---------- Pitfalls ---------- */
+  .pits { display: grid; gap: 12px; }
+  .pit {
+    background: var(--danger-soft);
+    border: 1px solid #fecaca;
+    border-left: 4px solid var(--danger);
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .pit h5 { margin: 0 0 5px; font-size: 14.5px; color: #991b1b; }
+  .pit p { margin: 0; font-size: 13.5px; color: #7f1d1d; }
+
+  footer {
+    margin-top: 64px;
+    padding: 30px 0 48px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 13px;
+  }
+  footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="kicker">Web 端 · 眼动 + 手势 · 纯前端 · 无构建</div>
+    <h1>隔空控制器</h1>
+    <p class="lead">不碰鼠标键盘，只靠摄像头 —— 眼睛看哪里，光标吸到哪里；比个手势，就能确认 / 返回 / 滚动。</p>
+    <div class="stats">
+      <div><b>5</b><span>推进阶段</span></div>
+      <div><b>5</b><span>已完成</span></div>
+      <div><b>1</b><span>等硬件实测</span></div>
+      <div><b>6</b><span>手势</span></div>
+    </div>
+  </div>
+</header>
+
+<!-- ========== 一、整体架构 ========== -->
+<section>
+  <div class="wrap">
+    <h2><span class="num">01</span>整体架构：两条输入链路，一个防冲突闸门</h2>
+    <p class="sub">摄像头同时喂两条链路。眼动负责"指哪"，手势负责"点哪 / 滚哪"，最后经防冲突闸门统一触发。</p>
+
+    <div class="flow">
+      <div class="lane">
+        <div class="lane-title">链路 A · 眼动（WebGazer 2.1.2）</div>
+        <div class="pipe">
+          <span class="node">摄像头</span><span class="arrow">→</span>
+          <span class="node">WebGazer 视线坐标</span><span class="arrow">→</span>
+          <span class="node">EMA 低通</span><span class="arrow">→</span>
+          <span class="node key">按钮磁吸（gravity）</span><span class="arrow">→</span>
+          <span class="node">光标</span><span class="arrow">→</span>
+          <span class="node done">驻留 800ms 点击</span>
+        </div>
+      </div>
+
+      <div class="lane">
+        <div class="lane-title">链路 B · 手势（MediaPipe Hands）</div>
+        <div class="pipe">
+          <span class="node">摄像头</span><span class="arrow">→</span>
+          <span class="node">21 点手部关键点</span><span class="arrow">→</span>
+          <span class="node key">手势分类</span><span class="arrow">→</span>
+          <span class="node">状态机（3 帧确认 / 冷却）</span><span class="arrow">→</span>
+          <span class="node done">动作键 / 方向滚动</span>
+        </div>
+      </div>
+
+      <div class="lane">
+        <div class="lane-title">汇合 · 防双触发闸门</div>
+        <div class="pipe">
+          <span class="node">链路 A</span><span class="arrow">+</span>
+          <span class="node">链路 B</span><span class="arrow">→</span>
+          <span class="node key">handBusyUntil：手势活跃时冻结 dwell</span><span class="arrow">→</span>
+          <span class="node done">单次触发</span><span class="arrow">→</span>
+          <span class="node">（可选）WebSocket 后端</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 二、按阶段推进 ========== -->
+<section>
+  <div class="wrap">
+    <h2><span class="num">02</span>按阶段推进</h2>
+    <p class="sub">从"能看见眼睛"到"不用手也能操作"，每一步都有明确的验收标准。</p>
+
+    <div class="timeline">
+
+      <!-- 阶段 0 -->
+      <div class="stage done">
+        <div class="dot">0</div>
+        <div class="card">
+          <div class="stage-head">
+            <h3>地基：摄像头 + 眼动 + 点击</h3>
+            <span class="badge done">已完成</span>
+          </div>
+          <p class="goal-line"><b>目标：</b>摄像头能取到眼睛，视线驱动光标，盯住按钮能点。</p>
+          <div class="cols">
+            <div>
+              <ul class="checks">
+                <li>WebGazer 2.1.2 <b>本地化</b>（vendor 包 + 本地 facemesh 模型，离线可用）</li>
+                <li>9 点标定（<code>recordScreenPosition</code>）</li>
+                <li>视线光标 + <b>800ms 驻留点击</b>（dwell）</li>
+                <li>隐藏预测红点、修复标定光标被遮挡</li>
+              </ul>
+            </div>
+            <div>
+              <p class="meta" style="margin-top:0">
+                <b>关键文件</b><br>
+                <code>controller-demo/index.html</code><br>
+                <code>controller-demo/vendor/webgazer/</code>
+              </p>
+              <p class="meta"><b>验收：</b>标定后光标跟随视线，盯按钮 0.8s 触发一次。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 阶段 1 -->
+      <div class="stage done">
+        <div class="dot">1</div>
+        <div class="card">
+          <div class="stage-head">
+            <h3>眼动手感：意图吸附</h3>
+            <span class="badge done">已完成</span>
+          </div>
+          <p class="goal-line"><b>目标：</b>解决"视线抖、按钮难点中"的问题。</p>
+          <div class="cols">
+            <div>
+              <ul class="checks">
+                <li>视线 <b>EMA 低通</b>，只保留"大致在看哪"</li>
+                <li><b>按钮磁吸</b>（gravity well，默认 70px）</li>
+                <li>三档预设：低 50 / 中 70 / 高 95</li>
+                <li>URL 可调：<code>?ema=&amp;gravity=</code></li>
+              </ul>
+            </div>
+            <div>
+              <p class="meta" style="margin-top:0">
+                <b>关键文件</b><br>
+                <code>controller-demo/index.html</code>（<code>SNAP_PRESETS</code>、<code>onGaze</code>）
+              </p>
+              <p class="meta"><b>验收：</b>光标能"吸"到按钮；相邻按钮之间不来回跳。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 阶段 2 -->
+      <div class="stage done">
+        <div class="dot">2</div>
+        <div class="card">
+          <div class="stage-head">
+            <h3>手势：6 静态手势 + 方向滚动</h3>
+            <span class="badge done">已完成</span>
+          </div>
+          <p class="goal-line"><b>目标：</b>手不碰设备，比手势就能操作。</p>
+          <div class="cols">
+            <div>
+              <ul class="checks">
+                <li>MediaPipe Hands <b>21 点</b>关键点</li>
+                <li>✊ 握拳=确认　👍 拇指=返回</li>
+                <li>☝️ 食指=主页　✌️ 二指=菜单</li>
+                <li>🖐 指尖朝上=上滚　指尖朝下=下滚</li>
+                <li>状态机：<b>3 帧确认</b> + <b>900ms 冷却</b> + <b>120ms 滚动节流</b></li>
+                <li>滚动演示列表 + 图例 + 诊断行实时手势</li>
+              </ul>
+            </div>
+            <div>
+              <p class="meta" style="margin-top:0">
+                <b>判定方法</b><br>
+                手指伸直：指尖到手腕距离 &gt; 指根到手腕 × 倍数<br>
+                拇指伸直：拇指尖到掌心 &gt; 拇指根到掌心 × 倍数<br>
+                滚动方向：四指指尖平均 y vs 掌心 y（±0.12 死区）
+              </p>
+              <p class="meta"><b>验收：</b>1–2 米能稳识别握拳 / 食指 / 二指 / 张开；拇指中等。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 阶段 3 -->
+      <div class="stage done">
+        <div class="dot">3</div>
+        <div class="card">
+          <div class="stage-head">
+            <h3>联调：眼动与手势不打架</h3>
+            <span class="badge done">已完成</span>
+          </div>
+          <p class="goal-line"><b>目标：</b>手势触发时，眼动 dwell 不能对同一按钮再补一刀。</p>
+          <div class="cols">
+            <div>
+              <ul class="checks">
+                <li><b>handBusyUntil</b>：手势活跃时冻结 dwell，结束后 300ms 恢复</li>
+                <li>动作触发后再冻结 480ms</li>
+                <li>阈值集中为 <b>GT</b>，支持 URL 试参</li>
+                <li><code>?gEnter=3&amp;gCooldown=900&amp;gScroll=120&amp;gStep=40&amp;gFinger=1.2&amp;gThumb=1.25&amp;gDead=0.12</code></li>
+              </ul>
+            </div>
+            <div>
+              <p class="meta" style="margin-top:0">
+                <b>关键文件</b><br>
+                <code>controller-demo/index.html</code>（<code>dwellOn</code>、<code>GT</code>）
+              </p>
+              <p class="meta"><b>验收：</b>同一个动作只触发一次，不被 dwell 重复。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 阶段 4 -->
+      <div class="stage active">
+        <div class="dot">4</div>
+        <div class="card">
+          <div class="stage-head">
+            <h3>硬件实测：Brio 1080 + 环境光</h3>
+            <span class="badge active">等 Brio 到位</span>
+          </div>
+          <p class="goal-line"><b>目标：</b>真实硬件下调参，锁定最终手感。Brio 到位后按此清单跑。</p>
+          <div class="cols">
+            <div>
+              <ul class="todos">
+                <li>1–2 米基线实测，记录 6 手势识别率</li>
+                <li>调 <code>gEnter / gThumb / gDead / gScroll</code></li>
+                <li>确认滚动方向与速度符合直觉</li>
+                <li><code>?mode=both</code> 联调，验证不双触发</li>
+                <li>看环境光是否够，再决定要不要补光灯</li>
+              </ul>
+            </div>
+            <div>
+              <p class="meta" style="margin-top:0">
+                <b>硬件基线</b><br>
+                • Logitech Brio 1080p（1080p@30fps，可 720p@60fps）<br>
+                • 距离 1–2 米（定焦）<br>
+                • 光照：正面均匀、避免逆光<br>
+                • ⚠️ <b>红外补光灯对 Brio 无效</b>（RGB + IR-cut），要补光必须用可见光
+              </p>
+              <p class="meta"><b>验收：</b>6 手势识别率达标、联调无冲突、手感可接受。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 阶段 5 -->
+      <div class="stage goal">
+        <div class="dot">5</div>
+        <div class="card">
+          <div class="stage-head">
+            <h3>最终形态：免接触操作</h3>
+            <span class="badge goal">目标</span>
+          </div>
+          <p class="goal-line"><b>目标：</b>坐/站在电脑前 1–2 米，全程不碰鼠标键盘、不戴任何设备，用"看 + 手势"完成操作。</p>
+          <div class="cols">
+            <div>
+              <ul class="checks">
+                <li>眼睛看按钮 → 光标吸附 → 盯 0.8s 点击</li>
+                <li>或比手势直接触发动作键</li>
+                <li>手掌指尖朝上/下 → 内容滚动</li>
+                <li>（可选）WebSocket 把指令发给后端 / 外部应用</li>
+              </ul>
+            </div>
+            <div>
+              <p class="meta" style="margin-top:0">
+                <b>适用场景</b><br>
+                • 双手被占用（做饭 / 维修 / 演示）<br>
+                • 不便接触（医疗 / 洁净环境）<br>
+                • 无障碍（行动不便者）
+              </p>
+              <p class="meta"><b>衡量：</b>连续 10 次操作误触发 ≤ 1 次，无需回退到鼠标。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ========== 三、理想效果 ========== -->
+<section>
+  <div class="wrap">
+    <h2><span class="num">03</span>最终理想效果（用户视角）</h2>
+    <p class="sub">不谈技术，只描述"用起来是什么感觉"。</p>
+
+    <div class="scenes">
+      <div class="scene">
+        <span class="icon">👀</span>
+        <h4>看哪里，光标去哪里</h4>
+        <p>视线扫过屏幕，光标会"被按钮吸住"，不会在按钮边缘来回抖。看准了，停 0.8 秒，自动点击。</p>
+      </div>
+      <div class="scene">
+        <span class="icon">✊</span>
+        <h4>比个手势，就是一次指令</h4>
+        <p>握拳 = 确认，拇指朝上 = 返回，食指 = 主页，二指 = 菜单。每个手势要"稳住 3 帧"才生效，避免误触。</p>
+      </div>
+      <div class="scene">
+        <span class="icon">🖐</span>
+        <h4>手掌一翻，页面就滚</h4>
+        <p>张开手掌、指尖朝上，内容往上滚；指尖朝下，内容往下滚。滚多快由手势停留时间决定。</p>
+      </div>
+      <div class="scene">
+        <span class="icon">🧘</span>
+        <h4>全程零接触</h4>
+        <p>1–2 米外坐着或站着，不用碰键盘鼠标，也不戴任何设备。手上有油、有水、在忙，都能操作。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 四、工程文件 ========== -->
+<section>
+  <div class="wrap">
+    <h2><span class="num">04</span>工程文件结构</h2>
+    <p class="sub">★ 标出的是核心文件；团队仓库 <code>origin = TPProjectPBL/EPBL</code>。</p>
+
+<pre class="tree">PBL/
+├── controller-demo/
+│   ├── <span class="s">index.html</span>            <span class="c">★ 主控制器：眼动 + 手势 + dwell + 防冲突</span>
+│   ├── webgazer-gaze.html       <span class="c">眼动对照页（调参用）</span>
+│   ├── hero.html                <span class="c">协作者 hero 视觉页（?mode=hero）</span>
+│   └── vendor/webgazer/         <span class="c">★ 本地 WebGazer 2.1.2 + facemesh 模型（必须提交）</span>
+├── draw/                        <span class="c">协作者隔空画板（真实 MediaPipe，保留）</span>
+│   ├── index.html
+│   ├── index-v2.1-backup.html   <span class="c">备份，勿删</span>
+│   ├── models/                  <span class="c">gesture_recognizer.task</span>
+│   └── vendor/                  <span class="c">vision wasm + webgazer</span>
+├── eye-page-turner/             <span class="c">旧眼动翻页器（参考，不主用）</span>
+├── outputs/
+│   ├── 隔空控制器-工程蓝图.html  <span class="c">★ 本页</span>
+│   ├── 隔空控制器-系统设计报告.html
+│   ├── 眼动追踪系统设计报告.html
+│   └── 眼动翻页插件-操作说明.md
+├── HANDOFF.md                   <span class="c">★ 交接文档（新会话先读）</span>
+└── .gitignore                   <span class="c">忽略 .opencode / .deepworks / EyeControlApp / uploads 等</span>
+</pre>
+
+    <table class="roles">
+      <thead>
+        <tr><th style="width:30%">文件 / 目录</th><th>角色</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>controller-demo/index.html</code></td>
+          <td>全部核心逻辑都在这里：WebGazer 集成、标定、意图吸附、dwell、手势库、状态机、防冲突、诊断行。</td>
+        </tr>
+        <tr>
+          <td><code>controller-demo/vendor/webgazer/</code></td>
+          <td>已 patch 的 WebGazer 2.1.2 + 本地 facemesh 模型。**必须提交**，否则页面离线不可用。</td>
+        </tr>
+        <tr>
+          <td><code>controller-demo/webgazer-gaze.html</code></td>
+          <td>眼动对照页，调 EMA / 磁吸参数时用，不影响主控制器。</td>
+        </tr>
+        <tr>
+          <td><code>controller-demo/hero.html</code></td>
+          <td>协作者做的 hero 视觉页，由 <code>?mode=hero</code> 用视线驱动，属于集成功能，勿删。</td>
+        </tr>
+        <tr>
+          <td><code>draw/</code></td>
+          <td>协作者隔空画板，真实 MediaPipe 接入，与项目同源，保留。</td>
+        </tr>
+        <tr>
+          <td><code>eye-page-turner/</code></td>
+          <td>旧眼动翻页方案，仅作参考，不参与主线。</td>
+        </tr>
+        <tr>
+          <td><code>HANDOFF.md</code></td>
+          <td>交接文档：任务、已完成、卡点、下一步、踩坑。新会话第一份要读的文件。</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ========== 五、踩坑预警 ========== -->
+<section>
+  <div class="wrap">
+    <h2><span class="num">05</span>踩坑预警（绝对不要再踩）</h2>
+    <p class="sub">这些都是已经踩过、付过代价的坑，写在这里是为了不让下一个人重犯。</p>
+
+    <div class="pits">
+      <div class="pit">
+        <h5>1. 红外补光灯对 Brio 无效</h5>
+        <p>Brio 是 RGB 传感器、带 IR-cut 滤镜，红外光会被滤掉，开红外补光灯画面不会变亮。要补光只能用<b>可见光（白光 / LED）</b>。</p>
+      </div>
+      <div class="pit">
+        <h5>2. "张开手掌"不能同时做"返回"和"上滚"</h5>
+        <p>张开手掌、指尖朝上，与"指尖向上=上滚"是同一个姿态，无法区分。所以<b>「返回」改成了拇指朝上</b>，张开手掌专门留给滚动。</p>
+      </div>
+      <div class="pit">
+        <h5>3. 没有 node，改 JS 只能靠括号自检 + 浏览器实测</h5>
+        <p>本项目无任何构建工具。改完 <code>index.html</code> 先跑 <code>python3 .deepworks/tmp/check_js_balance.py</code> 检查括号/字符串平衡，再到浏览器实跑。不要假设"改完就能用"。</p>
+      </div>
+      <div class="pit">
+        <h5>4. 滚动不要加 <code>scroll-behavior: smooth</code></h5>
+        <p>它和手动 <code>scrollTop</code> 累加冲突，会导致滚动卡顿/回弹。<b>已移除</b>，不要再加回去。</p>
+      </div>
+      <div class="pit">
+        <h5>5. 手势触发时眼动 dwell 会"补刀"</h5>
+        <p>手势触发动作的瞬间，眼动光标可能正停在同一个按钮上，dwell 满 800ms 后又点一次。已用 <code>handBusyUntil</code> 冻结，<b>不要删这段逻辑</b>。</p>
+      </div>
+      <div class="pit">
+        <h5>6. 双远程：必须 push <code>origin</code>，不是 <code>jarvis</code></h5>
+        <p><code>origin</code> 是团队仓库（推送目标），<code>jarvis</code> 是个人 fork。裸 <code>git push</code> 会推到错误仓库，务必 <code>git push origin main</code>；被拒就 <code>fetch + rebase</code>，<b>绝不 force</b>。</p>
+      </div>
+      <div class="pit">
+        <h5>7. 别把"合成眼动 / hero 模板"当成真实功能</h5>
+        <p>已清理 <code>gaze-pointer-lab.html</code>（合成眼动驱动视觉折痕）和 <code>creative-developer-hero.html</code>（纯网页模板）。它们不接摄像头、不跑模型，看着像功能其实不是。</p>
+      </div>
+      <div class="pit">
+        <h5>8. 标定覆盖层会挡住诊断行</h5>
+        <p>右上角 <code>dbg-line</code> 的 <code>z-index:60</code> 被标定层（100）盖住，标定时看不到 gaze 帧数。需要时可提到 110（尚未改）。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>隔空控制器 · 工程蓝图 · 2026-10-26</span>
+    <span>仓库：TPProjectPBL/EPBL（origin）</span>
+  </div>
+</footer>
+
+</body>
+</html>
