@@ -349,11 +349,14 @@
     dwellOn(hovered);
   }
 
-  let dwellKey = null, dwellStart = 0;
+  let dwellKey = null, dwellStart = 0, handBusyUntil = 0;
   function dwellOn(key) {
     keys.forEach(k => { k.classList.remove("hovered"); if (k !== key) k.classList.remove("triggered"); });
     if (!key) { dwellKey = null; return; }
     key.classList.add("hovered");
+    // 手势活跃（或动作刚触发）时暂停驻留：视觉上仍高亮，但不累计 dwell，
+    // 避免"手势触发动作"与"眼动 dwell"对同一个按钮重复触发。
+    if (performance.now() < handBusyUntil) { dwellKey = null; return; }
     if (dwellKey !== key) { dwellKey = key; dwellStart = performance.now(); }
     if (performance.now() - dwellStart >= S.dwellMs) {
       triggerKey(key);
@@ -368,6 +371,23 @@
   keys.forEach(k => k.addEventListener("click", () => triggerKey(k)));
 
   // ---------- 手势识别 + 状态机 ----------
+  // 可调参数，均可用 URL 覆盖，便于 Brio 到位后快速试参而不改代码：
+  //   ?gEnter=3&gCooldown=900&gScroll=120&gStep=40&gFinger=1.2&gThumb=1.25&gDead=0.12
+  const GQ = new URLSearchParams(location.search);
+  function gnum(name, def) {
+    const v = GQ.get(name);
+    return v != null && v !== "" && isFinite(+v) ? +v : def;
+  }
+  const GT = {
+    enter:            gnum("gEnter", 3),      // 候选手势连续帧数才确认切换
+    cooldownMs:       gnum("gCooldown", 900), // 离散动作冷却
+    scrollThrottleMs: gnum("gScroll", 120),   // 滚动节流
+    scrollStep:       gnum("gStep", 40),      // 每次滚动像素
+    fingerRatio:      gnum("gFinger", 1.2),   // 手指伸直判定倍数
+    thumbRatio:       gnum("gThumb", 1.25),   // 拇指伸直判定倍数
+    scrollDeadband:   gnum("gDead", 0.12),    // 指尖方向死区
+  };
+
   const GESTURE_TEXT = {
     "fist":        "✊ 握拳 · 确认",
     "thumb":       "👍 拇指 · 返回",
@@ -404,12 +424,12 @@
     { tip: 8, mcp: 5 }, { tip: 12, mcp: 9 }, { tip: 16, mcp: 13 }, { tip: 20, mcp: 17 },
   ];
   function fingerUp(lm, tip, mcp) {
-    // 伸直：指尖到手腕(0)距离 > 指根(MCP)到手腕距离 * 1.2（对朝向鲁棒）
-    return d2(lm, tip, 0) > d2(lm, mcp, 0) * 1.2;
+    // 伸直：指尖到手腕(0)距离 > 指根(MCP)到手腕距离 * 倍数（对朝向鲁棒）
+    return d2(lm, tip, 0) > d2(lm, mcp, 0) * GT.fingerRatio;
   }
   function thumbUp(lm) {
-    // 拇指伸直：拇指尖(4)到掌心(9)距离 > 拇指 MCP(2)到掌心距离 * 1.25
-    return d2(lm, 4, 9) > d2(lm, 2, 9) * 1.25;
+    // 拇指伸直：拇指尖(4)到掌心(9)距离 > 拇指 MCP(2)到掌心距离 * 倍数
+    return d2(lm, 4, 9) > d2(lm, 2, 9) * GT.thumbRatio;
   }
 
   function classifyHand(lm) {
@@ -420,8 +440,8 @@
       // 张开手掌 → 按指尖方向判定滚动
       const tipsY = (lm[8].y + lm[12].y + lm[16].y + lm[20].y) / 4;
       const palmY = lm[9].y;
-      if (tipsY < palmY - 0.12) return "scroll-up";
-      if (tipsY > palmY + 0.12) return "scroll-down";
+      if (tipsY < palmY - GT.scrollDeadband) return "scroll-up";
+      if (tipsY > palmY + GT.scrollDeadband) return "scroll-down";
       return "open";
     }
     if (n === 0) return thumb ? "thumb" : "fist";
@@ -431,7 +451,7 @@
   }
 
   // 状态机：候选连续 ENTER 帧确认切换；离散动作带冷却
-  const GS = { current: "none", pending: "none", pendingCnt: 0, enter: 3, cooldownUntil: 0, scrollAt: 0 };
+  const GS = { current: "none", pending: "none", pendingCnt: 0, enter: GT.enter, cooldownUntil: 0, scrollAt: 0 };
 
   function onHandResults(results) {
     S.dbg.handRes++;
@@ -447,6 +467,8 @@
       onGestureEnter(prev);
     }
     S.gesture = GS.current;
+    // 手势活跃时冻结眼动驻留（结束后 300ms 恢复），防「手势 + dwell」双触发
+    if (GS.current !== "none") handBusyUntil = performance.now() + 300;
     updateGestureTag();
     actContinuous();
   }
@@ -456,7 +478,8 @@
     if (!act) return;
     const now = performance.now();
     if (now < GS.cooldownUntil) return;
-    GS.cooldownUntil = now + 900;
+    GS.cooldownUntil = now + GT.cooldownMs;
+    handBusyUntil = Math.max(handBusyUntil, now + 480); // 动作后短暂冻结眼动 dwell
     highlightKey(act.label);
     sendToBackend({ type: "click", label: act.label });
   }
@@ -465,10 +488,10 @@
     const g = GS.current;
     if (g !== "scroll-up" && g !== "scroll-down") return;
     const now = performance.now();
-    if (now - GS.scrollAt < 120) return;
+    if (now - GS.scrollAt < GT.scrollThrottleMs) return;
     GS.scrollAt = now;
     const dir = g === "scroll-up" ? -1 : 1;
-    scrollDemo.scrollTop += dir * 40;
+    scrollDemo.scrollTop += dir * GT.scrollStep;
     sendToBackend({ type: "scroll", dir });
   }
 

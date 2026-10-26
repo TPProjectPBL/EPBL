@@ -55,7 +55,8 @@
    - 页面新增滚动演示列表 + 「隔空手势」图例；诊断行显示实时手势。
    - **重要取舍**：因「张开手掌、指尖向上」与「上滚」是同一姿态，**「返回」从张开改为拇指朝上**，避免冲突。
 9. **清理无关上传**：删除协作者误传的 `creative-developer-hero.html`（纯网页模板）与 `gaze-pointer-lab.html`（合成眼动驱动的视觉折痕实验页，无真实摄像头/模型）；保留 `draw/` 隔空画板。
-10. **已提交推送**：`origin/main`（团队仓库 `TPProjectPBL/EPBL`）。
+10. **阶段 A 预埋（Brio 到位前）**：① 手势活跃时冻结眼动 dwell（`handBusyUntil`：手势期间持续刷新，结束后 300ms 恢复；动作触发后再冻结 480ms），避免「手势触发 + 眼动 dwell」对同一按钮双触发；② 所有手势阈值集中为 `GT`，支持 `?gEnter/gCooldown/gScroll/gStep/gFinger/gThumb/gDead` URL 覆盖，Brio 到位后**不改代码即可试参**。
+11. **已提交推送**：`origin/main`（团队仓库 `TPProjectPBL/EPBL`）。
 
 ---
 
@@ -139,6 +140,7 @@
 - `?mode=gaze|hand|both`（默认 `both`）：只用眼动 / 只用手势 / 两者。
 - 吸附调参：`?ema=0.14&gravity=70`（ema 视线低通，gravity 磁吸半径）。
 - 手势：比静态手势触发按键；张开手掌、指尖朝上/下滚动。图例在页面「隔空手势」面板。
+- 手势调参（不改代码试参）：`?gEnter=3&gCooldown=900&gScroll=120&gStep=40&gFinger=1.2&gThumb=1.25&gDead=0.12`。
 
 ### 证书失效重签（IP 变了才需要）
 
