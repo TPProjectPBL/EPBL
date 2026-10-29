@@ -67,7 +67,7 @@
   - `gEnter` 确认帧数 / `gCooldown` 动作冷却 / `gScroll` 滚动节流 / `gStep` 滚动像素 / `gFinger` 手指倍数 / `gThumb` 拇指倍数 / `gDead` 方向死区。
 
 ### 其它已完成
-- **内网 HTTPS 分享**：`https://10.11.0.192:8443/controller-demo/index.html`（独立 CA + `server.crt`，SAN 绑 IP）。
+- **内网 HTTPS 分享**：`https://10.11.0.216:8443/controller-demo/index.html`（独立 CA + `server.crt`，SAN 绑 IP）。
 - **清理无关上传**：删除 `creative-developer-hero.html`（纯模板）、`gaze-pointer-lab.html`（合成眼动视觉实验，无真实摄像头/模型）；保留 `draw/` 隔空画板。
 - **工程蓝图**：`outputs/隔空控制器-工程蓝图.html`（按阶段 + 理想效果 + 踩坑）。
 - **全部已提交推送** `origin/main`。
@@ -132,7 +132,7 @@
 9. **红外补光灯对 Brio 无效**：RGB + IR-cut 会滤掉红外光，画面不会变亮。要补光只能用可见光（白光/LED）。
 10. **无 node/deno/bun**：改 JS 后只能 Python 括号自检 + 浏览器实测，不要假设"改完就能用"。
 11. **私钥绝不进 git**：`ca.key`/`server.key` 在 `.deepworks/tmp/ssl/`，靠 `.gitignore` 忽略。**永远不要 `git add -A`**，提交前逐项 `git status`。
-12. **内网 IP 是 DHCP 动态的**：变过一次（`10.11.0.183` → `10.11.0.192`）。IP 变了 `server.crt` 的 SAN 就失效，要重新签发。
+12. **内网 IP 是 DHCP 动态的**：变过两次（`10.11.0.183` → `10.11.0.192` → `10.11.0.216`）。IP 变了 `server.crt` 的 SAN 就失效，要重新签发，并同步改 `ext.cnf`。
 
 ### 5.2 协作 / 流程坑
 
@@ -158,8 +158,10 @@
 ### 访问地址
 
 - 本机调试：`http://127.0.0.1:8125/controller-demo/index.html`
-- 内网分享：`https://10.11.0.192:8443/controller-demo/index.html`
-- 协作者信任证书：`https://10.11.0.192:8443/ca.crt`
+- 主控制器：`https://10.11.0.216:8443/controller-demo/index.html`
+- 手势测试台：`https://10.11.0.216:8443/gesture-test/index.html`
+- 隔空画板：`https://10.11.0.216:8443/draw/index.html`
+- 协作者信任证书：`https://10.11.0.216:8443/ca.crt`
 
 ### 页面 URL 参数
 
