@@ -399,6 +399,34 @@ function onGaze(data) {
   if (S.phase === "gaze-sample") S.samples.push({ x: data.x, y: data.y });
 }
 
+/* ---------- 摄像头预检：区分「权限/占用」与「WebGazer 处理失败」 ---------- */
+async function probeCamera() {
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+    const v = document.createElement("video");
+    v.muted = true;
+    v.playsInline = true;
+    v.srcObject = s;
+    await v.play();
+    await new Promise(r => setTimeout(r, 350));
+    const c = document.createElement("canvas");
+    c.width = 64;
+    c.height = 48;
+    const cx = c.getContext("2d");
+    cx.drawImage(v, 0, 0, 64, 48);
+    const d = cx.getImageData(0, 0, 64, 48).data;
+    let sum = 0;
+    for (let i = 0; i < d.length; i += 4) sum += d[i] + d[i + 1] + d[i + 2];
+    const avg = sum / (d.length / 4);
+    const w = v.videoWidth, h = v.videoHeight;
+    s.getTracks().forEach(t => t.stop());
+    v.srcObject = null;
+    return { ok: avg >= 6, avg, w, h };
+  } catch (e) {
+    return { ok: false, err: (e && e.name || "Error") + ": " + (e && e.message || e) };
+  }
+}
+
 async function bootEye() {
   if (typeof webgazer === "undefined") {
     log("WebGazer 未加载，请检查 controller-demo/vendor/webgazer/webgazer.js", "er");
@@ -858,6 +886,18 @@ function renderResults() {
 /* ---------- 启动 ---------- */
 async function boot() {
   $("btnBoot").disabled = true;
+  log("正在检测摄像头…");
+  const cam = await probeCamera();
+  if (!cam.ok) {
+    log(cam.err
+      ? ("摄像头不可用：" + cam.err)
+      : `摄像头返回黑帧（平均亮度 ${Math.round(cam.avg)}）：权限被拒或被其他应用占用`, "er");
+    $("btnBoot").disabled = false;
+    $("hint").textContent = "摄像头不可用：请检查权限与占用";
+    return;
+  }
+  log(`摄像头预检通过 ${cam.w}×${cam.h}`);
+  await new Promise(r => setTimeout(r, 200));
   log("正在启动摄像头与模型…");
   const okEye = await bootEye();
   if (!okEye) {
