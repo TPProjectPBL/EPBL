@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>手势精确度测试台 · EPBL</title>
+<style>
+  :root{
+    --bg:#0b1120; --panel:#111a2e; --panel2:#0e1626; --line:#1e2b45;
+    --txt:#e6edf7; --dim:#8b9bb4; --accent:#3ddc97; --warn:#ffb454; --bad:#ff6b6b;
+    --blue:#5aa9ff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--txt);
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+  header{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel2)}
+  header h1{font-size:16px;margin:0;font-weight:600}
+  header .sub{color:var(--dim);font-size:12px}
+  header .spacer{flex:1}
+  .pill{font-size:12px;padding:3px 10px;border-radius:99px;border:1px solid var(--line);color:var(--dim)}
+  .pill.on{color:var(--accent);border-color:#1f5c42}
+  .pill.err{color:var(--bad);border-color:#5c2020}
+
+  main{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(340px,.85fr);gap:16px;padding:16px 20px}
+  @media(max-width:980px){main{grid-template-columns:1fr}}
+
+  .stage{position:relative;background:#000;border:1px solid var(--line);border-radius:14px;overflow:hidden;aspect-ratio:16/9}
+  .stage video,.stage canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .stage video{transform:scaleX(-1)}
+  .stage .badge{position:absolute;left:12px;top:12px;background:rgba(6,10,20,.75);border:1px solid var(--line);
+    border-radius:10px;padding:8px 12px;backdrop-filter:blur(6px)}
+  .stage .badge .k{font-size:11px;color:var(--dim)}
+  .stage .badge .v{font-size:22px;font-weight:700;letter-spacing:.5px}
+  .stage .badge .v.hit{color:var(--accent)}
+  .stage .badge .v.miss{color:var(--bad)}
+  .stage .feat{position:absolute;right:12px;top:12px;background:rgba(6,10,20,.75);border:1px solid var(--line);
+    border-radius:10px;padding:8px 12px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--dim)}
+  .stage .center{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:20px;
+    background:rgba(4,8,16,.55);font-size:15px;color:var(--dim);pointer-events:none}
+  .stage .center b{color:var(--txt)}
+  .stage .center.hide{display:none}
+  .target-big{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);
+    background:rgba(6,10,20,.8);border:1px solid var(--line);border-radius:12px;padding:8px 18px;
+    font-size:15px;white-space:nowrap;max-width:92%;overflow:hidden;text-overflow:ellipsis}
+  .target-big b{color:var(--blue)}
+  .ring{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:120px;height:120px;
+    border-radius:50%;border:3px solid rgba(90,169,255,.25);display:none}
+  .ring.on{display:block}
+  .ring i{position:absolute;inset:-3px;border-radius:50%;border:3px solid transparent;border-top-color:var(--blue);
+    animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  button{cursor:pointer;border-radius:10px;border:1px solid var(--line);background:#18243d;color:var(--txt);
+    padding:9px 14px;font-size:13px;font-weight:600}
+  button:hover{background:#1e2c4a}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button.primary{background:#123d2c;border-color:#1f5c42;color:#a8f0cd}
+  button.primary:hover{background:#174a36}
+  label.inp{display:flex;align-items:center;gap:6px;color:var(--dim);font-size:12px}
+  label.inp input{width:56px;background:#0b1526;color:var(--txt);border:1px solid var(--line);
+    border-radius:8px;padding:6px;font-size:13px}
+
+  .bar-wrap{height:8px;background:#0b1526;border-radius:99px;overflow:hidden;margin:12px 0;border:1px solid var(--line)}
+  .bar{height:100%;width:0;background:linear-gradient(90deg,#2b7fff,#3ddc97);transition:width .08s linear}
+
+  .gestures{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px}
+  .gestures li{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--line);
+    border-radius:10px;background:var(--panel2);cursor:pointer;transition:.12s}
+  .gestures li:hover{border-color:#2b7fff}
+  .gestures li.active{border-color:var(--blue);background:#0f1d33}
+  .gestures li.done .score{color:var(--accent)}
+  .gestures li .g{width:26px;text-align:center;font-size:18px}
+  .gestures li .n{flex:1}
+  .gestures li .n small{display:block;color:var(--dim);font-size:11px}
+  .gestures li .score{font:12px ui-monospace,Menlo,monospace;color:var(--dim)}
+
+  .results{padding:0 20px 30px}
+  .results h2{font-size:15px;margin:18px 0 10px}
+  table{width:100%;border-collapse:collapse;font-size:13px;background:var(--panel);border-radius:12px;overflow:hidden}
+  th,td{padding:9px 12px;border-bottom:1px solid var(--line);text-align:right}
+  th{color:var(--dim);font-weight:600;font-size:12px;background:var(--panel2)}
+  th:first-child,td:first-child{text-align:left}
+  td.big{font-weight:700}
+  .good{color:var(--accent)} .mid{color:var(--warn)} .bad{color:var(--bad)}
+  .matrix-wrap{overflow:auto;margin-top:10px}
+  .matrix{border-collapse:collapse;font-size:12px}
+  .matrix th,.matrix td{padding:6px 10px;border:1px solid var(--line);text-align:center;min-width:64px}
+  .matrix th{color:var(--dim);background:var(--panel2)}
+  .matrix td.hot{background:#123d2c;color:#a8f0cd;font-weight:700}
+  .matrix td.warm{background:#3d2c12;color:#ffd39b}
+  .empty{color:var(--dim);font-size:13px;padding:14px 0}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#18243d;border:1px solid var(--line);
+    color:var(--txt);padding:10px 18px;border-radius:12px;opacity:0;transition:.25s;pointer-events:none;z-index:9}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <h1>手势精确度测试台</h1>
+  <span class="sub">控制器同一分类器 · GT 默认参数 · 6 个库手势</span>
+  <span class="spacer"></span>
+  <span class="pill" id="pillCam">摄像头未启动</span>
+  <span class="pill" id="pillModel">模型未加载</span>
+</header>
+
+<main>
+  <section class="stage" id="stage">
+    <video id="cam" autoplay muted playsinline></video>
+    <canvas id="overlay"></canvas>
+    <div class="badge">
+      <div class="k">当前识别</div>
+      <div class="v" id="curPred">—</div>
+    </div>
+    <div class="feat" id="feat">ext [–,–,–,–]　thumb –<br>tipsY-palmY –</div>
+    <div class="ring" id="ring"><i></i></div>
+    <div class="target-big" id="targetBig">点击「开始全部测试」，或右侧选择单个手势</div>
+    <div class="center" id="center">需要摄像头权限<br><b>点击右上角「启动摄像头」</b></div>
+  </section>
+
+  <section class="panel">
+    <div class="row">
+      <button class="primary" id="btnCam">启动摄像头</button>
+      <button id="btnAll" disabled>开始全部测试</button>
+      <button id="btnStop" disabled>停止</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <label class="inp">准备 <input id="prepSec" type="number" value="3" min="1" max="10"> 秒</label>
+      <label class="inp">采集 <input id="holdSec" type="number" value="5" min="2" max="20"> 秒</label>
+    </div>
+    <div class="bar-wrap"><div class="bar" id="bar"></div></div>
+    <ul class="gestures" id="gestureList"></ul>
+  </section>
+</main>
+
+<section class="results">
+  <h2>测试结果 <span class="sub" id="summary" style="font-weight:400"></span></h2>
+  <table id="rt">
+    <thead><tr>
+      <th>手势</th><th>采样帧</th><th>检测到手</th><th>帧级命中</th><th>帧级准确率</th>
+      <th>状态机确认率</th><th>主要误判</th>
+    </tr></thead>
+    <tbody><tr><td colspan="7" class="empty">还没有开始测试。至少采集一个手势后会在这里看到结果。</td></tr></tbody>
+  </table>
+
+  <h2>混淆矩阵（行 = 你摆出的目标，列 = 分类器输出，单位：帧）</h2>
+  <div class="matrix-wrap"><table class="matrix" id="mtx"></table></div>
+
+  <div class="row" style="margin-top:14px">
+    <button id="btnExport" disabled>导出 JSON</button>
+    <button id="btnClear">清空结果</button>
+    <span class="sub" style="color:var(--dim);font-size:12px">URL 可调参：?gFinger=1.2&gThumb=1.25&gDead=0.12</span>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+/* ============================================================
+ * 0. 与 controller-demo 完全一致的参数与分类器
+ * ============================================================ */
+const GQ = new URLSearchParams(location.search);
+function gnum(name, def) {
+  const v = GQ.get(name);
+  return v != null && v !== "" && isFinite(+v) ? +v : def;
+}
+const GT = {
+  fingerRatio:    gnum("gFinger", 1.2),
+  thumbRatio:     gnum("gThumb", 1.25),
+  scrollDeadband: gnum("gDead", 0.12),
+  enter: 3,          // 状态机确认帧数（与控制器默认一致）
+};
+const d2 = (lm, a, b) => Math.hypot(lm[a].x - lm[b].x, lm[a].y - lm[b].y);
+const FINGERS = [
+  { tip: 8, mcp: 5 }, { tip: 12, mcp: 9 }, { tip: 16, mcp: 13 }, { tip: 20, mcp: 17 },
+];
+function fingerUp(lm, tip, mcp) {
+  return d2(lm, tip, 0) > d2(lm, mcp, 0) * GT.fingerRatio;
+}
+function thumbUp(lm) {
+  return d2(lm, 4, 9) > d2(lm, 2, 9) * GT.thumbRatio;
+}
+function classifyHand(lm) {
+  const ext = FINGERS.map(f => fingerUp(lm, f.tip, f.mcp));
+  const n = ext.filter(Boolean).length;
+  const thumb = thumbUp(lm);
+  if (n === 4) {
+    const tipsY = (lm[8].y + lm[12].y + lm[16].y + lm[20].y) / 4;
+    const palmY = lm[9].y;
+    if (tipsY < palmY - GT.scrollDeadband) return "scroll-up";
+    if (tipsY > palmY + GT.scrollDeadband) return "scroll-down";
+    return "open";
+  }
+  if (n === 0) return thumb ? "thumb" : "fist";
+  if (n === 1 && ext[0]) return "point";
+  if (n === 2 && ext[0] && ext[1]) return "two";
+  return "none";
+}
+
+/* ============================================================
+ * 1. 手势库（与控制器 GESTURE_TEXT 对齐）
+ * ============================================================ */
+const GESTURES = [
+  { id: "fist",        icon: "✊", name: "握拳",        action: "确认",  tip: "握紧拳头，手背朝摄像头" },
+  { id: "thumb",       icon: "👍", name: "拇指朝上",    action: "返回",  tip: "四指收拢，只伸直拇指并朝上" },
+  { id: "point",       icon: "☝️", name: "食指",        action: "主页",  tip: "只伸食指，其余三指收拢" },
+  { id: "two",         icon: "✌️", name: "二指",        action: "菜单",  tip: "伸食指+中指，其余收拢成 V" },
+  { id: "scroll-up",   icon: "🖐", name: "张开·指尖朝上", action: "上滚", tip: "五指张开，指尖朝向画面上方" },
+  { id: "scroll-down", icon: "🖐", name: "张开·指尖朝下", action: "下滚", tip: "五指张开，指尖朝向画面下方" },
+  { id: "open",        icon: "🖐", name: "张开·水平",     action: "中立", tip: "五指张开，指尖朝前不上下偏（应判为中立）" },
+];
+const LABEL = {
+  fist: "✊ 握拳", thumb: "👍 拇指", point: "☝️ 食指", two: "✌️ 二指",
+  "scroll-up": "🖐 上滚", "scroll-down": "🖐 下滚", open: "🖐 张开(中立)", none: "未识别",
+};
+const ALL_LABELS = ["fist","thumb","point","two","scroll-up","scroll-down","open","none"];
+
+/* ============================================================
+ * 2. DOM
+ * ============================================================ */
+const $ = id => document.getElementById(id);
+const video = $("cam"), canvas = $("overlay"), ctx = canvas.getContext("2d");
+const stage = $("stage");
+let toastTimer = null;
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
+}
+function setPill(el, text, cls) { el.textContent = text; el.className = "pill" + (cls ? " " + cls : ""); }
+
+/* ============================================================
+ * 3. 模型 & 摄像头
+ * ============================================================ */
+let recognizer = null;
+let stream = null;
+let running = false;
+let rafId = 0;
+let lastDetect = 0;
+let fps = 0, fpsCount = 0, fpsAt = performance.now();
+
+async function loadModel() {
+  setPill($("pillModel"), "模型加载中…", "");
+  try {
+    const vision = await import("../draw/vendor/vision/vision_bundle.mjs");
+    const fileset = await vision.FilesetResolver.forVisionTasks("../draw/vendor/vision/wasm");
+    const make = delegate => vision.GestureRecognizer.createFromOptions(fileset, {
+      baseOptions: { modelAssetPath: "../draw/models/gesture_recognizer.task", delegate },
+      runningMode: "VIDEO",
+      numHands: 1,
+      minHandDetectionConfidence: 0.5,
+      minHandPresenceConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+    });
+    try { recognizer = await make("GPU"); }
+    catch (e) { recognizer = await make("CPU"); }
+    setPill($("pillModel"), "模型就绪", "on");
+    return true;
+  } catch (e) {
+    setPill($("pillModel"), "模型加载失败", "err");
+    toast("模型加载失败：" + (e && e.message || e));
+    return false;
+  }
+}
+
+async function startCam() {
+  if (stream) return true;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
+      audio: false,
+    });
+    video.srcObject = stream;
+    await video.play();
+    video.addEventListener("loadedmetadata", resizeCanvas, { once: true });
+    setPill($("pillCam"), "摄像头已开启", "on");
+    $("center").classList.add("hide");
+    resizeCanvas();
+    return true;
+  } catch (e) {
+    setPill($("pillCam"), "摄像头失败", "err");
+    $("center").innerHTML = "摄像头启动失败<br><b>" + (e && e.message || e) + "</b><br>需 localhost / https 并授权";
+    return false;
+  }
+}
+
+function resizeCanvas() {
+  if (!video.videoWidth) return;
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+}
+
+/* ============================================================
+ * 4. 骨架绘制
+ * ============================================================ */
+const CONN = [
+  [0,1],[1,2],[2,3],[3,4],
+  [0,5],[5,6],[6,7],[7,8],
+  [5,9],[9,10],[10,11],[11,12],
+  [9,13],[13,14],[14,15],[15,16],
+  [13,17],[17,18],[18,19],[19,20],
+  [0,17],
+];
+function drawSkeleton(lm, color) {
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  if (!lm) return;
+  ctx.save();
+  ctx.translate(w, 0); ctx.scale(-1, 1);   // 与镜像视频对齐
+  ctx.lineWidth = Math.max(2, w / 480);
+  ctx.strokeStyle = color || "#3ddc97";
+  ctx.beginPath();
+  for (const [a, b] of CONN) {
+    ctx.moveTo(lm[a].x * w, lm[a].y * h);
+    ctx.lineTo(lm[b].x * w, lm[b].y * h);
+  }
+  ctx.stroke();
+  ctx.fillStyle = "#ffffff";
+  for (const p of lm) {
+    ctx.beginPath();
+    ctx.arc(p.x * w, p.y * h, Math.max(2.5, w / 400), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* ============================================================
+ * 5. 状态机（仅为统计口径，和控制器同 enter=3）
+ * ============================================================ */
+const SM = { cur: "none", pend: "none", cnt: 0 };
+function stepSM(pred) {
+  if (pred === SM.pend) SM.cnt++;
+  else { SM.pend = pred; SM.cnt = 1; }
+  if (SM.cnt >= GT.enter && SM.pend !== SM.cur) { SM.cur = SM.pend; SM.cnt = 0; }
+  return SM.cur;
+}
+function resetSM() { SM.cur = "none"; SM.pend = "none"; SM.cnt = 0; }
+
+/* ============================================================
+ * 6. 测试流程
+ * ============================================================ */
+const state = {
+  phase: "idle",          // idle | prep | collect | done
+  target: null,           // 目标手势 id
+  queue: [],              // 待测手势
+  current: null,          // 当前测试记录
+  results: {},            // id -> record
+  matrix: {},             // target -> { pred: frames }
+  collecting: false,
+};
+function newRecord(id) {
+  return { id, total: 0, hand: 0, hit: 0, confirmed: 0, preds: {}, startedAt: Date.now() };
+}
+function beginTest(id) {
+  state.target = id;
+  state.current = newRecord(id);
+  state.results[id] = state.current;
+  state.phase = "prep";
+  state.prepStart = 0;
+  resetSM();
+  const g = GESTURES.find(x => x.id === id);
+  $("targetBig").innerHTML = "准备：<b>" + g.icon + " " + g.name + "</b> — " + g.tip;
+  $("ring").classList.add("on");
+  renderList();
+}
+function startCollect() {
+  state.phase = "collect";
+  state.current.startedAt = Date.now();
+  state.collectStart = performance.now();
+  state.collectEnd = state.collectStart + (+$("holdSec").value) * 1000;
+  $("ring").classList.remove("on");
+  const g = GESTURES.find(x => x.id === state.target);
+  $("targetBig").innerHTML = "保持：<b>" + g.icon + " " + g.name + "</b>";
+}
+function finishCollect() {
+  state.phase = "done";
+  state.collecting = false;
+  $("bar").style.width = "0";
+  $("ring").classList.remove("on");
+  renderResults();
+  renderMatrix();
+  renderList();
+  const r = state.results[state.target];
+  const acc = r.total ? r.hit / r.total : 0;
+  $("targetBig").innerHTML = (GESTURES.find(x => x.id === state.target).icon) + " 完成 · 帧级准确率 <b>" +
+    (acc * 100).toFixed(1) + "%</b>";
+  toast("「" + LABEL[state.target] + "」完成：" + (acc * 100).toFixed(1) + "%");
+  if (state.queue.length) {
+    const next = state.queue.shift();
+    setTimeout(() => beginTest(next), 1200);
+  } else {
+    state.phase = "idle";
+    $("btnStop").disabled = true;
+    $("btnAll").disabled = false;
+    toast("全部测试完成");
+  }
+}
+function stopAll() {
+  state.queue = [];
+  if (state.phase === "prep" || state.phase === "collect") {
+    state.phase = "done";
+    finishCollect();
+  }
+  state.phase = "idle";
+  $("btnStop").disabled = true;
+  $("btnAll").disabled = false;
+  $("bar").style.width = "0";
+  $("ring").classList.remove("on");
+}
+
+/* ============================================================
+ * 7. 主循环
+ * ============================================================ */
+function loop(now) {
+  if (!running) return;
+  rafId = requestAnimationFrame(loop);
+  if (!recognizer || !video.videoWidth) return;
+  if (now - lastDetect < 34) return;
+  lastDetect = now;
+
+  let res;
+  try {
+    res = recognizer.recognizeForVideo(video, now);
+  } catch (e) {
+    return;
+  }
+  const lm = res.landmarks && res.landmarks[0];
+  const pred = lm ? classifyHand(lm) : "none";
+  const confirmed = stepSM(pred);
+
+  // FPS
+  fpsCount++;
+  if (now - fpsAt >= 1000) {
+    fps = fpsCount; fpsCount = 0; fpsAt = now;
+  }
+
+  // 实时显示
+  const predEl = $("curPred");
+  predEl.textContent = LABEL[pred] || pred;
+  if (state.phase === "collect" && state.target) {
+    const ok = pred === state.target;
+    predEl.className = "v " + (ok ? "hit" : "miss");
+  } else {
+    predEl.className = "v";
+  }
+  if (lm) {
+    const ext = FINGERS.map(f => fingerUp(lm, f.tip, f.mcp) ? 1 : 0);
+    const tipsY = (lm[8].y + lm[12].y + lm[16].y + lm[20].y) / 4;
+    $("feat").innerHTML = "ext [" + ext.join(",") + "]　thumb " + (thumbUp(lm) ? 1 : 0) +
+      "<br>tipsY-palmY " + (tipsY - lm[9].y).toFixed(3) + "　fps " + fps;
+  } else {
+    $("feat").innerHTML = "未检测到手<br>fps " + fps;
+  }
+  drawSkeleton(lm, pred === state.target ? "#3ddc97" : "#5aa9ff");
+
+  // 采集统计
+  if (state.phase === "collect" && state.current) {
+    const r = state.current;
+    r.total++;
+    if (lm) r.hand++;
+    if (pred === state.target) r.hit++;
+    if (confirmed === state.target) r.confirmed++;
+    r.preds[pred] = (r.preds[pred] || 0) + 1;
+    if (!state.matrix[state.target]) state.matrix[state.target] = {};
+    state.matrix[state.target][pred] = (state.matrix[state.target][pred] || 0) + 1;
+
+    const p = Math.min(1, (now - state.collectStart) / (state.collectEnd - state.collectStart));
+    $("bar").style.width = (p * 100).toFixed(1) + "%";
+    if (now >= state.collectEnd) finishCollect();
+  }
+}
+
+/* ============================================================
+ * 8. UI 渲染
+ * ============================================================ */
+function renderList() {
+  const ul = $("gestureList");
+  ul.innerHTML = "";
+  for (const g of GESTURES) {
+    const r = state.results[g.id];
+    const li = document.createElement("li");
+    li.className = (state.target === g.id ? "active " : "") + (r ? "done" : "");
+    const acc = r && r.total ? (r.hit / r.total * 100).toFixed(0) + "%" : "—";
+    li.innerHTML = '<span class="g">' + g.icon + '</span>' +
+      '<span class="n">' + g.name + '<small>' + g.tip + '</small></span>' +
+      '<span class="score">' + acc + '</span>';
+    li.addEventListener("click", () => {
+      if (state.phase !== "idle") return toast("请先停止当前测试");
+      beginTest(g.id);
+    });
+    ul.appendChild(li);
+  }
+}
+function accClass(v) { return v >= 0.9 ? "good" : v >= 0.7 ? "mid" : "bad"; }
+function renderResults() {
+  const tbody = $("rt").querySelector("tbody");
+  const ids = GESTURES.map(g => g.id).filter(id => state.results[id]);
+  if (!ids.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">还没有开始测试。至少采集一个手势后会在这里看到结果。</td></tr>';
+    return;
+  }
+  tbody.innerHTML = "";
+  let sumT = 0, sumH = 0, sumC = 0;
+  for (const id of ids) {
+    const r = state.results[id];
+    const acc = r.total ? r.hit / r.total : 0;
+    const cacc = r.total ? r.confirmed / r.total : 0;
+    sumT += r.total; sumH += r.hit; sumC += r.confirmed;
+    // 主要误判：排除目标与 none
+    const wrong = Object.entries(r.preds)
+      .filter(([k]) => k !== id && k !== "none")
+      .sort((a, b) => b[1] - a[1])[0];
+    const g = GESTURES.find(x => x.id === id);
+    const tr = document.createElement("tr");
+    tr.innerHTML =
+      '<td>' + g.icon + " " + g.name + '</td>' +
+      '<td>' + r.total + '</td>' +
+      '<td>' + r.hand + '</td>' +
+      '<td>' + r.hit + '</td>' +
+      '<td class="big ' + accClass(acc) + '">' + (acc * 100).toFixed(1) + '%</td>' +
+      '<td class="' + accClass(cacc) + '">' + (cacc * 100).toFixed(1) + '%</td>' +
+      '<td>' + (wrong ? LABEL[wrong[0]] + " (" + wrong[1] + ")" : "—") + '</td>';
+    tbody.appendChild(tr);
+  }
+  const acc = sumT ? sumH / sumT : 0;
+  const cacc = sumT ? sumC / sumT : 0;
+  $("summary").textContent = " · 总帧 " + sumT + " · 帧级 " + (acc * 100).toFixed(1) +
+    "% · 状态机 " + (cacc * 100).toFixed(1) + "%";
+  $("btnExport").disabled = false;
+}
+function renderMatrix() {
+  const gids = GESTURES.map(g => g.id).filter(id => state.results[id]);
+  const cols = ALL_LABELS.filter(k => gids.some(id => (state.matrix[id] || {})[k]));
+  const table = $("mtx");
+  if (!gids.length || !cols.length) { table.innerHTML = ""; return; }
+  let html = "<thead><tr><th>目标 \\ 输出</th>";
+  for (const c of cols) html += "<th>" + LABEL[c] + "</th>";
+  html += "</tr></thead><tbody>";
+  for (const id of gids) {
+    html += "<tr><th>" + LABEL[id] + "</th>";
+    const row = state.matrix[id] || {};
+    const max = Math.max(1, ...cols.map(c => row[c] || 0));
+    for (const c of cols) {
+      const v = row[c] || 0;
+      const cls = v === 0 ? "" : (c === id ? "hot" : (v >= max * 0.4 ? "warm" : ""));
+      html += '<td class="' + cls + '">' + (v || "·") + "</td>";
+    }
+    html += "</tr>";
+  }
+  html += "</tbody>";
+  table.innerHTML = html;
+}
+
+/* ============================================================
+ * 9. 事件绑定
+ * ============================================================ */
+$("btnCam").addEventListener("click", async () => {
+  $("btnCam").disabled = true;
+  const okCam = await startCam();
+  const okModel = await loadModel();
+  if (okCam && okModel) {
+    running = true;
+    resetSM();
+    requestAnimationFrame(loop);
+    $("btnAll").disabled = false;
+    $("center").classList.add("hide");
+    toast("已就绪：可以开始测试");
+  }
+  $("btnCam").disabled = false;
+});
+
+$("btnAll").addEventListener("click", () => {
+  if (!running) return toast("请先启动摄像头");
+  state.results = {}; state.matrix = {}; state.queue = [];
+  $("summary").textContent = "";
+  $("btnAll").disabled = true;
+  $("btnStop").disabled = false;
+  const ids = GESTURES.map(g => g.id);
+  beginTest(ids.shift());
+  state.queue = ids;
+  renderList();
+});
+
+$("btnStop").addEventListener("click", stopAll);
+
+$("btnClear").addEventListener("click", () => {
+  if (state.phase !== "idle") return toast("请先停止当前测试");
+  state.results = {}; state.matrix = {};
+  $("summary").textContent = "";
+  $("btnExport").disabled = true;
+  renderResults(); renderMatrix(); renderList();
+});
+
+$("btnExport").addEventListener("click", () => {
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    params: GT,
+    gestures: state.results,
+    matrix: state.matrix,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "gesture-accuracy-" + new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + ".json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+window.addEventListener("resize", resizeCanvas);
+
+/* 准备阶段倒计时（用 rAF 时间，独立于主循环） */
+function prepTicker() {
+  if (state.phase !== "prep") { prepRaf = requestAnimationFrame(prepTicker); return; }
+  const now = performance.now();
+  if (!state.prepStart) {
+    state.prepStart = now;
+    state.prepEnd = now + (+$("prepSec").value) * 1000;
+  }
+  const p = Math.min(1, (now - state.prepStart) / (state.prepEnd - state.prepStart));
+  $("bar").style.width = (p * 100).toFixed(1) + "%";
+  if (now >= state.prepEnd) {
+    state.prepStart = 0;
+    startCollect();
+  }
+  prepRaf = requestAnimationFrame(prepTicker);
+}
+let prepRaf = 0;
+requestAnimationFrame(prepTicker);
+
+renderList();
+</script>
+</body>
+</html>
