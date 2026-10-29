@@ -119,9 +119,10 @@
     font-size:12px;color:var(--dim);background:rgba(11,21,38,.8);border:1px solid var(--line);
     padding:6px 14px;border-radius:999px;}
 
-  /* WebGazer 的视频容器必须留在视口外继续解码：
-     display:none 会让 Chrome/Electron 暂停 video 解码 → canvas 黑帧 → facemesh/MediaPipe 全卡住 */
-  #webgazerVideoContainer{position:fixed !important;left:-9999px !important;top:0 !important;z-index:-1 !important;}
+  /* 留在视口内、完全透明：display:none 或移出视口都可能让浏览器暂停视频解码 */
+  #webgazerVideoContainer{position:fixed !important;left:0 !important;top:0 !important;
+    width:320px !important;height:240px !important;opacity:0 !important;
+    pointer-events:none !important;z-index:0 !important;overflow:hidden !important;}
   #webgazerFaceOverlay,#webgazerFaceFeedbackBox{display:none !important;}
 </style>
 </head>
@@ -436,7 +437,7 @@ async function bootEye() {
   webgazer.showPredictionPoints(false);
   // 关键：不能用 showVideoPreview(false)。display:none 的 video 会被浏览器暂停解码，
   // 导致 getVideoElementCanvas() 永远是黑帧，facemesh 检测不到脸、MediaPipe 也拿不到画面。
-  // 改为保留预览，再用 CSS 把容器移出视口（见 #webgazerVideoContainer 规则）。
+  // 改为保留预览，再用 CSS 让容器留在视口内但完全透明（见 #webgazerVideoContainer 规则）。
   webgazer.showVideoPreview(true);
   webgazer.showFaceOverlay(false);
   webgazer.showFaceFeedbackBox(false);
@@ -451,21 +452,24 @@ async function bootEye() {
   cursorEl.classList.add("live");
   handImg = webgazer.getVideoElementCanvas();
 
-  // begin() 之后容器才插入 DOM，再补一次移出视口
-  const vc = document.getElementById("webgazerVideoContainer");
-  if (vc) { vc.style.position = "fixed"; vc.style.left = "-9999px"; vc.style.top = "0"; }
+  // 不再内联移动容器：定位与透明由 CSS #webgazerVideoContainer 统一控制
 
   // 诊断：1.5s 后确认输入源有尺寸且不是黑帧
   setTimeout(() => {
-    const c = webgazer.getVideoElementCanvas();
-    if (c && c.width) handImg = c;
-    const w = handImg ? handImg.width : 0;
-    const h = handImg ? handImg.height : 0;
-    log(`输入源 ${w}×${h}`);
-    if (!w) {
-      log("摄像头画布尺寸为 0：手势与眼动都不会工作", "er");
-    } else if (isBlackFrame(handImg)) {
-      log("摄像头画面全黑：检查摄像头是否被其他应用占用 / 授权是否拒绝", "er");
+    const vf = document.getElementById("webgazerVideoFeed");
+    const cv = webgazer.getVideoElementCanvas();
+    const vw = vf ? (vf.videoWidth || 0) : 0;
+    const vh = vf ? (vf.videoHeight || 0) : 0;
+    log(`video ${vw}×${vh} ready=${vf ? vf.readyState : "-"} paused=${vf ? vf.paused : "-"}`);
+
+    if (vf && vw && !isBlackFrame(vf)) {
+      handImg = vf;                    // video 有画面：直接用它，绕开 canvas
+      log(`输入源使用 <video> ${vw}×${vh}`, "ok");
+    } else if (cv && cv.width && !isBlackFrame(cv)) {
+      handImg = cv;
+      log(`输入源使用 <canvas> ${cv.width}×${cv.height}`, "ok");
+    } else {
+      log("video 与 canvas 都没有画面，手势/眼动不可用", "er");
       pill($("pillCam"), false, "摄像头 · 黑帧");
     }
   }, 1500);
@@ -473,8 +477,15 @@ async function bootEye() {
   return true;
 }
 
-function isBlackFrame(canvas) {
+function isBlackFrame(el) {
   try {
+    let canvas = el;
+    if (el.tagName === "VIDEO") {
+      canvas = document.createElement("canvas");
+      canvas.width = 64;
+      canvas.height = 48;
+      canvas.getContext("2d").drawImage(el, 0, 0, 64, 48);
+    }
     const ctx = canvas.getContext("2d");
     const w = Math.min(48, canvas.width), h = Math.min(48, canvas.height);
     const d = ctx.getImageData(0, 0, w, h).data;
@@ -514,9 +525,12 @@ async function bootHand() {
   }
 }
 
+function srcW() { return handImg ? (handImg.videoWidth || handImg.width || 0) : 0; }
+function srcH() { return handImg ? (handImg.videoHeight || handImg.height || 0) : 0; }
+
 function handLoop(now) {
   requestAnimationFrame(handLoop);
-  if (!recognizer || !handImg || !handImg.width || inFlight) return;
+  if (!recognizer || !handImg || !srcW() || inFlight) return;
   if (now - lastDetect < 34) return;
   lastDetect = now;
   inFlight = true;
@@ -563,7 +577,7 @@ const preview = $("preview");
 const pctx = preview.getContext("2d");
 
 function drawPreview(lm) {
-  if (!handImg || !handImg.width) return;
+  if (!handImg || !srcW()) return;
   const W = preview.width, H = preview.height;
   pctx.save();
   pctx.translate(W, 0);
@@ -595,7 +609,7 @@ function drawPreview(lm) {
 /* 预览独立循环：不依赖手势识别回调，摄像头一有画面就能看到 */
 function previewLoop() {
   requestAnimationFrame(previewLoop);
-  if (handImg && handImg.width) drawPreview(S.lm);
+  if (handImg && srcW()) drawPreview(S.lm);
 }
 
 /* ---------- 9 点标定 ---------- */
@@ -897,7 +911,7 @@ async function boot() {
     return;
   }
   log(`摄像头预检通过 ${cam.w}×${cam.h}`);
-  await new Promise(r => setTimeout(r, 200));
+  await new Promise(r => setTimeout(r, 1200));
   log("正在启动摄像头与模型…");
   const okEye = await bootEye();
   if (!okEye) {
