@@ -63,7 +63,9 @@
   h1{margin:0 0 8px;font-size:14px;font-weight:700;letter-spacing:.3px;}
   .sub{font-size:11px;color:var(--dim);}
 
-  #preview{width:232px;height:174px;border-radius:10px;background:#000;display:block;object-fit:cover;}
+  /* 页面独占的摄像头源：留在视口内、完全透明（display:none 会让 video 停止解码） */
+  #cam{position:fixed;left:0;top:0;width:320px;height:240px;opacity:0;
+    pointer-events:none;z-index:0;object-fit:cover;}
   .gnow{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;}
   .gnow .ic{font-size:22px;}
   .gnow .nm{font-weight:600;}
@@ -137,7 +139,7 @@
 
 <!-- 左上：摄像头 + 当前手势 -->
 <div class="panel" id="pCam">
-  <canvas id="preview" width="232" height="174"></canvas>
+  <video id="cam" playsinline muted autoplay></video>
   <div class="gnow">
     <span class="ic" id="gIcon">·</span>
     <span class="nm" id="gName">未检测</span>
@@ -400,32 +402,40 @@ function onGaze(data) {
   if (S.phase === "gaze-sample") S.samples.push({ x: data.x, y: data.y });
 }
 
-/* ---------- 摄像头预检：区分「权限/占用」与「WebGazer 处理失败」 ---------- */
-async function probeCamera() {
+/* ---------- 摄像头：页面独占一条流，WebGazer 复用同一条 ---------- */
+let camStream = null;
+const camVideo = $("cam");
+
+async function startCamera() {
+  if (camStream) return true;
   try {
-    const s = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
-    const v = document.createElement("video");
-    v.muted = true;
-    v.playsInline = true;
-    v.srcObject = s;
-    await v.play();
-    await new Promise(r => setTimeout(r, 350));
-    const c = document.createElement("canvas");
-    c.width = 64;
-    c.height = 48;
-    const cx = c.getContext("2d");
-    cx.drawImage(v, 0, 0, 64, 48);
-    const d = cx.getImageData(0, 0, 64, 48).data;
-    let sum = 0;
-    for (let i = 0; i < d.length; i += 4) sum += d[i] + d[i + 1] + d[i + 2];
-    const avg = sum / (d.length / 4);
-    const w = v.videoWidth, h = v.videoHeight;
-    s.getTracks().forEach(t => t.stop());
-    v.srcObject = null;
-    return { ok: avg >= 6, avg, w, h };
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
+      audio: false,
+    });
   } catch (e) {
-    return { ok: false, err: (e && e.name || "Error") + ": " + (e && e.message || e) };
+    log("摄像头不可用：" + (e && e.name || "Error") + ": " + (e && e.message || e), "er");
+    pill($("pillCam"), false, "摄像头 · 失败");
+    return false;
   }
+  camVideo.srcObject = camStream;
+  try { await camVideo.play(); } catch (e) { /* 静音视频通常可自动播放 */ }
+  for (let i = 0; i < 40 && !camVideo.videoWidth; i++) {
+    await new Promise(r => setTimeout(r, 50));
+  }
+  if (!camVideo.videoWidth) {
+    log("摄像头已授权但没有画面（videoWidth 为 0），检查设备是否被占用", "er");
+    pill($("pillCam"), false, "摄像头 · 无画面");
+    return false;
+  }
+  if (isBlackFrame(camVideo)) {
+    log(`摄像头返回黑帧 ${camVideo.videoWidth}×${camVideo.videoHeight}：被其他应用占用或权限异常`, "er");
+    pill($("pillCam"), false, "摄像头 · 黑帧");
+    return false;
+  }
+  log(`摄像头就绪 ${camVideo.videoWidth}×${camVideo.videoHeight}`, "ok");
+  pill($("pillCam"), true, `摄像头 · ${camVideo.videoWidth}×${camVideo.videoHeight}`);
+  return true;
 }
 
 async function bootEye() {
@@ -435,43 +445,33 @@ async function bootEye() {
   }
   webgazer.setRegression("ridge");
   webgazer.showPredictionPoints(false);
-  // 关键：不能用 showVideoPreview(false)。display:none 的 video 会被浏览器暂停解码，
-  // 导致 getVideoElementCanvas() 永远是黑帧，facemesh 检测不到脸、MediaPipe 也拿不到画面。
-  // 改为保留预览，再用 CSS 让容器留在视口内但完全透明（见 #webgazerVideoContainer 规则）。
+  // 不能用 showVideoPreview(false)：display:none 的 video 会被浏览器暂停解码，
+  // facemesh 检测不到脸，眼动永远没有输出。改为保留预览 + CSS 透明覆盖。
   webgazer.showVideoPreview(true);
   webgazer.showFaceOverlay(false);
   webgazer.showFaceFeedbackBox(false);
   webgazer.setGazeListener(onGaze);
+
+  // 关键：让 WebGazer 复用页面已拿到的同一条流。
+  // 自己再开一次摄像头在 macOS 上经常拿到黑帧，且会与页面流争抢设备。
+  const realGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+  navigator.mediaDevices.getUserMedia = () => Promise.resolve(camStream);
   try {
     await webgazer.begin();
   } catch (e) {
     log("WebGazer 启动失败：" + (e && e.message || e), "er");
     return false;
+  } finally {
+    navigator.mediaDevices.getUserMedia = realGUM;
   }
-  pill($("pillCam"), true, "摄像头 · 开");
   cursorEl.classList.add("live");
-  handImg = webgazer.getVideoElementCanvas();
 
-  // 不再内联移动容器：定位与透明由 CSS #webgazerVideoContainer 统一控制
-
-  // 诊断：1.5s 后确认输入源有尺寸且不是黑帧
+  // 诊断：确认 WebGazer 自己的 video 拿到了同一条流的画面
   setTimeout(() => {
     const vf = document.getElementById("webgazerVideoFeed");
-    const cv = webgazer.getVideoElementCanvas();
     const vw = vf ? (vf.videoWidth || 0) : 0;
-    const vh = vf ? (vf.videoHeight || 0) : 0;
-    log(`video ${vw}×${vh} ready=${vf ? vf.readyState : "-"} paused=${vf ? vf.paused : "-"}`);
-
-    if (vf && vw && !isBlackFrame(vf)) {
-      handImg = vf;                    // video 有画面：直接用它，绕开 canvas
-      log(`输入源使用 <video> ${vw}×${vh}`, "ok");
-    } else if (cv && cv.width && !isBlackFrame(cv)) {
-      handImg = cv;
-      log(`输入源使用 <canvas> ${cv.width}×${cv.height}`, "ok");
-    } else {
-      log("video 与 canvas 都没有画面，手势/眼动不可用", "er");
-      pill($("pillCam"), false, "摄像头 · 黑帧");
-    }
+    log(`webgazer video ${vw}×${vf ? vf.videoHeight : 0} paused=${vf ? vf.paused : "-"}`);
+    if (!vw) log("WebGazer 未拿到视频画面，眼动不可用", "er");
   }, 1500);
 
   return true;
@@ -508,6 +508,9 @@ async function bootHand() {
       baseOptions: { modelAssetPath: "../draw/models/gesture_recognizer.task", delegate },
       runningMode: "VIDEO",
       numHands: 1,
+      minHandDetectionConfidence: 0.5,
+      minHandPresenceConfidence: 0.5,
+      minTrackingConfidence: 0.5,
     });
     try {
       recognizer = await vision.GestureRecognizer.createFromOptions(fileset, opts("GPU"));
@@ -515,6 +518,8 @@ async function bootHand() {
       log("GPU 初始化失败，回退 CPU：" + (e && e.message || e));
       recognizer = await vision.GestureRecognizer.createFromOptions(fileset, opts("CPU"));
     }
+    // 直接用手势测试页同样的输入源：页面自己的 <video>
+    handImg = camVideo;
     pill($("pillHand"), true, "手势 · 就绪");
     requestAnimationFrame(handLoop);
     return true;
@@ -570,46 +575,6 @@ function onGesture(ev) {
   }
   log(`手势 ${meta.icon} ${meta.name} → <b>${meta.act}</b>`);
   if (S.phase === "joint") judgeClick(g);
-}
-
-/* ---------- 摄像头预览 + 骨架（镜像） ---------- */
-const preview = $("preview");
-const pctx = preview.getContext("2d");
-
-function drawPreview(lm) {
-  if (!handImg || !srcW()) return;
-  const W = preview.width, H = preview.height;
-  pctx.save();
-  pctx.translate(W, 0);
-  pctx.scale(-1, 1);
-  pctx.drawImage(handImg, 0, 0, W, H);
-  pctx.restore();
-
-  if (!lm) return;
-  const px = (i) => (1 - lm[i].x) * W;
-  const py = (i) => lm[i].y * H;
-
-  pctx.strokeStyle = "rgba(56,217,150,.85)";
-  pctx.lineWidth = 2;
-  for (const [a, b] of CONN) {
-    pctx.beginPath();
-    pctx.moveTo(px(a), py(a));
-    pctx.lineTo(px(b), py(b));
-    pctx.stroke();
-  }
-  for (let i = 0; i < lm.length; i++) {
-    const tip = FINGERS.some(f => f.tip === i);
-    pctx.fillStyle = tip ? "#ffd166" : "#4aa8ff";
-    pctx.beginPath();
-    pctx.arc(px(i), py(i), tip ? 4 : 2.5, 0, Math.PI * 2);
-    pctx.fill();
-  }
-}
-
-/* 预览独立循环：不依赖手势识别回调，摄像头一有画面就能看到 */
-function previewLoop() {
-  requestAnimationFrame(previewLoop);
-  if (handImg && srcW()) drawPreview(S.lm);
 }
 
 /* ---------- 9 点标定 ---------- */
@@ -900,35 +865,28 @@ function renderResults() {
 /* ---------- 启动 ---------- */
 async function boot() {
   $("btnBoot").disabled = true;
-  log("正在检测摄像头…");
-  const cam = await probeCamera();
-  if (!cam.ok) {
-    log(cam.err
-      ? ("摄像头不可用：" + cam.err)
-      : `摄像头返回黑帧（平均亮度 ${Math.round(cam.avg)}）：权限被拒或被其他应用占用`, "er");
+  log("正在打开摄像头…");
+  if (!await startCamera()) {
     $("btnBoot").disabled = false;
     $("hint").textContent = "摄像头不可用：请检查权限与占用";
     return;
   }
-  log(`摄像头预检通过 ${cam.w}×${cam.h}`);
-  await new Promise(r => setTimeout(r, 1200));
-  log("正在启动摄像头与模型…");
+  log("正在加载手势模型…");
+  const okHand = await bootHand();
+  log("正在启动眼动…");
   const okEye = await bootEye();
   if (!okEye) {
     $("btnBoot").disabled = false;
+    $("stepHint").textContent = okHand ? "手势可用，但眼动启动失败。" : "摄像头/模型启动失败。";
     return;
   }
-  log("摄像头就绪，正在加载手势模型…");
-  const okHand = await bootHand();
   S.running = true;
   $("btnCalib").disabled = false;
+  $("btnGaze").disabled = false;
   $("stepHint").textContent = okHand
     ? "已就绪：先做 9 点标定。"
     : "眼动已就绪，但手势模型加载失败（仍可测眼动精度）。";
   log(okHand ? "全部就绪 ✓" : "手势不可用，仅眼动", okHand ? "ok" : "er");
-  if (!okHand) {
-    $("btnGaze").disabled = false;
-  }
   $("hint").textContent = "眼动控光标 · 手势发命令";
 }
 
@@ -971,7 +929,6 @@ document.addEventListener("keydown", (e) => {
 /* ---------- 启动时构建 ---------- */
 buildButtons();
 renderResults();
-requestAnimationFrame(previewLoop);
 log("页面就绪。点击右上「启动摄像头 + 模型」。");
 </script>
 </body>
