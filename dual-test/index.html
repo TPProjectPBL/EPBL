@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>眼动光标 + 手势控制 · 测试台</title>
+<!-- WebGazer 必须用普通 script（全局变量），不能用 module -->
+<script src="../controller-demo/vendor/webgazer/webgazer.js"></script>
+<style>
+  :root{
+    --bg:#05080f; --bg2:#0b1526; --panel:rgba(11,21,38,.92); --line:#1e2f4d;
+    --txt:#e6edf7; --dim:#7d8ea8; --acc:#38d996; --acc2:#4aa8ff; --warn:#ffb454; --bad:#ff6b6b;
+  }
+  *{box-sizing:border-box; -webkit-user-select:none; user-select:none;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+    font:14px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;overflow:hidden;}
+
+  /* ---------- 全屏测试舞台 ---------- */
+  #stage{position:fixed;inset:0;background:
+    radial-gradient(1200px 700px at 50% 40%,#0b1a2e 0%,#05080f 65%);
+    background-image:
+      radial-gradient(1200px 700px at 50% 40%,#0b1a2e 0%,#05080f 65%),
+      linear-gradient(rgba(38,64,102,.13) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(38,64,102,.13) 1px,transparent 1px);
+    background-size:auto,44px 44px,44px 44px;
+  }
+
+  /* ---------- 眼动光标 ---------- */
+  #cursor{position:fixed;left:0;top:0;width:26px;height:26px;margin:-13px 0 0 -13px;
+    border-radius:50%;pointer-events:none;z-index:50;opacity:0;transition:opacity .3s;
+    background:radial-gradient(circle at 40% 35%,#bfffe3,#38d996 55%,#0d7a52);
+    box-shadow:0 0 0 3px rgba(56,217,150,.22),0 0 22px rgba(56,217,150,.55);}
+  #cursor.live{opacity:1;}
+  #cursor::after{content:"";position:absolute;inset:9px;border-radius:50%;background:#031a10;}
+
+  /* ---------- 目标点 ---------- */
+  #target{position:fixed;width:96px;height:96px;margin:-48px 0 0 -48px;border-radius:50%;
+    border:3px dashed rgba(74,168,255,.85);background:rgba(74,168,255,.10);
+    display:none;z-index:20;pointer-events:none;animation:tp 1.1s ease-in-out infinite;}
+  #target::after{content:"";position:absolute;inset:38px;border-radius:50%;background:var(--acc2);}
+  @keyframes tp{0%,100%{transform:scale(1)}50%{transform:scale(.92)}}
+
+  /* ---------- 四按钮 ---------- */
+  .gbtn{position:fixed;width:190px;height:112px;border-radius:16px;
+    border:1px solid var(--line);background:rgba(13,24,42,.9);color:var(--txt);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    z-index:15;transition:border-color .18s,box-shadow .18s,transform .12s;}
+  .gbtn .ic{font-size:26px;line-height:1;}
+  .gbtn .nm{font-size:15px;font-weight:600;}
+  .gbtn .ac{font-size:11px;color:var(--dim);}
+  .gbtn.target{border-color:var(--acc2);box-shadow:0 0 0 2px rgba(74,168,255,.35),0 0 30px rgba(74,168,255,.35);}
+  .gbtn.ok{border-color:var(--acc);box-shadow:0 0 0 3px rgba(56,217,150,.45);transform:scale(1.03);}
+  .gbtn.bad{border-color:var(--bad);box-shadow:0 0 0 3px rgba(255,107,107,.45);}
+
+  /* ---------- 面板 ---------- */
+  .panel{position:fixed;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    backdrop-filter:blur(8px);z-index:40;}
+  #pCam{left:16px;top:16px;padding:10px;width:252px;}
+  #pCtrl{right:16px;top:16px;padding:14px;width:296px;}
+  #pLog{left:16px;bottom:16px;padding:10px 12px;width:340px;height:212px;display:flex;flex-direction:column;}
+  #pRes{right:16px;bottom:16px;padding:12px 14px;width:296px;}
+
+  h1{margin:0 0 8px;font-size:14px;font-weight:700;letter-spacing:.3px;}
+  .sub{font-size:11px;color:var(--dim);}
+
+  #preview{width:232px;height:174px;border-radius:10px;background:#000;display:block;object-fit:cover;}
+  .gnow{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;}
+  .gnow .ic{font-size:22px;}
+  .gnow .nm{font-weight:600;}
+  .gnow .ac{margin-left:auto;color:var(--acc);font-size:12px;}
+  .meta{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
+  .pill{font-size:10px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--dim);}
+  .pill.on{color:var(--acc);border-color:rgba(56,217,150,.45);background:rgba(56,217,150,.08);}
+  .pill.bad{color:var(--bad);border-color:rgba(255,107,107,.4);}
+
+  button{font:inherit;cursor:pointer;border-radius:9px;border:1px solid var(--line);
+    background:#132239;color:var(--txt);padding:8px 10px;transition:.15s;}
+  button:hover:not(:disabled){border-color:#33507c;background:#17294a;}
+  button:disabled{opacity:.4;cursor:not-allowed;}
+  button.primary{background:linear-gradient(180deg,#1f8f66,#14724f);border-color:#2bb985;font-weight:600;}
+  button.primary:hover:not(:disabled){background:linear-gradient(180deg,#25a175,#15805a);}
+  button.ghost{background:transparent;}
+  .row{display:flex;gap:8px;align-items:center;}
+  .row > *{flex:1;}
+  .row.tight > *{flex:0 0 auto;}
+  .lbl{font-size:11px;color:var(--dim);margin:10px 0 5px;letter-spacing:.4px;}
+  .chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);}
+  .chk input{accent-color:var(--acc);}
+
+  #log{flex:1;overflow:auto;font:11px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;
+    color:#9fb2cc;white-space:pre-wrap;word-break:break-word;}
+  #log b{color:var(--txt);}
+  #log .ok{color:var(--acc);}
+  #log .er{color:var(--bad);}
+
+  #res{font-size:12px;}
+  #res table{width:100%;border-collapse:collapse;}
+  #res td{padding:4px 0;border-bottom:1px solid rgba(30,47,77,.6);}
+  #res td:last-child{text-align:right;font-variant-numeric:tabular-nums;color:var(--txt);}
+  #res tr:last-child td{border-bottom:0;}
+  #res .note{color:var(--dim);font-size:11px;margin-top:8px;line-height:1.5;}
+
+  /* ---------- 标定遮罩 ---------- */
+  #calib{position:fixed;inset:0;z-index:100;display:none;background:rgba(4,8,15,.94);}
+  #calib.show{display:block;}
+  #calib .tips{position:absolute;left:50%;top:18px;transform:translateX(-50%);
+    text-align:center;font-size:15px;line-height:1.8;color:var(--dim);}
+  #calib .tips b{color:var(--txt);}
+  .cdot{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;
+    border:2px solid var(--acc2);background:rgba(74,168,255,.12);color:var(--acc2);
+    font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+  .cdot:hover{background:rgba(74,168,255,.3);}
+  .cdot.done{opacity:.25;pointer-events:none;}
+  #calibBar{position:absolute;left:50%;bottom:40px;transform:translateX(-50%);
+    font-size:13px;color:var(--dim);}
+  #calibClose{position:absolute;right:24px;top:20px;}
+
+  .hint{position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:30;
+    font-size:12px;color:var(--dim);background:rgba(11,21,38,.8);border:1px solid var(--line);
+    padding:6px 14px;border-radius:999px;}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="cursor"></div>
+  <div id="target"></div>
+</div>
+
+<div class="hint" id="hint">眼动控光标 · 手势发命令 —— 先启动并标定</div>
+
+<!-- 左上：摄像头 + 当前手势 -->
+<div class="panel" id="pCam">
+  <canvas id="preview" width="232" height="174"></canvas>
+  <div class="gnow">
+    <span class="ic" id="gIcon">·</span>
+    <span class="nm" id="gName">未检测</span>
+    <span class="ac" id="gAct">—</span>
+  </div>
+  <div class="meta">
+    <span class="pill" id="pillCam">摄像头</span>
+    <span class="pill" id="pillEye">视线</span>
+    <span class="pill" id="pillHand">手势</span>
+    <span class="pill" id="pillFps">-- fps</span>
+  </div>
+</div>
+
+<!-- 右上：控制 -->
+<div class="panel" id="pCtrl">
+  <h1>眼动光标 + 手势控制</h1>
+  <div class="sub">眼动负责“指哪”，手势负责“做什么”</div>
+
+  <div class="lbl">第一步 · 启动</div>
+  <div class="row">
+    <button class="primary" id="btnBoot">启动摄像头 + 模型</button>
+  </div>
+
+  <div class="lbl">第二步 · 标定（9 点）</div>
+  <div class="row">
+    <button id="btnCalib" disabled>开始标定</button>
+  </div>
+
+  <div class="lbl">第三步 · 量化测试</div>
+  <div class="row">
+    <button id="btnGaze" disabled>眼动精度测试</button>
+  </div>
+  <div class="row" style="margin-top:6px">
+    <button id="btnJoint" disabled>眼-手联合点击</button>
+  </div>
+
+  <div class="lbl">光标参数</div>
+  <div class="row tight">
+    <label class="chk"><input type="checkbox" id="optMagnet" checked> 按钮磁吸</label>
+    <label class="chk" style="margin-left:auto">平滑
+      <input id="optEma" type="range" min="5" max="45" value="16" style="width:80px">
+    </label>
+  </div>
+
+  <div class="lbl">操作提示</div>
+  <div class="sub" id="stepHint">启动后先做 9 点标定；标定越认真，光标越准。</div>
+
+  <div class="row" style="margin-top:10px">
+    <button class="ghost" id="btnExport">导出结果 JSON</button>
+  </div>
+</div>
+
+<!-- 左下：事件日志 -->
+<div class="panel" id="pLog">
+  <div class="row tight" style="margin-bottom:6px">
+    <span style="font-size:12px;font-weight:600;flex:1">事件日志</span>
+    <button class="ghost" id="btnClearLog" style="padding:3px 8px;font-size:11px;flex:0 0 auto">清空</button>
+  </div>
+  <div id="log"></div>
+</div>
+
+<!-- 右下：结果 -->
+<div class="panel" id="pRes">
+  <div style="font-size:12px;font-weight:600;margin-bottom:6px">测试结果</div>
+  <div id="res"><div class="note">尚未运行测试。</div></div>
+</div>
+
+<!-- 标定遮罩 -->
+<div id="calib">
+  <button class="ghost" id="calibClose">关闭</button>
+  <div class="tips" id="calibTips">
+    <b>9 点标定</b><br>
+    依次点击 9 个圆点，<b>点击时眼睛正看向圆点中心</b><br>
+    不要只动鼠标、眼睛看别处
+  </div>
+  <div id="calibBar">已标定 0 / 9</div>
+</div>
+
+<script type="module">
+/* =====================================================================
+   眼动光标 + 手势控制 测试台
+   - 眼动：WebGazer（复用 controller-demo/vendor）
+   - 手势：MediaPipe GestureRecognizer（复用 draw/ 的模型与 wasm）
+   - 测什么：
+     1) 眼动精度：随机目标点，统计注视点与目标的像素偏差 / 命中率
+     2) 眼-手联合：看准按钮 + 握拳确认，统计成功率 / 误点 / 耗时
+   ===================================================================== */
+
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const Q = new URLSearchParams(location.search);
+const gnum = (k, d) => { const v = parseFloat(Q.get(k)); return Number.isFinite(v) ? v : d; };
+
+/* ---------- 手势参数（与 controller-demo 一致） ---------- */
+const GT = {
+  enterFrames:    gnum("gEnter", 3),
+  cooldown:       gnum("gCooldown", 900),
+  scrollThrottle: gnum("gScroll", 120),
+  scrollStep:     gnum("gStep", 40),
+  fingerRatio:    gnum("gFinger", 1.2),
+  thumbRatio:     gnum("gThumb", 1.25),
+  scrollDeadband: gnum("gDead", 0.12),
+};
+
+const G = {
+  fist:          { name: "握拳",       act: "确认 / 点击", icon: "✊" },
+  thumb:         { name: "拇指朝上",   act: "返回",        icon: "👍" },
+  point:         { name: "食指",       act: "主页",        icon: "☝️" },
+  two:           { name: "二指",       act: "菜单",        icon: "✌️" },
+  "scroll-up":   { name: "张开·指尖上", act: "上滚",       icon: "🖐" },
+  "scroll-down": { name: "张开·指尖下", act: "下滚",       icon: "🖐" },
+  open:          { name: "张开·水平",   act: "中立",        icon: "🖐" },
+  none:          { name: "未检测",      act: "—",          icon: "·" },
+};
+
+/* ---------- 状态 ---------- */
+const S = {
+  phase: "idle",            // idle | calib | gaze-settle | gaze-sample | gaze-gap | joint | joint-gap | done
+  cursor: { x: innerWidth / 2, y: innerHeight / 2 },
+  ema: 0.16, magnet: true, magnetR: 90,
+  calibDone: false,
+  running: false,
+  lm: null, raw: "none", feat: null,
+  gazeCount: 0, lastHand: 0,
+  samples: [],
+  target: null,
+  logs: [],
+  gaze: { idx: 0, total: 12, errs: [], hit: 0, empty: 0 },
+  joint: { round: 0, total: 10, ok: 0, bad: 0, timeout: 0, miss: 0, times: [], t0: 0, target: null },
+};
+
+const FINGERS = [{ tip: 8, mcp: 5 }, { tip: 12, mcp: 9 }, { tip: 16, mcp: 13 }, { tip: 20, mcp: 17 }];
+const CONN = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],
+              [9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+
+const d2 = (lm, a, b) => {
+  const dx = lm[a].x - lm[b].x, dy = lm[a].y - lm[b].y;
+  return Math.hypot(dx, dy);
+};
+
+/* ---------- 分类器：与 controller-demo 逐行一致 ---------- */
+function fingerUp(lm, tip, mcp) {
+  return d2(lm, tip, 0) > d2(lm, mcp, 0) * GT.fingerRatio;
+}
+function thumbUp(lm) {
+  return d2(lm, 4, 9) > d2(lm, 2, 9) * GT.thumbRatio;
+}
+function classifyHand(lm) {
+  const ext = FINGERS.map(f => fingerUp(lm, f.tip, f.mcp));
+  const n = ext.filter(Boolean).length;
+  const th = thumbUp(lm);
+  const tipsY = FINGERS.reduce((a, f) => a + lm[f.tip].y, 0) / 4;
+  const palmY = lm[9].y;
+  const dy = tipsY - palmY;
+
+  if (n === 4) {
+    if (dy < -GT.scrollDeadband) return { gesture: "scroll-up", feat: { ext, th, dy } };
+    if (dy > GT.scrollDeadband) return { gesture: "scroll-down", feat: { ext, th, dy } };
+    return { gesture: "open", feat: { ext, th, dy } };
+  }
+  if (n === 0) return { gesture: th ? "thumb" : "fist", feat: { ext, th, dy } };
+  if (n === 1 && ext[0]) return { gesture: "point", feat: { ext, th, dy } };
+  if (n === 2 && ext[0] && ext[1]) return { gesture: "two", feat: { ext, th, dy } };
+  return { gesture: "none", feat: { ext, th, dy } };
+}
+
+/* ---------- 状态机 ---------- */
+const GS = { cand: null, streak: 0, lastFire: 0, lastScroll: 0 };
+function gsReset() { GS.cand = null; GS.streak = 0; }
+function gsStep(raw, now) {
+  const g = raw || "none";
+  if (g === "none") { gsReset(); return null; }
+  if (g === GS.cand) GS.streak++; else { GS.cand = g; GS.streak = 1; }
+  if (GS.streak < GT.enterFrames) return null;
+
+  const discrete = g === "fist" || g === "thumb" || g === "point" || g === "two";
+  const scroll = g === "scroll-up" || g === "scroll-down";
+
+  if (discrete) {
+    if (now - GS.lastFire < GT.cooldown) return null;
+    GS.lastFire = now;
+    return { type: "discrete", gesture: g };
+  }
+  if (scroll) {
+    if (now - GS.lastScroll < GT.scrollThrottle) return null;
+    GS.lastScroll = now;
+    return { type: "scroll", gesture: g };
+  }
+  return null;
+}
+
+/* ---------- 日志 / 面板 ---------- */
+function log(msg, cls) {
+  const t = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+  S.logs.unshift({ t, msg, cls: cls || "" });
+  if (S.logs.length > 60) S.logs.pop();
+  $("log").innerHTML = S.logs.map(l =>
+    `<div><span style="color:#5b6d87">${l.t}</span> <span class="${l.cls}">${l.msg}</span></div>`
+  ).join("");
+}
+function pill(el, on, text) {
+  el.classList.toggle("on", !!on);
+  el.classList.toggle("bad", on === false);
+  if (text) el.textContent = text;
+}
+function renderHand() {
+  const meta = G[S.raw] || G.none;
+  $("gIcon").textContent = meta.icon;
+  $("gName").textContent = meta.name;
+  $("gAct").textContent = meta.act;
+}
+
+/* ---------- 光标 ---------- */
+const cursorEl = $("cursor");
+function setCursor(x, y) {
+  S.cursor.x = clamp(x, 0, innerWidth);
+  S.cursor.y = clamp(y, 0, innerHeight);
+  cursorEl.style.left = S.cursor.x + "px";
+  cursorEl.style.top = S.cursor.y + "px";
+}
+
+/* ---------- WebGazer 眼动 ---------- */
+let gInit = false, gx = 0, gy = 0;
+let fpsT = performance.now(), fpsN = 0;
+
+setInterval(() => {
+  const now = performance.now();
+  const fps = Math.round((fpsN * 1000) / Math.max(1, now - fpsT));
+  $("pillFps").textContent = `眼动 ${fps} fps`;
+  fpsN = 0;
+  fpsT = now;
+}, 1000);
+
+function onGaze(data) {
+  if (!data) { pill($("pillEye"), false, "视线 · 丢失"); return; }
+  pill($("pillEye"), true, "视线 · OK");
+  S.gazeCount++;
+  fpsN++;
+
+  const rx = clamp(data.x, 0, innerWidth);
+  const ry = clamp(data.y, 0, innerHeight);
+
+  if (!gInit) { gx = rx; gy = ry; setCursor(rx, ry); gInit = true; }
+  gx += (rx - gx) * S.ema;
+  gy += (ry - gy) * S.ema;
+
+  let tx = gx, ty = gy, snapped = false;
+  if (S.magnet) {
+    let best = S.magnetR;
+    for (const b of buttons) {
+      if (b.el.style.display === "none") continue;
+      const d = Math.hypot(gx - b.cx, gy - b.cy);
+      if (d < best) { best = d; tx = b.cx; ty = b.cy; snapped = true; }
+    }
+  }
+  const follow = snapped ? 0.42 : 0.20;
+  setCursor(S.cursor.x + (tx - S.cursor.x) * follow, S.cursor.y + (ty - S.cursor.y) * follow);
+
+  // 眼动精度采样：用原始坐标，不做平滑
+  if (S.phase === "gaze-sample") S.samples.push({ x: data.x, y: data.y });
+}
+
+async function bootEye() {
+  if (typeof webgazer === "undefined") {
+    log("WebGazer 未加载，请检查 controller-demo/vendor/webgazer/webgazer.js", "er");
+    return false;
+  }
+  webgazer.setRegression("ridge");
+  webgazer.showPredictionPoints(false);
+  webgazer.showVideoPreview(false);
+  webgazer.showFaceOverlay(false);
+  webgazer.showFaceFeedbackBox(false);
+  webgazer.setGazeListener(onGaze);
+  try {
+    await webgazer.begin();
+  } catch (e) {
+    log("WebGazer 启动失败：" + (e && e.message || e), "er");
+    return false;
+  }
+  pill($("pillCam"), true, "摄像头 · 开");
+  cursorEl.classList.add("live");
+  handImg = webgazer.getVideoElementCanvas();
+  return true;
+}
+
+/* ---------- 手势识别 ---------- */
+let recognizer = null, handImg = null, lastDetect = 0, inFlight = false;
+
+async function bootHand() {
+  try {
+    const vision = await import("../draw/vendor/vision/vision_bundle.mjs");
+    const fileset = await vision.FilesetResolver.forVisionTasks("../draw/vendor/vision/wasm");
+    const opts = (delegate) => ({
+      baseOptions: { modelAssetPath: "../draw/models/gesture_recognizer.task", delegate },
+      runningMode: "VIDEO",
+      numHands: 1,
+    });
+    try {
+      recognizer = await vision.GestureRecognizer.createFromOptions(fileset, opts("GPU"));
+    } catch (e) {
+      log("GPU 初始化失败，回退 CPU：" + (e && e.message || e));
+      recognizer = await vision.GestureRecognizer.createFromOptions(fileset, opts("CPU"));
+    }
+    pill($("pillHand"), true, "手势 · 就绪");
+    requestAnimationFrame(handLoop);
+    return true;
+  } catch (e) {
+    log("手势模型加载失败：" + (e && e.message || e), "er");
+    pill($("pillHand"), false, "手势 · 失败");
+    return false;
+  }
+}
+
+function handLoop(now) {
+  requestAnimationFrame(handLoop);
+  if (!recognizer || !handImg || !handImg.width || inFlight) return;
+  if (now - lastDetect < 34) return;
+  lastDetect = now;
+  inFlight = true;
+
+  recognizer.recognizeForVideo(handImg, now).then(res => {
+    inFlight = false;
+    const lm = res && res.landmarks && res.landmarks[0];
+    S.lm = lm || null;
+    if (lm) {
+      S.lastHand = performance.now();
+      const c = classifyHand(lm);
+      S.raw = c.gesture;
+      S.feat = c.feat;
+      const ev = gsStep(c.gesture, performance.now());
+      if (ev) onGesture(ev);
+    } else {
+      S.raw = "none";
+      S.feat = null;
+      gsReset();
+    }
+    drawPreview(S.lm);
+    renderHand();
+  }).catch(err => {
+    inFlight = false;
+    log("识别出错：" + (err && err.message || err), "er");
+  });
+}
+
+function onGesture(ev) {
+  const g = ev.gesture;
+  const meta = G[g] || G.none;
+  if (ev.type === "scroll") {
+    log(`手势 ${meta.icon} ${meta.name} → 滚动 ${g === "scroll-up" ? "↑" : "↓"}`);
+    return;
+  }
+  log(`手势 ${meta.icon} ${meta.name} → <b>${meta.act}</b>`);
+  if (S.phase === "joint") judgeClick(g);
+}
+
+/* ---------- 摄像头预览 + 骨架（镜像） ---------- */
+const preview = $("preview");
+const pctx = preview.getContext("2d");
+
+function drawPreview(lm) {
+  if (!handImg || !handImg.width) return;
+  const W = preview.width, H = preview.height;
+  pctx.save();
+  pctx.translate(W, 0);
+  pctx.scale(-1, 1);
+  pctx.drawImage(handImg, 0, 0, W, H);
+  pctx.restore();
+
+  if (!lm) return;
+  const px = (i) => (1 - lm[i].x) * W;
+  const py = (i) => lm[i].y * H;
+
+  pctx.strokeStyle = "rgba(56,217,150,.85)";
+  pctx.lineWidth = 2;
+  for (const [a, b] of CONN) {
+    pctx.beginPath();
+    pctx.moveTo(px(a), py(a));
+    pctx.lineTo(px(b), py(b));
+    pctx.stroke();
+  }
+  for (let i = 0; i < lm.length; i++) {
+    const tip = FINGERS.some(f => f.tip === i);
+    pctx.fillStyle = tip ? "#ffd166" : "#4aa8ff";
+    pctx.beginPath();
+    pctx.arc(px(i), py(i), tip ? 4 : 2.5, 0, Math.PI * 2);
+    pctx.fill();
+  }
+}
+
+/* ---------- 9 点标定 ---------- */
+const CALIB = [
+  [0.10, 0.16], [0.50, 0.16], [0.90, 0.16],
+  [0.10, 0.50], [0.50, 0.50], [0.90, 0.50],
+  [0.10, 0.84], [0.50, 0.84], [0.90, 0.84],
+];
+let calibCount = 0;
+const calibEl = $("calib");
+
+function startCalib() {
+  if (!S.running) return;
+  calibCount = 0;
+  $("calibBar").textContent = "已标定 0 / 9";
+  calibEl.querySelectorAll(".cdot").forEach(n => n.remove());
+
+  CALIB.forEach((p, i) => {
+    const d = document.createElement("button");
+    d.className = "cdot";
+    d.textContent = String(i + 1);
+    d.style.left = (p[0] * 100) + "%";
+    d.style.top = (p[1] * 100) + "%";
+    d.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const r = d.getBoundingClientRect();
+      webgazer.recordScreenPosition(r.left + r.width / 2, r.top + r.height / 2, "click");
+      d.classList.add("done");
+      calibCount++;
+      $("calibBar").textContent = `已标定 ${calibCount} / 9`;
+      if (calibCount >= CALIB.length) finishCalib();
+    });
+    calibEl.appendChild(d);
+  });
+
+  calibEl.classList.add("show");
+  log("开始 9 点标定：每次点击时眼睛要看向圆点");
+}
+
+function finishCalib() {
+  S.calibDone = true;
+  $("btnGaze").disabled = false;
+  $("btnJoint").disabled = false;
+  $("stepHint").textContent = "标定完成。可先自由转动眼球看光标跟随，再运行量化测试。";
+  log("标定完成 ✓", "ok");
+  setTimeout(() => calibEl.classList.remove("show"), 500);
+}
+
+/* ---------- 目标点 ---------- */
+function safeRect() {
+  // 避开四周面板
+  return { x0: 300, y0: 110, x1: Math.max(360, innerWidth - 340), y1: Math.max(200, innerHeight - 60) };
+}
+function safePoint(pad) {
+  const r = safeRect();
+  const p = pad || 110;
+  return {
+    x: r.x0 + p + Math.random() * Math.max(1, (r.x1 - r.x0) - p * 2),
+    y: r.y0 + p + Math.random() * Math.max(1, (r.y1 - r.y0) - p * 2),
+  };
+}
+
+const targetEl = $("target");
+function showTarget(p) {
+  targetEl.style.display = "block";
+  targetEl.style.left = p.x + "px";
+  targetEl.style.top = p.y + "px";
+}
+function hideTarget() { targetEl.style.display = "none"; }
+
+/* ---------- 测试 1：眼动精度 ---------- */
+function startGazeTest() {
+  if (!S.calibDone) { log("请先完成标定", "er"); return; }
+  S.gaze = { idx: 0, total: 12, errs: [], hit: 0, empty: 0 };
+  $("btnGaze").disabled = true;
+  $("btnJoint").disabled = true;
+  buttons.forEach(b => { b.el.style.display = "none"; b.el.classList.remove("target", "ok", "bad"); });
+  log("开始眼动精度测试（12 个目标）");
+  nextGazeTarget();
+}
+
+function nextGazeTarget() {
+  if (S.gaze.idx >= S.gaze.total) { finishGazeTest(); return; }
+  const p = safePoint(120);
+  S.target = p;
+  S.gaze.idx++;
+  showTarget(p);
+  $("hint").textContent = `眼动测试 ${S.gaze.idx}/${S.gaze.total} —— 盯住蓝色圆点`;
+  S.phase = "gaze-settle";
+
+  setTimeout(() => {
+    if (S.phase !== "gaze-settle") return;
+    S.samples = [];
+    S.phase = "gaze-sample";
+  }, 400);
+
+  setTimeout(() => {
+    if (S.phase !== "gaze-sample") return;
+    S.phase = "gaze-gap";
+    evaluateGazePoint();
+  }, 400 + 1200);
+}
+
+function evaluateGazePoint() {
+  const s = S.samples || [];
+  hideTarget();
+  if (!s.length) {
+    S.gaze.empty++;
+    log(`目标 ${S.gaze.idx}：无视线样本（未检测到脸）`, "er");
+  } else {
+    const mx = s.reduce((a, b) => a + b.x, 0) / s.length;
+    const my = s.reduce((a, b) => a + b.y, 0) / s.length;
+    const d = Math.hypot(mx - S.target.x, my - S.target.y);
+    S.gaze.errs.push(d);
+    if (d < 70) S.gaze.hit++;
+    log(`目标 ${S.gaze.idx}：偏差 ${Math.round(d)}px ${d < 70 ? "✓" : ""}`, d < 70 ? "ok" : "");
+  }
+  renderResults();
+  setTimeout(nextGazeTarget, 350);
+}
+
+function finishGazeTest() {
+  S.phase = "idle";
+  $("btnGaze").disabled = false;
+  $("btnJoint").disabled = false;
+  buttons.forEach(b => { b.el.style.display = ""; });
+  const e = S.gaze.errs;
+  const avg = e.length ? e.reduce((a, b) => a + b, 0) / e.length : 0;
+  log(`眼动测试完成：平均偏差 ${Math.round(avg)}px，命中 ${S.gaze.hit}/${S.gaze.total}`, "ok");
+  $("hint").textContent = "眼动测试完成，可运行眼-手联合点击";
+  renderResults();
+}
+
+/* ---------- 四按钮 + 测试 2：眼-手联合点击 ---------- */
+const BTN_DEFS = [
+  { key: "fist", label: "确认", sub: "✊ 握拳", icon: "✊" },
+  { key: "thumb", label: "返回", sub: "👍 拇指朝上", icon: "👍" },
+  { key: "point", label: "主页", sub: "☝️ 食指", icon: "☝️" },
+  { key: "two", label: "菜单", sub: "✌️ 二指", icon: "✌️" },
+];
+const buttons = [];
+
+function buildButtons() {
+  BTN_DEFS.forEach((def) => {
+    const el = document.createElement("div");
+    el.className = "gbtn";
+    el.innerHTML = `<span class="ic">${def.icon}</span><span class="nm">${def.label}</span><span class="ac">${def.sub}</span>`;
+    document.body.appendChild(el);
+    buttons.push({ ...def, el, x: 0, y: 0, w: 190, h: 112, cx: 0, cy: 0 });
+  });
+  layoutButtons();
+}
+
+function layoutButtons() {
+  const W = innerWidth, H = innerHeight;
+  const gap = 22, bw = 190, bh = 112;
+  const totalW = bw * 2 + gap, totalH = bh * 2 + gap;
+  const x0 = Math.round(W / 2 - totalW / 2);
+  const y0 = Math.round(H / 2 - totalH / 2);
+  buttons.forEach((b, i) => {
+    b.x = x0 + (i % 2) * (bw + gap);
+    b.y = y0 + Math.floor(i / 2) * (bh + gap);
+    b.w = bw; b.h = bh;
+    b.cx = b.x + bw / 2;
+    b.cy = b.y + bh / 2;
+    b.el.style.left = b.x + "px";
+    b.el.style.top = b.y + "px";
+    b.el.style.width = bw + "px";
+    b.el.style.height = bh + "px";
+  });
+}
+
+function btnAt(x, y) {
+  for (const b of buttons) {
+    if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return b;
+  }
+  return null;
+}
+
+function startJointTest() {
+  if (!S.calibDone) { log("请先完成标定", "er"); return; }
+  S.joint = { round: 0, total: 10, ok: 0, bad: 0, timeout: 0, miss: 0, times: [], t0: 0, target: null };
+  $("btnGaze").disabled = true;
+  $("btnJoint").disabled = true;
+  buttons.forEach(b => { b.el.style.display = ""; b.el.classList.remove("target", "ok", "bad"); });
+  log("开始眼-手联合点击（10 轮）：看准高亮按钮 → 握拳确认");
+  nextJointRound();
+}
+
+function nextJointRound() {
+  if (S.joint.round >= S.joint.total) { finishJointTest(); return; }
+  buttons.forEach(b => b.el.classList.remove("target", "ok", "bad"));
+  const t = buttons[Math.floor(Math.random() * buttons.length)];
+  S.joint.round++;
+  S.joint.target = t;
+  t.el.classList.add("target");
+  S.joint.t0 = performance.now();
+  S.phase = "joint";
+  $("hint").textContent = `联合测试 ${S.joint.round}/${S.joint.total} —— 看向「${t.label}」并握拳`;
+
+  clearTimeout(S.joint.timer);
+  S.joint.timer = setTimeout(() => {
+    if (S.phase !== "joint") return;
+    S.joint.timeout++;
+    log(`第 ${S.joint.round} 轮超时（15s）`, "er");
+    finishJointRound();
+  }, 15000);
+}
+
+function judgeClick(g) {
+  if (g !== "fist") {
+    log(`（${G[g] ? G[g].name : g} 不是确认手势，忽略）`);
+    return;
+  }
+  const b = btnAt(S.cursor.x, S.cursor.y);
+  const now = performance.now();
+  if (!b) {
+    S.joint.miss++;
+    log(`  空点：光标不在按钮上 (${Math.round(S.cursor.x)},${Math.round(S.cursor.y)})`, "er");
+    return;
+  }
+  if (b === S.joint.target) {
+    S.joint.ok++;
+    S.joint.times.push(now - S.joint.t0);
+    b.el.classList.add("ok");
+    b.el.classList.remove("target");
+    log(`  ✓ 命中「${b.label}」 ${Math.round(now - S.joint.t0)}ms`, "ok");
+    finishJointRound();
+  } else {
+    S.joint.bad++;
+    b.el.classList.add("bad");
+    log(`  ✗ 误点「${b.label}」（目标「${S.joint.target.label}」）`, "er");
+    // 误点不结束本轮，允许重试
+  }
+  renderResults();
+}
+
+function finishJointRound() {
+  clearTimeout(S.joint.timer);
+  S.phase = "joint-gap";
+  renderResults();
+  setTimeout(nextJointRound, 800);
+}
+
+function finishJointTest() {
+  S.phase = "idle";
+  $("btnGaze").disabled = false;
+  $("btnJoint").disabled = false;
+  buttons.forEach(b => b.el.classList.remove("target", "ok", "bad"));
+  log(`联合测试完成：命中 ${S.joint.ok}/${S.joint.total}，误点 ${S.joint.bad}，超时 ${S.joint.timeout}`, "ok");
+  $("hint").textContent = "联合测试完成";
+  renderResults();
+}
+
+/* ---------- 结果渲染 ---------- */
+function p90(arr) {
+  if (!arr.length) return 0;
+  const s = [...arr].sort((a, b) => a - b);
+  return s[Math.min(s.length - 1, Math.floor(s.length * 0.9))];
+}
+
+function renderResults() {
+  const g = S.gaze, j = S.joint;
+  const avg = g.errs.length ? g.errs.reduce((a, b) => a + b, 0) / g.errs.length : 0;
+  const hitRate = g.total ? Math.round((g.hit / g.total) * 100) : 0;
+  const jAvg = j.times.length ? j.times.reduce((a, b) => a + b, 0) / j.times.length : 0;
+
+  $("res").innerHTML = `
+    <div style="color:#7d8ea8;font-size:11px;margin-bottom:2px">眼动精度（${g.idx}/${g.total} 点）</div>
+    <table>
+      <tr><td>平均偏差</td><td>${g.errs.length ? Math.round(avg) + " px" : "—"}</td></tr>
+      <tr><td>P90 偏差</td><td>${g.errs.length ? Math.round(p90(g.errs)) + " px" : "—"}</td></tr>
+      <tr><td>命中率（&lt;70px）</td><td>${g.errs.length ? hitRate + " %" : "—"}</td></tr>
+      <tr><td>无样本点</td><td>${g.empty}</td></tr>
+    </table>
+    <div style="color:#7d8ea8;font-size:11px;margin:10px 0 2px">眼-手联合（${j.round}/${j.total} 轮）</div>
+    <table>
+      <tr><td>命中</td><td>${j.ok}</td></tr>
+      <tr><td>误点</td><td>${j.bad}</td></tr>
+      <tr><td>空点</td><td>${j.miss}</td></tr>
+      <tr><td>超时</td><td>${j.timeout}</td></tr>
+      <tr><td>平均耗时</td><td>${j.times.length ? Math.round(jAvg) + " ms" : "—"}</td></tr>
+    </table>
+    <div class="note">眼动误差 ≈ 70px 以内可视为“能指向”；联合命中率 ≥ 80% 说明“看+确认”可用。</div>
+  `;
+}
+
+/* ---------- 启动 ---------- */
+async function boot() {
+  $("btnBoot").disabled = true;
+  log("正在启动摄像头与模型…");
+  const okEye = await bootEye();
+  if (!okEye) {
+    $("btnBoot").disabled = false;
+    return;
+  }
+  log("摄像头就绪，正在加载手势模型…");
+  const okHand = await bootHand();
+  S.running = true;
+  $("btnCalib").disabled = false;
+  $("stepHint").textContent = okHand
+    ? "已就绪：先做 9 点标定。"
+    : "眼动已就绪，但手势模型加载失败（仍可测眼动精度）。";
+  log(okHand ? "全部就绪 ✓" : "手势不可用，仅眼动", okHand ? "ok" : "er");
+  if (!okHand) {
+    $("btnGaze").disabled = false;
+  }
+  $("hint").textContent = "眼动控光标 · 手势发命令";
+}
+
+/* ---------- 事件绑定 ---------- */
+$("btnBoot").addEventListener("click", boot);
+$("btnCalib").addEventListener("click", startCalib);
+$("btnGaze").addEventListener("click", startGazeTest);
+$("btnJoint").addEventListener("click", startJointTest);
+$("calibClose").addEventListener("click", () => calibEl.classList.remove("show"));
+$("btnClearLog").addEventListener("click", () => { S.logs = []; $("log").innerHTML = ""; });
+
+$("optMagnet").addEventListener("change", (e) => { S.magnet = e.target.checked; });
+$("optEma").addEventListener("input", (e) => { S.ema = parseFloat(e.target.value) / 100; });
+
+$("btnExport").addEventListener("click", () => {
+  const data = {
+    ts: new Date().toISOString(),
+    gt: GT,
+    gaze: { total: S.gaze.total, idx: S.gaze.idx, errs: S.gaze.errs, hit: S.gaze.hit, empty: S.gaze.empty },
+    joint: { total: S.joint.total, ok: S.joint.ok, bad: S.joint.bad, miss: S.joint.miss, timeout: S.joint.timeout, times: S.joint.times },
+    logs: S.logs.slice(0, 100),
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "dual-control-test.json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  log("已导出结果 JSON");
+});
+
+window.addEventListener("resize", () => { layoutButtons(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") calibEl.classList.remove("show");
+  // 调试：按 1-4 模拟手势，方便无摄像头时验证流程
+  const map = { "1": "fist", "2": "thumb", "3": "point", "4": "two" };
+  if (map[e.key] && e.altKey) { onGesture({ type: "discrete", gesture: map[e.key] }); }
+});
+
+/* ---------- 启动时构建 ---------- */
+buildButtons();
+renderResults();
+log("页面就绪。点击右上「启动摄像头 + 模型」。");
+</script>
+</body>
+</html>

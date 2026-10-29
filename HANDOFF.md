@@ -153,12 +153,13 @@
 | 服务 | 端口 | 命令 | 说明 |
 |---|---|---|---|
 | 本地调试 HTTP | 8125 | `python3 -m http.server 8125` | 仅 127.0.0.1 |
-| 内网 HTTPS | 8443 | `python3 .deepworks/tmp/ssl/https_server.py` | 白名单 `controller-demo`、`outputs`，根路径 302 → 主页面 |
+| 内网 HTTPS | 8443 | `python3 .deepworks/tmp/ssl/https_server.py` | 白名单 `controller-demo`、`outputs`、`gesture-test`、`dual-test`、`draw`，根路径 302 → 主页面 |
 
 ### 访问地址
 
 - 本机调试：`http://127.0.0.1:8125/controller-demo/index.html`
 - 主控制器：`https://10.11.0.216:8443/controller-demo/index.html`
+- 眼动+手势测试台：`https://10.11.0.216:8443/dual-test/index.html`
 - 手势测试台：`https://10.11.0.216:8443/gesture-test/index.html`
 - 隔空画板：`https://10.11.0.216:8443/draw/index.html`
 - 协作者信任证书：`https://10.11.0.216:8443/ca.crt`
