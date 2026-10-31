@@ -63,9 +63,6 @@
   h1{margin:0 0 8px;font-size:14px;font-weight:700;letter-spacing:.3px;}
   .sub{font-size:11px;color:var(--dim);}
 
-  /* 页面独占的摄像头源：留在视口内、完全透明（display:none 会让 video 停止解码） */
-  #cam{position:fixed;left:0;top:0;width:320px;height:240px;opacity:0;
-    pointer-events:none;z-index:0;object-fit:cover;}
   .gnow{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;}
   .gnow .ic{font-size:22px;}
   .gnow .nm{font-weight:600;}
@@ -139,7 +136,6 @@
 
 <!-- 左上：摄像头 + 当前手势 -->
 <div class="panel" id="pCam">
-  <video id="cam" playsinline muted autoplay></video>
   <div class="gnow">
     <span class="ic" id="gIcon">·</span>
     <span class="nm" id="gName">未检测</span>
@@ -163,7 +159,7 @@
     <button class="primary" id="btnBoot">启动摄像头 + 模型</button>
   </div>
 
-  <div class="lbl">第二步 · 标定（9 点）</div>
+  <div class="lbl">第二步 · 标定（13 点）</div>
   <div class="row">
     <button id="btnCalib" disabled>开始标定</button>
   </div>
@@ -185,7 +181,7 @@
   </div>
 
   <div class="lbl">操作提示</div>
-  <div class="sub" id="stepHint">启动后先做 9 点标定；标定越认真，光标越准。</div>
+  <div class="sub" id="stepHint">启动后先做 13 点标定；标定越认真，光标越准。</div>
 
   <div class="row" style="margin-top:10px">
     <button class="ghost" id="btnExport">导出结果 JSON</button>
@@ -211,11 +207,11 @@
 <div id="calib">
   <button class="ghost" id="calibClose">关闭</button>
   <div class="tips" id="calibTips">
-    <b>9 点标定</b><br>
-    依次点击 9 个圆点，<b>点击时眼睛正看向圆点中心</b><br>
+    <b>13 点标定</b><br>
+    依次点击 13 个圆点，<b>点击后眼睛继续盯住圆点约 0.7 秒</b>，等它打勾再移开<br>
     不要只动鼠标、眼睛看别处
   </div>
-  <div id="calibBar">已标定 0 / 9</div>
+  <div id="calibBar">已标定 0 / 13</div>
 </div>
 
 <script type="module">
@@ -402,40 +398,15 @@ function onGaze(data) {
   if (S.phase === "gaze-sample") S.samples.push({ x: data.x, y: data.y });
 }
 
-/* ---------- 摄像头：页面独占一条流，WebGazer 复用同一条 ---------- */
-let camStream = null;
-const camVideo = $("cam");
-
-async function startCamera() {
-  if (camStream) return true;
-  try {
-    camStream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
-      audio: false,
-    });
-  } catch (e) {
-    log("摄像头不可用：" + (e && e.name || "Error") + ": " + (e && e.message || e), "er");
-    pill($("pillCam"), false, "摄像头 · 失败");
-    return false;
-  }
-  camVideo.srcObject = camStream;
-  try { await camVideo.play(); } catch (e) { /* 静音视频通常可自动播放 */ }
-  for (let i = 0; i < 40 && !camVideo.videoWidth; i++) {
+/* ---------- 摄像头：由 WebGazer 自己开流（单流单 video，不再复用同一条流） ---------- */
+async function waitVideoReady(vf, timeoutMs = 3000) {
+  const t0 = performance.now();
+  // readyState >= 2 (HAVE_CURRENT_DATA) 才有可绘制帧；只等 videoWidth 会在首帧
+  // 还没渲染出来时就误判为黑帧（drawImage 画出透明黑）。
+  while (vf && !(vf.videoWidth && vf.readyState >= 2)) {
+    if (performance.now() - t0 > timeoutMs) break;
     await new Promise(r => setTimeout(r, 50));
   }
-  if (!camVideo.videoWidth) {
-    log("摄像头已授权但没有画面（videoWidth 为 0），检查设备是否被占用", "er");
-    pill($("pillCam"), false, "摄像头 · 无画面");
-    return false;
-  }
-  if (isBlackFrame(camVideo)) {
-    log(`摄像头返回黑帧 ${camVideo.videoWidth}×${camVideo.videoHeight}：被其他应用占用或权限异常`, "er");
-    pill($("pillCam"), false, "摄像头 · 黑帧");
-    return false;
-  }
-  log(`摄像头就绪 ${camVideo.videoWidth}×${camVideo.videoHeight}`, "ok");
-  pill($("pillCam"), true, `摄像头 · ${camVideo.videoWidth}×${camVideo.videoHeight}`);
-  return true;
 }
 
 async function bootEye() {
@@ -452,27 +423,53 @@ async function bootEye() {
   webgazer.showFaceFeedbackBox(false);
   webgazer.setGazeListener(onGaze);
 
-  // 关键：让 WebGazer 复用页面已拿到的同一条流。
-  // 自己再开一次摄像头在 macOS 上经常拿到黑帧，且会与页面流争抢设备。
-  const realGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-  navigator.mediaDevices.getUserMedia = () => Promise.resolve(camStream);
+  // 让 WebGazer 自己以 720p 开流。不要页面预先 getUserMedia 再复用同一条流：
+  // 一条 MediaStream 被多个 <video>（#cam + #webgazerVideoFeed + tf.data.webcam）同时消费，
+  // Chrome 会静默卡住预测循环（onGaze 永不触发 → 视线灯灰、眼动 0 fps）。
+  webgazer.params.camConstraints = {
+    video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
+    audio: false,
+  };
   try {
     await webgazer.begin();
   } catch (e) {
     log("WebGazer 启动失败：" + (e && e.message || e), "er");
+    pill($("pillCam"), false, "摄像头 · 失败");
     return false;
-  } finally {
-    navigator.mediaDevices.getUserMedia = realGUM;
   }
   cursorEl.classList.add("live");
 
-  // 诊断：确认 WebGazer 自己的 video 拿到了同一条流的画面
+  // WebGazer 内部 video：轮询等它真正出帧，再做黑帧校验，并交给手势识别
+  const vf = document.getElementById("webgazerVideoFeed");
+  handImg = vf;                 // MediaPipe 直接读 WebGazer 的 <video>（不是 canvas）
+  await waitVideoReady(vf);
+  if (!vf || !vf.videoWidth) {
+    log("WebGazer 未拿到视频画面，眼动不可用", "er");
+    pill($("pillCam"), false, "摄像头 · 无画面");
+    return false;
+  }
+  // 首帧可能仍未渲染完，多采样几次再判黑帧，避免时序误判（只对真黑帧报警）
+  let black = true;
+  for (let i = 0; i < 3; i++) {
+    if (!isBlackFrame(vf)) { black = false; break; }
+    await new Promise(r => setTimeout(r, 200));
+  }
+  if (black) {
+    log(`摄像头返回黑帧 ${vf.videoWidth}×${vf.videoHeight}：被其他应用占用或权限异常`, "er");
+    pill($("pillCam"), false, "摄像头 · 黑帧");
+    return false;
+  }
+  log(`摄像头就绪 ${vf.videoWidth}×${vf.videoHeight}`, "ok");
+  pill($("pillCam"), true, `摄像头 · ${vf.videoWidth}×${vf.videoHeight}`);
+
+  // 兜底诊断：begin() 后 3 秒若仍无任何视线输出，提示预测循环可能未启动
+  const gc0 = S.gazeCount;
   setTimeout(() => {
-    const vf = document.getElementById("webgazerVideoFeed");
-    const vw = vf ? (vf.videoWidth || 0) : 0;
-    log(`webgazer video ${vw}×${vf ? vf.videoHeight : 0} paused=${vf ? vf.paused : "-"}`);
-    if (!vw) log("WebGazer 未拿到视频画面，眼动不可用", "er");
-  }, 1500);
+    if (S.gazeCount === gc0) {
+      log("3 秒内没有任何视线输出：WebGazer 预测循环可能未启动", "er");
+      pill($("pillEye"), false, "视线 · 丢失");
+    }
+  }, 3000);
 
   return true;
 }
@@ -498,7 +495,7 @@ function isBlackFrame(el) {
 }
 
 /* ---------- 手势识别 ---------- */
-let recognizer = null, handImg = null, lastDetect = 0, inFlight = false;
+let recognizer = null, handImg = null, lastDetect = 0;
 
 async function bootHand() {
   try {
@@ -518,8 +515,7 @@ async function bootHand() {
       log("GPU 初始化失败，回退 CPU：" + (e && e.message || e));
       recognizer = await vision.GestureRecognizer.createFromOptions(fileset, opts("CPU"));
     }
-    // 直接用手势测试页同样的输入源：页面自己的 <video>
-    handImg = camVideo;
+    // handImg 已在 bootEye 里设为 WebGazer 的 <video>（#webgazerVideoFeed）
     pill($("pillHand"), true, "手势 · 就绪");
     requestAnimationFrame(handLoop);
     return true;
@@ -535,35 +531,33 @@ function srcH() { return handImg ? (handImg.videoHeight || handImg.height || 0) 
 
 function handLoop(now) {
   requestAnimationFrame(handLoop);
-  if (!recognizer || !handImg || !srcW() || inFlight) return;
+  if (!recognizer || !handImg || !srcW()) return;
   if (now - lastDetect < 34) return;
   lastDetect = now;
-  inFlight = true;
-  const guard = setTimeout(() => { inFlight = false; }, 2000);
 
-  recognizer.recognizeForVideo(handImg, now).then(res => {
-    clearTimeout(guard);
-    inFlight = false;
-    const lm = res && res.landmarks && res.landmarks[0];
-    S.lm = lm || null;
-    if (lm) {
-      S.lastHand = performance.now();
-      const c = classifyHand(lm);
-      S.raw = c.gesture;
-      S.feat = c.feat;
-      const ev = gsStep(c.gesture, performance.now());
-      if (ev) onGesture(ev);
-    } else {
-      S.raw = "none";
-      S.feat = null;
-      gsReset();
-    }
-    renderHand();
-  }).catch(err => {
-    clearTimeout(guard);
-    inFlight = false;
-    log("识别出错：" + (err && err.message || err), "er");
-  });
+  // recognizeForVideo 是同步 API（与 gesture-test / draw 一致），不能用 .then()
+  let res;
+  try {
+    res = recognizer.recognizeForVideo(handImg, now);
+  } catch (e) {
+    log("识别出错：" + (e && e.message || e), "er");
+    return;
+  }
+  const lm = res && res.landmarks && res.landmarks[0];
+  S.lm = lm || null;
+  if (lm) {
+    S.lastHand = performance.now();
+    const c = classifyHand(lm);
+    S.raw = c.gesture;
+    S.feat = c.feat;
+    const ev = gsStep(c.gesture, performance.now());
+    if (ev) onGesture(ev);
+  } else {
+    S.raw = "none";
+    S.feat = null;
+    gsReset();
+  }
+  renderHand();
 }
 
 function onGesture(ev) {
@@ -577,11 +571,13 @@ function onGesture(ev) {
   if (S.phase === "joint") judgeClick(g);
 }
 
-/* ---------- 9 点标定 ---------- */
+/* ---------- 13 点标定 ---------- */
 const CALIB = [
-  [0.10, 0.16], [0.50, 0.16], [0.90, 0.16],
+  [0.10, 0.12], [0.50, 0.12], [0.90, 0.12],
+  [0.10, 0.31],              [0.90, 0.31],
   [0.10, 0.50], [0.50, 0.50], [0.90, 0.50],
-  [0.10, 0.84], [0.50, 0.84], [0.90, 0.84],
+  [0.10, 0.69],              [0.90, 0.69],
+  [0.10, 0.88], [0.50, 0.88], [0.90, 0.88],
 ];
 let calibCount = 0;
 const calibEl = $("calib");
@@ -589,7 +585,7 @@ const calibEl = $("calib");
 function startCalib() {
   if (!S.running) return;
   calibCount = 0;
-  $("calibBar").textContent = "已标定 0 / 9";
+  $("calibBar").textContent = `已标定 0 / ${CALIB.length}`;
   calibEl.querySelectorAll(".cdot").forEach(n => n.remove());
 
   CALIB.forEach((p, i) => {
@@ -601,17 +597,23 @@ function startCalib() {
     d.addEventListener("click", (ev) => {
       ev.stopPropagation();
       const r = d.getBoundingClientRect();
-      webgazer.recordScreenPosition(r.left + r.width / 2, r.top + r.height / 2, "click");
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
       d.classList.add("done");
       calibCount++;
-      $("calibBar").textContent = `已标定 ${calibCount} / 9`;
-      if (calibCount >= CALIB.length) finishCalib();
+      $("calibBar").textContent = `已标定 ${calibCount} / ${CALIB.length}`;
+      // 点击后延迟 300ms 等眼球稳定注视圆点，再连采 3 个等权样本（间隔 200ms）。
+      // 用 ridge（等权回归）：每点 3 样本等权叠加，回归更稳；不用 weightedRidge，
+      // 它按采集时间加权（最新样本权重 1），会和多采样冲突、让最后几个点主导回归。
+      [300, 500, 700].forEach(delay => {
+        setTimeout(() => webgazer.recordScreenPosition(cx, cy, "click"), delay);
+      });
+      if (calibCount >= CALIB.length) setTimeout(finishCalib, 800);
     });
     calibEl.appendChild(d);
   });
 
   calibEl.classList.add("show");
-  log("开始 9 点标定：每次点击时眼睛要看向圆点");
+  log(`开始 ${CALIB.length} 点标定：点击后眼睛继续盯住圆点约 0.7 秒，等它打勾再移开`);
 }
 
 function finishCalib() {
@@ -865,26 +867,21 @@ function renderResults() {
 /* ---------- 启动 ---------- */
 async function boot() {
   $("btnBoot").disabled = true;
-  log("正在打开摄像头…");
-  if (!await startCamera()) {
+  log("正在启动眼动（WebGazer 开摄像头）…");
+  const okEye = await bootEye();
+  if (!okEye) {
     $("btnBoot").disabled = false;
-    $("hint").textContent = "摄像头不可用：请检查权限与占用";
+    $("hint").textContent = "摄像头/眼动不可用：请检查权限与占用";
+    $("stepHint").textContent = "眼动启动失败（摄像头未就绪）。";
     return;
   }
   log("正在加载手势模型…");
   const okHand = await bootHand();
-  log("正在启动眼动…");
-  const okEye = await bootEye();
-  if (!okEye) {
-    $("btnBoot").disabled = false;
-    $("stepHint").textContent = okHand ? "手势可用，但眼动启动失败。" : "摄像头/模型启动失败。";
-    return;
-  }
   S.running = true;
   $("btnCalib").disabled = false;
   $("btnGaze").disabled = false;
   $("stepHint").textContent = okHand
-    ? "已就绪：先做 9 点标定。"
+    ? "已就绪：先做 13 点标定。"
     : "眼动已就绪，但手势模型加载失败（仍可测眼动精度）。";
   log(okHand ? "全部就绪 ✓" : "手势不可用，仅眼动", okHand ? "ok" : "er");
   $("hint").textContent = "眼动控光标 · 手势发命令";
