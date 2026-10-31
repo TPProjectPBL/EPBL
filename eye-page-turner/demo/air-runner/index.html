@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>星际跑酷 · 眼动 + 手势</title>
+<link rel="stylesheet" href="ui.css" />
+</head>
+<body>
+
+<!-- ============ 全局层 ============ -->
+<div class="bg-glow"></div>
+
+<header class="chipbar">
+  <div class="brand">星际跑酷 <span>AIR RUNNER</span></div>
+  <div class="chips">
+    <span class="chip" id="chipMode">模式：--</span>
+    <span class="chip" id="chipCam">摄像头：未启动</span>
+    <span class="chip" id="chipInput">输入：--</span>
+    <span class="chip" id="chipFps">FPS：--</span>
+  </div>
+</header>
+
+<!-- 摄像头预览（全局，避免切屏时 video 被 display:none 打断取流） -->
+<div class="cam-preview" id="camPreview">
+  <video id="video" playsinline autoplay muted></video>
+  <div class="cam-overlay">
+    <div class="face-guide"></div>
+    <div class="box" id="boxFace"></div>
+    <div class="box hand" id="boxHand"></div>
+  </div>
+  <span class="cam-label" id="camLabel">摄像头预览</span>
+</div>
+
+<!-- 视线/指尖光标 -->
+<div class="cursor" id="cursor"></div>
+<div class="toast" id="toast"></div>
+
+<!-- ============ 1. 首屏 ============ -->
+<section class="screen" data-screen="splash">
+  <div class="hero">
+    <div class="badge">眼动 + 手势 · 双模态</div>
+    <h1>星际跑酷<span>AIR RUNNER</span></h1>
+    <p class="tagline">眼睛变道，挥手起跳 —— 不用手柄，也不用触屏</p>
+    <div class="actions">
+      <button class="btn primary xl" data-dwell data-action="to-mode">开始游戏</button>
+      <button class="btn" data-dwell data-action="to-help">玩法说明</button>
+      <button class="btn" data-dwell data-action="to-settings">设置</button>
+    </div>
+    <ul class="quick">
+      <li><b>👀</b><span>看左 / 中 / 右<br />切换车道</span></li>
+      <li><b>✋</b><span>向上挥手<br />起跳</span></li>
+      <li><b>👇</b><span>向下挥手<br />滑铲</span></li>
+      <li><b>✊</b><span>握拳<br />开护盾</span></li>
+    </ul>
+    <p class="foot">建议 Chrome / Edge · 距离镜头 0.6–1.0 m · 光线充足 · 按钮可用视线停留点击</p>
+  </div>
+</section>
+
+<!-- ============ 2. 模式选择 ============ -->
+<section class="screen" data-screen="mode">
+  <div class="screen-head">
+    <button class="btn ghost" data-dwell data-action="back">← 返回</button>
+    <h2>选择操作模式</h2>
+    <p>四个通道可随时切换；现场若摄像头不可用，会自动落到「鼠标兜底」</p>
+  </div>
+  <div class="cards">
+    <button class="card" data-dwell data-action="pick-mode" data-mode="dual">
+      <span class="tag rec">推荐</span>
+      <h3>双模态</h3>
+      <p class="desc">眼动负责变道，手势负责跳跃 / 滑铲 / 护盾</p>
+      <ul class="kv"><li>眼动 → 变道</li><li>挥手 → 跳 / 滑</li><li>握拳 → 护盾</li></ul>
+    </button>
+    <button class="card" data-dwell data-action="pick-mode" data-mode="gaze">
+      <span class="tag">纯眼动</span>
+      <h3>只用眼睛</h3>
+      <p class="desc">变道全靠视线；跳跃与滑铲用键盘 / 屏幕按钮</p>
+      <ul class="kv"><li>眼动 → 变道</li><li>键盘 → 跳 / 滑</li></ul>
+    </button>
+    <button class="card" data-dwell data-action="pick-mode" data-mode="hand">
+      <span class="tag">纯手势</span>
+      <h3>只手不眨眼</h3>
+      <p class="desc">左右挥手变道，上下挥手跳 / 滑，握拳护盾</p>
+      <ul class="kv"><li>左右挥 → 变道</li><li>上下挥 → 跳 / 滑</li><li>握拳 → 护盾</li></ul>
+    </button>
+    <button class="card" data-dwell data-action="pick-mode" data-mode="mouse">
+      <span class="tag">兜底</span>
+      <h3>鼠标 / 键盘</h3>
+      <p class="desc">没有摄像头也能完整走完流程，适合联调与彩排</p>
+      <ul class="kv"><li>← → → 变道</li><li>↑ / 空格 → 跳</li><li>↓ → 滑铲</li></ul>
+    </button>
+  </div>
+  <p class="hintline" id="modeHint">提示：双模态是本项目的目标形态。</p>
+</section>
+
+<!-- ============ 3. 就位检测 ============ -->
+<section class="screen" data-screen="calib">
+  <div class="calib">
+    <div class="calib-info">
+      <h2>就位检测</h2>
+      <p class="sub">三项都通过就可以开始；检测到问题会给出具体提示</p>
+      <ul class="checklist">
+        <li id="chkFace"><i></i><span class="k">人脸</span><span class="v">检测中…</span></li>
+        <li id="chkHand"><i></i><span class="k">手部</span><span class="v">检测中…</span></li>
+        <li id="chkDist"><i></i><span class="k">距离</span><span class="v">检测中…</span></li>
+        <li id="chkLight"><i></i><span class="k">画面</span><span class="v">检测中…</span></li>
+      </ul>
+      <div class="bar"><i id="calibBar"></i></div>
+      <p class="tip" id="calibTip">请正对镜头，把脸放在取景框内，双手举到画面可见范围。</p>
+      <div class="actions">
+        <button class="btn primary" id="btnCalibGo" data-dwell data-action="calib-done">继续</button>
+        <button class="btn" data-dwell data-action="calib-skip">跳过检测</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 4. 教学 ============ -->
+<section class="screen" data-screen="tutorial">
+  <div class="screen-head">
+    <h2>三步上手 <small>完成下面四项即可发车，约 10 秒</small></h2>
+    <p id="tutorialHint">跟着做一遍，四项都打勾就进赛道。</p>
+  </div>
+  <div class="steps">
+    <div class="step" data-step="lane">
+      <div class="step-icon">👀</div>
+      <h3>看向左边，再看右边</h3>
+      <p>视线落到画面左 / 右区域，停一下就会变道</p>
+      <div class="step-live"><span class="dot"></span><em id="liveLane">等待视线…</em></div>
+      <div class="done">✓ 已完成</div>
+    </div>
+    <div class="step" data-step="jump">
+      <div class="step-icon">✋</div>
+      <h3>手掌向上挥一下</h3>
+      <p>手从下往上挥过，角色起跳越过低栏</p>
+      <div class="step-live"><span class="dot"></span><em id="liveJump">等待挥手…</em></div>
+      <div class="done">✓ 已完成</div>
+    </div>
+    <div class="step" data-step="slide">
+      <div class="step-icon">👇</div>
+      <h3>手掌向下挥一下</h3>
+      <p>手从上往下挥过，角色滑铲穿过横杆</p>
+      <div class="step-live"><span class="dot"></span><em id="liveSlide">等待挥手…</em></div>
+      <div class="done">✓ 已完成</div>
+    </div>
+    <div class="step" data-step="shield">
+      <div class="step-icon">✊</div>
+      <h3>握拳保持一下</h3>
+      <p>握拳展开护盾，能硬吃一次撞击</p>
+      <div class="step-live"><span class="dot"></span><em id="liveShield">等待握拳…</em></div>
+      <div class="done">✓ 已完成</div>
+    </div>
+  </div>
+  <div class="actions center">
+    <button class="btn primary" id="btnTutorialGo" data-dwell data-action="tutorial-done" disabled>进入赛道</button>
+    <button class="btn" data-dwell data-action="tutorial-skip">跳过教学</button>
+  </div>
+</section>
+
+<!-- ============ 5. 设置 ============ -->
+<section class="screen" data-screen="settings">
+  <div class="screen-head">
+    <button class="btn ghost" data-dwell data-action="back">← 返回</button>
+    <h2>设置</h2>
+    <p>本局时长、难度、眼动与手势灵敏度；设置会记住</p>
+  </div>
+  <div class="settings">
+    <div class="row" data-setting="duration">
+      <span class="k">本局时长</span>
+      <div class="seg">
+        <button data-dwell data-action="set" data-value="45">45 秒</button>
+        <button data-dwell data-action="set" data-value="60">60 秒</button>
+        <button data-dwell data-action="set" data-value="90">90 秒</button>
+        <button data-dwell data-action="set" data-value="0">不限时</button>
+      </div>
+    </div>
+    <div class="row" data-setting="difficulty">
+      <span class="k">难度</span>
+      <div class="seg">
+        <button data-dwell data-action="set" data-value="easy">休闲</button>
+        <button data-dwell data-action="set" data-value="normal">标准</button>
+        <button data-dwell data-action="set" data-value="hard">硬核</button>
+      </div>
+    </div>
+    <div class="row" data-setting="gaze">
+      <span class="k">眼动变道灵敏度</span>
+      <div class="seg">
+        <button data-dwell data-action="set" data-value="fast">快 200ms</button>
+        <button data-dwell data-action="set" data-value="normal">标准 350ms</button>
+        <button data-dwell data-action="set" data-value="stable">稳 500ms</button>
+      </div>
+    </div>
+    <div class="row" data-setting="sensitivity">
+      <span class="k">手势灵敏度</span>
+      <div class="seg">
+        <button data-dwell data-action="set" data-value="low">低</button>
+        <button data-dwell data-action="set" data-value="normal">中</button>
+        <button data-dwell data-action="set" data-value="high">高</button>
+      </div>
+    </div>
+    <div class="row" data-setting="dwellNav">
+      <span class="k">视线点击按钮</span>
+      <div class="seg">
+        <button data-dwell data-action="set" data-value="on">开启</button>
+        <button data-dwell data-action="set" data-value="off">关闭</button>
+      </div>
+    </div>
+    <div class="row" data-setting="gazeAbs">
+      <span class="k">精确注视（9 点标定）</span>
+      <div class="seg">
+        <button data-dwell data-action="set" data-value="on">开启</button>
+        <button data-dwell data-action="set" data-value="off">关闭</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="k">标定状态</span>
+      <div class="seg wrap">
+        <button class="btn small" data-dwell data-action="gaze-calib">重新标定</button>
+        <button class="btn small" data-dwell data-action="gaze-calib-clear">清除标定</button>
+      </div>
+    </div>
+    <p class="sub" id="gazeCalibStatus">未标定 · 当前用「相对方向」代理注视（粗）</p>
+    <div class="row" data-setting="sound">
+      <span class="k">音效</span>
+      <div class="seg">
+        <button data-dwell data-action="set" data-value="on">开</button>
+        <button data-dwell data-action="set" data-value="off">关</button>
+      </div>
+    </div>
+  </div>
+  <div class="actions center">
+    <button class="btn primary" data-dwell data-action="back">回到上一页</button>
+    <button class="btn" data-dwell data-action="reset-best">清除最高分</button>
+  </div>
+</section>
+
+<!-- ============ 5b. 9 点精确注视标定 ============ -->
+
+<section class="screen screen-plain" data-screen="gazeCalib">
+  <div class="gc-wrap">
+    <div class="gc-head">
+      <h2>精确注视标定</h2>
+      <span class="gc-badge" id="gcBadge">1 / 9</span>
+    </div>
+    <p class="gc-tip" id="gcTip">盯住亮起的圆点：只动眼睛，不要转头；共 9 个点，约 20 秒</p>
+    <div class="gaze-field" id="gazeField"></div>
+    <p class="gc-status" id="gcStatus">准备中…</p>
+    <div class="gc-foot">
+      <button class="btn" data-action="gaze-calib-redo">重做</button>
+      <button class="btn" data-action="gaze-calib-export">复制诊断数据</button>
+      <button class="btn" data-action="gaze-calib-cancel">取消</button>
+      <button class="btn primary" id="gcApply" data-dwell data-action="gaze-calib-apply" disabled>应用并返回</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 6. 倒数 ============ -->
+<section class="screen screen-plain" data-screen="countdown">
+  <div class="countdown">
+    <div class="count" id="countNum">3</div>
+    <p id="countTip">握拳开护盾 · 眼睛看向要去的车道</p>
+  </div>
+</section>
+
+<!-- ============ 7. 游戏 ============ -->
+<section class="screen screen-plain" data-screen="game">
+  <canvas id="gameCanvas"></canvas>
+  <div class="hud">
+    <div class="hud-block">
+      <div class="score" id="hudScore">0</div>
+      <div class="sub"><span id="hudMeters">0 m</span> · <span id="hudLane">中间道</span></div>
+    </div>
+    <div class="hud-block right">
+      <div class="hearts" id="hudLives">♥♥♥</div>
+      <div class="sub"><span id="hudTime">60s</span> · 护盾 <span id="hudShield">就绪</span></div>
+      <button class="btn ghost small" data-dwell data-action="pause">暂停</button>
+    </div>
+  </div>
+
+  <div class="zone-strip" id="zoneStrip">
+    <div class="zone" data-zone="left"><span>左</span><i></i></div>
+    <div class="zone" data-zone="center"><span>中</span><i></i></div>
+    <div class="zone" data-zone="right"><span>右</span><i></i></div>
+  </div>
+  <div class="gesture-hint" id="gestureHint">✋ 向上挥 = 跳 · 👇 向下挥 = 滑铲 · ✊ 握拳 = 护盾</div>
+  <div class="flash-event" id="flashEvent"></div>
+</section>
+
+<!-- ============ 8. 结算 ============ -->
+<section class="screen" data-screen="result">
+  <div class="result-card">
+    <h2 id="resTitle">本局结束</h2>
+    <div class="big-score" id="resScore">0</div>
+    <p class="sub" id="resReason">时间到</p>
+    <dl class="stats">
+      <div><dt>最远距离</dt><dd id="resDist">0 m</dd></div>
+      <div><dt>变道</dt><dd id="resLane">0</dd></div>
+      <div><dt>跳跃</dt><dd id="resJump">0</dd></div>
+      <div><dt>滑铲</dt><dd id="resSlide">0</dd></div>
+      <div><dt>护盾</dt><dd id="resShield">0</dd></div>
+      <div><dt>撞到</dt><dd id="resHit">0</dd></div>
+    </dl>
+    <p class="best" id="resBest">最高分：0</p>
+    <div class="actions center">
+      <button class="btn primary" data-dwell data-action="play-again">再来一局</button>
+      <button class="btn" data-dwell data-action="save-card">保存战绩卡</button>
+      <button class="btn" data-dwell data-action="to-splash">返回主菜单</button>
+    </div>
+    <canvas id="cardCanvas" width="760" height="1000" hidden></canvas>
+  </div>
+</section>
+
+<!-- ============ 9. 玩法说明 ============ -->
+<section class="screen" data-screen="help">
+  <div class="screen-head">
+    <button class="btn ghost" data-dwell data-action="back">← 返回</button>
+    <h2>玩法说明</h2>
+    <p>三步记住：眼睛变道 · 挥手跳滑 · 握拳护盾</p>
+  </div>
+  <div class="help-grid">
+    <div class="help-card">
+      <h3>👀 眼动 · 变道</h3>
+      <p>画面被横向分成左 / 中 / 右三条注视带。视线落到某条带上并停留一小会儿，角色就切到对应车道。因为车道只有三条，视线落点有几度误差也不会选错。</p>
+    </div>
+    <div class="help-card">
+      <h3>✋ 手势 · 跳与滑铲</h3>
+      <p>向上挥手 = 跳过低栏；向下挥手 = 滑铲穿过横杆；整块护栏只能靠变道躲开。挥手用「掌宽」归一化，离镜头远近都不影响判定。</p>
+    </div>
+    <div class="help-card">
+      <h3>✊ 手势 · 护盾</h3>
+      <p>握拳即开护盾，硬吃一次撞击，随后进入冷却。手离开画面不会误触发。</p>
+    </div>
+    <div class="help-card">
+      <h3>🧭 分时复用</h3>
+      <p>菜单阶段可以只用视线点击按钮；进入赛道后手放低一点，避免手挡住脸影响眼动跟踪。</p>
+    </div>
+  </div>
+  <table class="keys">
+    <thead><tr><th>操作</th><th>双模态</th><th>纯眼动</th><th>纯手势</th><th>鼠标键盘</th></tr></thead>
+    <tbody>
+      <tr><td>变道</td><td>眼神</td><td>眼神</td><td>左右挥手</td><td>← →</td></tr>
+      <tr><td>跳跃</td><td>向上挥手</td><td>↑ / 空格</td><td>向上挥手</td><td>↑ / 空格</td></tr>
+      <tr><td>滑铲</td><td>向下挥手</td><td>↓</td><td>向下挥手</td><td>↓</td></tr>
+      <tr><td>护盾</td><td>握拳</td><td>F</td><td>握拳</td><td>F</td></tr>
+      <tr><td>暂停</td><td>注视暂停钮</td><td>Esc</td><td>Esc</td><td>Esc</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ 暂停弹层（不切屏，赛道保留在下面） ============ -->
+<div class="modal" id="pauseModal">
+  <div class="modal-card">
+    <h3>已暂停</h3>
+    <p class="sub" id="pauseSub">放松一下，想继续就继续</p>
+    <div class="actions center">
+      <button class="btn primary" data-dwell data-action="resume">继续</button>
+      <button class="btn" data-dwell data-action="play-again">重新开始</button>
+      <button class="btn" data-dwell data-action="to-settings">设置</button>
+      <button class="btn ghost" data-dwell data-action="to-splash">返回主菜单</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 输入插件（与阶段 1 原型一致的 CDN 全局） ============ -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

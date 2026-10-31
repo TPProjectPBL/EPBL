@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>隔空画画 · 眼动 + 手势双模态 Demo</title>
+<link rel="stylesheet" href="demo.css" />
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+
+<header class="topbar">
+  <div class="brand">隔空画画 <span>Air Draw</span></div>
+  <div class="chips">
+    <span class="chip" id="chipStatus">摄像头：未开始</span>
+    <span class="chip" id="chipInput">笔尖来源：--</span>
+    <span class="chip" id="chipPen">笔尖：抬笔</span>
+    <span class="chip" id="chipColor">颜色：--</span>
+    <span class="chip" id="chipFps">FPS：--</span>
+  </div>
+</header>
+
+<!-- M14 眼动选色：注视色块 0.7s，进度环填充即选中 -->
+<aside class="palette" id="palette" aria-label="颜色面板">
+  <button class="sw" style="--c:#ffffff" data-color="#ffffff" data-name="白"></button>
+  <button class="sw" style="--c:#ffd166" data-color="#ffd166" data-name="金黄"></button>
+  <button class="sw" style="--c:#50dc96" data-color="#50dc96" data-name="翠绿"></button>
+  <button class="sw" style="--c:#ff6b8a" data-color="#ff6b8a" data-name="粉红"></button>
+  <button class="sw" style="--c:#50aaff" data-color="#50aaff" data-name="天蓝"></button>
+  <button class="sw" style="--c:#7a3bff" data-color="#7a3bff" data-name="绛紫"></button>
+</aside>
+
+<div class="cam" id="camThumb">
+  <video id="video" playsinline autoplay muted></video>
+  <span>摄像头预览</span>
+</div>
+
+<div class="tools">
+  <label class="rng">粗细 <input id="rangeWidth" type="range" min="1" max="26" value="6" /></label>
+  <label class="rng">浓淡 <input id="rangeAlpha" type="range" min="20" max="100" value="100" /></label>
+  <label class="chk"><input id="chkGlow" type="checkbox" checked /> 发光笔</label>
+  <label class="chk"><input id="bgToggle" type="checkbox" /> 纸质底</label>
+  <button id="btnUndo">撤销</button>
+  <button id="btnClear">清空</button>
+  <input id="signature" class="sign" placeholder="题字：送给评委" />
+  <button id="btnFinish" class="primary">完成 · 生成作品</button>
+</div>
+
+<div class="hint" id="hint">握拳 = 落笔</div>
+<div class="penDot" id="penDot"></div>
+<div class="toast" id="toast"></div>
+
+<!-- 10 秒引导：零学习成本 -->
+<div class="overlay guide show" id="guide">
+  <div class="card">
+    <h1>隔空画画</h1>
+    <p class="sub">不用手柄、不用触屏 —— 手势落笔，眼睛选色。</p>
+    <ol class="steps">
+      <li><b>✊ 握拳</b><span>落笔，开始画</span></li>
+      <li><b>🖐 张开手掌</b><span>抬笔，笔离纸</span></li>
+      <li><b>👀 注视右侧色块</b><span>停 0.7 秒，进度环走满即换色</span></li>
+    </ol>
+    <div class="row">
+      <button id="btnStart" class="primary">开始体验</button>
+      <button id="btnSkip">跳过 · 看演示</button>
+    </div>
+    <p class="tip">建议距离屏幕 0.6–1.0 m · 光线充足 · 手不要挡住脸</p>
+  </div>
+</div>
+
+<!-- 作品卡片：一键导出 PNG -->
+<div class="overlay result" id="result">
+  <div class="card">
+    <h2>你的作品</h2>
+    <img id="resultImg" alt="作品" />
+    <p class="cap" id="resultCap"></p>
+    <div class="row">
+      <a id="btnDownload" class="primary" download="air-draw.png">下载 PNG</a>
+      <button id="btnAgain">再画一幅</button>
+    </div>
+    <p class="tip">按 Esc 关闭</p>
+  </div>
+</div>
+
+<!-- 与阶段 1 原型一致：MediaPipe 走 CDN 全局对象（window.Camera / FaceMesh / Hands） -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

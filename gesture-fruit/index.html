@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>手势切西瓜 · MediaPipe Hands</title>
+<style>
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 18px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    background: #0d1117;
+    color: #e6edf3;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: .02em;
+  }
+
+  /* 画面舞台：摄像头画面 + 掉落物 + 刀痕 + 血条都画在同一张 canvas 上 */
+  .stage {
+    position: relative;
+    width: min(92vw, 640px);
+    aspect-ratio: 4 / 3;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #000;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
+  }
+
+  /* video 只作为 MediaPipe 的输入源，不直接显示：保持全尺寸但完全透明，
+     避免个别浏览器对 display:none 的视频停止解码 */
+  #video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  #game {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* 分数条：放右上角，左上角让给画在 canvas 上的血条 */
+  .hud {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, .45);
+    backdrop-filter: blur(6px);
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .hud b {
+    color: #7ee787;
+    font-size: 19px;
+  }
+
+  /* 结束遮罩 */
+  .over {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, .6);
+    backdrop-filter: blur(3px);
+  }
+
+  /* 没有这条规则时，.over 的 display:flex 会盖掉 hidden 属性 */
+  .over[hidden] { display: none; }
+
+  .over-card {
+    padding: 22px 28px;
+    border-radius: 14px;
+    background: rgba(22, 27, 34, .95);
+    border: 1px solid rgba(255, 255, 255, .1);
+    text-align: center;
+  }
+
+  .over-title {
+    margin: 0 0 8px;
+    font-size: 22px;
+    font-weight: 700;
+    color: #ff7b72;
+  }
+
+  .over-score {
+    margin: 0 0 16px;
+    font-size: 14px;
+    color: #9aa4b2;
+  }
+
+  .over-score b {
+    color: #7ee787;
+    font-size: 18px;
+  }
+
+  .over-card button {
+    padding: 8px 20px;
+    border: 0;
+    border-radius: 8px;
+    background: #238636;
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .over-card button:hover { background: #2ea043; }
+
+  /* 状态行 / 报错 */
+  .status {
+    margin: 0;
+    min-height: 20px;
+    font-size: 13px;
+    color: #9aa4b2;
+    text-align: center;
+  }
+
+  .status.error { color: #ff7b72; }
+
+  .tip-text {
+    margin: 0;
+    font-size: 12px;
+    color: #6e7681;
+  }
+</style>
+</head>
+<body>
+
+<h1>手势切西瓜</h1>
+
+<div class="stage">
+  <video id="video" playsinline muted autoplay></video>
+  <canvas id="game" width="640" height="480"></canvas>
+  <div class="hud">已切 <b id="score">0</b> 个</div>
+
+  <div class="over" id="over" hidden>
+    <div class="over-card">
+      <p class="over-title">游戏结束</p>
+      <p class="over-score">本局切得 <b id="finalScore">0</b> 个西瓜</p>
+      <button id="restart" type="button">再来一局</button>
+    </div>
+  </div>
+</div>
+
+<p class="status" id="status">正在加载 MediaPipe Hands 模型…</p>
+<p class="tip-text">切开西瓜得分，别碰炸弹（碰一次掉一滴血，3 滴掉光就结束）；握拳可暂停 / 继续</p>
+
+<!-- MediaPipe 官方 CDN 全局脚本（与仓库 eye-page-turner/demo 的引法一致） -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js" crossorigin="anonymous"></script>
+
+<script>
+'use strict';
+
+/* ==========================================================================
+   手势切西瓜（浏览器端）
+   --------------------------------------------------------------------------
+   1. 只跟踪食指指尖 landmark 8
+   2. 画面随机生成西瓜与炸弹，一起匀速向下掉落
+   3. 指尖碰到西瓜 → 西瓜消失，分数 +1
+   4. 指尖碰到炸弹 → 炸弹消失，掉 1 滴血；3 滴血掉光 → 游戏结束
+   5. 指尖移动留下刀痕（轨迹），坐标经过 8 帧滑动平均滤波 → 见「滤波模块」
+   6. 握拳手势切换「暂停 / 继续」；三态状态机：游戏中 / 暂停 / 游戏结束
+   7. 手势判定、GT 参数、GS 状态机写法对齐仓库 controller-demo
+
+   MediaPipe Hands 走 WASM 推理，输入是 <video>，所有绘制在 canvas 上完成。
+   ========================================================================== */
+
+/* ------------------------------- 配置常量 ------------------------------- */
+
+const W = 640;                 // 逻辑画面宽（与 canvas 属性一致）
+const H = 480;                 // 逻辑画面高
+const HANDS_VERSION = '0.4.1675469240';
+
+const INDEX_TIP = 8;           // MediaPipe 手部关键点编号：8 = 食指指尖
+const TIP_RADIUS = 22;         // 指尖判定半径（像素），指头是个圆，不是点
+
+const FALL_SPEED = 170;        // 匀速下落速度：像素/秒（西瓜和炸弹同速）
+const SPAWN_INTERVAL = 0.55;   // 每 0.55 秒生成一个掉落物
+const ITEM_MIN_R = 26;         // 掉落物最小半径
+const ITEM_MAX_R = 44;         // 掉落物最大半径
+const MAX_ITEMS = 8;           // 同屏掉落物上限
+const BOMB_CHANCE = 0.28;      // 每次生成有 28% 概率是炸弹
+
+const SMOOTH_WINDOW = 8;       // 滑动平均窗口：缓存最近 8 帧指尖坐标
+const TRAIL_MAX = 16;          // 刀痕最多保留的点数
+const TRAIL_MIN_STEP = 4;      // 相邻刀痕点的最小间距（像素），防止静止时堆成一坨
+
+const MAX_LIVES = 3;           // 初始血量
+const HP_BAR = { x: 16, y: 16, segW: 30, segH: 14, gap: 6 };   // 血条布局
+
+// 游戏状态机：只有 PLAYING 会推进（生成 / 下落 / 碰撞）
+const PHASE = { PLAYING: 'playing', PAUSED: 'paused', OVER: 'over' };
+
+const TAU = Math.PI * 2;
+
+/* ------------------------------- 运行时状态 ----------------------------- */
+
+/** 游戏状态：所有可变数据集中在这里，便于排查 */
+const state = {
+  items: [],         // [{ id, kind, x, y, r, seeds, consumed }]
+  score: 0,          // 切中西瓜数
+  lives: MAX_LIVES,  // 剩余血量
+  phase: PHASE.PLAYING,  // 状态机：playing / paused / over
+  tip: null,         // { x, y } 平滑后的屏幕坐标；null 表示当前没检测到手
+  spawnTimer: 0,     // 距上次生成的累计秒数
+  lastTime: 0,       // 上一帧时间戳（ms）
+};
+
+/* ------------------------------- DOM 引用 ------------------------------- */
+
+const video = document.getElementById('video');
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const statusEl = document.getElementById('status');
+const overEl = document.getElementById('over');
+const finalScoreEl = document.getElementById('finalScore');
+const restartEl = document.getElementById('restart');
+
+/** 设置状态行文案；传 error=true 时标红 */
+function setStatus(text, error = false) {
+  statusEl.textContent = text;
+  statusEl.classList.toggle('error', error);
+}
+
+/* ========================= 滤波模块（8 帧滑动平均） ========================= */
+
+/**
+ * 滑动平均滤波：缓存最近 SMOOTH_WINDOW 帧的食指坐标，取算术平均。
+ *
+ * 为什么需要：MediaPipe 给出的单个关键点会随检测在 ±数像素内抖动，
+ * 直接把这些点连成轨迹，画出来是一条毛刺线；取最近 8 帧均值后明显顺滑。
+ *
+ * 代价：窗口越长越平滑、但滞后越大（8 帧 @30fps ≈ 260ms 的"半个窗口"延迟），
+ * 所以这里取 8 —— 顺滑和跟手之间的折中值。
+ *
+ * 注意：手离开画面时必须调用 resetSmooth()，否则恢复时第一帧会拿旧点一起平均，
+ * 表现为刀痕"从上次的位置直线弹回来"。
+ */
+
+const tipBuffer = [];          // 环形缓冲：最多存 SMOOTH_WINDOW 个 {x, y}
+
+/** 清空滤波缓冲（手丢失 / 重新出现时调用） */
+function resetSmooth() {
+  tipBuffer.length = 0;
+}
+
+/**
+ * 送入一帧原始指尖坐标，返回平滑后的坐标。
+ * @param {number} x 原始屏幕坐标 x（像素）
+ * @param {number} y 原始屏幕坐标 y（像素）
+ * @returns {{x: number, y: number}} 窗口内所有点的算术平均
+ */
+function smoothTip(x, y) {
+  tipBuffer.push({ x, y });
+  if (tipBuffer.length > SMOOTH_WINDOW) {
+    tipBuffer.shift();          // 超出窗口就丢掉最旧的一帧
+  }
+
+  let sumX = 0;
+  let sumY = 0;
+  for (const p of tipBuffer) {
+    sumX += p.x;
+    sumY += p.y;
+  }
+  const n = tipBuffer.length;
+  return { x: sumX / n, y: sumY / n };
+}
+
+/* ============================ 刀痕（指尖轨迹） ============================ */
+
+const trail = [];              // 保存最近若干个"已平滑"的指尖位置
+
+/** 追加一个刀痕点；离上一个点太近就跳过，避免手静止时堆成一块色斑 */
+function pushTrail(pt) {
+  const last = trail[trail.length - 1];
+  if (last) {
+    const dx = pt.x - last.x;
+    const dy = pt.y - last.y;
+    if (dx * dx + dy * dy < TRAIL_MIN_STEP * TRAIL_MIN_STEP) return;
+  }
+  trail.push(pt);
+  if (trail.length > TRAIL_MAX) trail.shift();   // 尾部滚动，只留最近一段
+}
+
+/** 清空刀痕（手丢失 / 重开时调用，避免残留一条断线） */
+function clearTrail() {
+  trail.length = 0;
+}
+
+/* ========================= 手势模块（对齐 controller-demo） ========================= */
+
+/**
+ * 手势参数集中在这里，可用 URL 覆盖，方便现场试参：
+ *   ?gEnter=3&gCooldown=900&gFinger=1.2&gThumb=1.25&hitCd=400
+ *   gEnter    候选手势连续帧数才确认切换
+ *   gCooldown 动作冷却（ms），防同一次握拳触发两次
+ *   gFinger   手指伸直判定倍数
+ *   gThumb    拇指伸直判定倍数
+ *   hitCd     同一目标最短重复结算间隔（ms）
+ */
+const GQ = new URLSearchParams(location.search);
+function gnum(name, def) {
+  const v = GQ.get(name);
+  return v != null && v !== "" && isFinite(+v) ? +v : def;
+}
+
+const GT = {
+  enter:       gnum("gEnter", 3),      // 候选手势连续帧数才确认切换
+  cooldownMs:  gnum("gCooldown", 900), // 离散动作冷却
+  fingerRatio: gnum("gFinger", 1.2),   // 手指伸直判定倍数
+  thumbRatio:  gnum("gThumb", 1.25),   // 拇指伸直判定倍数
+};
+
+/** 碰撞冷却：同一颗目标在这个时间内不会重复计分 / 重复扣血 */
+const HIT_COOLDOWN_MS = gnum("hitCd", 400);
+
+const GESTURE_TEXT = { fist: "✊ 握拳", thumb: "👍 拇指外伸", none: "—" };
+
+/** 两点距离（归一化坐标，与 controller-demo 保持一致） */
+const d2 = (lm, a, b) => Math.hypot(lm[a].x - lm[b].x, lm[a].y - lm[b].y);
+
+/** 食指 / 中指 / 无名指 / 小指的「指尖 - 指根」关键点编号 */
+const FINGERS = [
+  { tip: 8, mcp: 5 }, { tip: 12, mcp: 9 }, { tip: 16, mcp: 13 }, { tip: 20, mcp: 17 },
+];
+
+function fingerUp(lm, tip, mcp) {
+  // 伸直：指尖到手腕(0)距离 > 指根(MCP)到手腕距离 * 倍数（对朝向鲁棒）
+  return d2(lm, tip, 0) > d2(lm, mcp, 0) * GT.fingerRatio;
+}
+
+function thumbUp(lm) {
+  // 拇指伸直：拇指尖(4)到掌心(9)距离 > 拇指 MCP(2)到掌心距离 * 倍数
+  return d2(lm, 4, 9) > d2(lm, 2, 9) * GT.thumbRatio;
+}
+
+/**
+ * 判定手势，本 demo 只关心握拳。
+ * 四指全部弯下才是候选；拇指也外伸时判为 thumb，避免「👍」被误当成握拳。
+ */
+function classifyHand(lm) {
+  const ext = FINGERS.map((f) => fingerUp(lm, f.tip, f.mcp));
+  if (ext.some(Boolean)) return "none";      // 任一根手指伸直 => 不是拳
+  return thumbUp(lm) ? "thumb" : "fist";
+}
+
+/** 状态机：候选连续 enter 帧确认切换；离散动作带冷却（与 controller-demo 同构） */
+const GS = {
+  current: "none",
+  pending: "none",
+  pendingCnt: 0,
+  enter: GT.enter,
+  cooldownUntil: 0,
+};
+
+/**
+ * 每帧把手势判定结果喂进状态机。
+ * 只有「候选连续 N 帧」且与当前状态不同时，才确认切换并触发动作。
+ */
+function feedGesture(cand, now) {
+  if (cand === GS.pending) GS.pendingCnt++;
+  else { GS.pending = cand; GS.pendingCnt = 1; }
+
+  if (GS.pendingCnt >= GS.enter && GS.pending !== GS.current) {
+    const prev = GS.current;
+    GS.current = GS.pending;
+    GS.pendingCnt = 0;
+    onGestureEnter(prev);
+  }
+}
+
+/** 手势确认切换后触发动作：本 demo 只有「握拳 = 暂停 / 继续」 */
+function onGestureEnter(prev) {
+  if (GS.current !== "fist") return;         // 只对握拳生效
+  if (state.phase === PHASE.OVER) return;    // 已结束，不响应
+
+  const now = performance.now();
+  if (now < GS.cooldownUntil) return;        // 冷却中
+  GS.cooldownUntil = now + GT.cooldownMs;
+
+  togglePause();
+}
+
+/** 暂停 / 继续 */
+function togglePause() {
+  if (state.phase === PHASE.PLAYING) {
+    state.phase = PHASE.PAUSED;
+    setStatus("已暂停：握拳（连续 3 帧）继续");
+  } else if (state.phase === PHASE.PAUSED) {
+    state.phase = PHASE.PLAYING;
+    setStatus("已继续：切开西瓜得分，别碰炸弹");
+  }
+
+  // 切换瞬间清掉瞬时状态，避免恢复时拖出一条跨屏刀痕
+  state.tip = null;
+  resetSmooth();
+  clearTrail();
+}
+
+/** 复位手势状态机（重开时调用） */
+function resetGesture() {
+  GS.current = "none";
+  GS.pending = "none";
+  GS.pendingCnt = 0;
+  GS.cooldownUntil = 0;
+}
+
+/* ------------------------------- 掉落物逻辑 ----------------------------- */
+
+let itemSeq = 0;               // 掉落物自增 id，用于碰撞冷却表
+
+/** 生成一个掉落物：随机决定是西瓜还是炸弹，从画面上方外侧掉进来 */
+function createItem() {
+  const r = randInt(ITEM_MIN_R, ITEM_MAX_R);
+  const kind = Math.random() < BOMB_CHANCE ? 'bomb' : 'watermelon';
+
+  return {
+    id: ++itemSeq,
+    kind,
+    // x 随机，但保证整颗都在画面内
+    x: randInt(r + 8, W - r - 8),
+    y: -r,                       // 起点在画面之上，刚好看不到
+    r,
+    consumed: false,             // 是否已结算过（防止单次碰撞被重复计数）
+    seeds: kind === 'watermelon' ? makeSeeds() : null,
+  };
+}
+
+/** 随机撒 5 颗籽，坐标是相对半径的偏移量（只给西瓜用） */
+function makeSeeds() {
+  const seeds = [];
+  for (let i = 0; i < 5; i++) {
+    const angle = Math.random() * TAU;
+    const dist = Math.random() * 0.45;   // 0 ~ 0.45 倍半径
+    seeds.push({ ax: Math.cos(angle) * dist, ay: Math.sin(angle) * dist });
+  }
+  return seeds;
+}
+
+/** 圆-圆相交判定：圆心距 <= 两半径之和 */
+function isHit(item, tip) {
+  const dx = item.x - tip.x;
+  const dy = item.y - tip.y;
+  const rr = item.r + TIP_RADIUS;
+  return dx * dx + dy * dy <= rr * rr;
+}
+
+/**
+ * 结算一次碰撞：西瓜加分，炸弹扣血。
+ * 只会被 update() 在「首次判定命中」时调用一次。
+ */
+function resolveHit(item) {
+  if (item.kind === 'bomb') {
+    state.lives = Math.max(0, state.lives - 1);
+    if (state.lives === 0) endGame();
+  } else {
+    state.score += 1;
+    scoreEl.textContent = state.score;
+  }
+}
+
+/* ------------------------- 碰撞结算与冷却 ------------------------- */
+
+const hitLog = new Map();      // item.id -> 上次结算时间（ms）
+
+/**
+ * 尝试结算一次碰撞。
+ * 三道闸：consumed 标记 → 同目标时间冷却 → 结算并记录。
+ * @param {object} item 掉落物
+ * @param {number} now  当前时间（ms）
+ * @returns {boolean} 是否真的结算了（false = 命中但被冷却拦下）
+ */
+function tryHit(item, now) {
+  if (item.consumed) return false;
+
+  const last = hitLog.get(item.id);
+  if (last !== undefined && now - last < HIT_COOLDOWN_MS) return false;
+
+  hitLog.set(item.id, now);
+  if (hitLog.size > 200) hitLog.clear();   // 条目本来不该堆积，真堆积了就整体清空
+
+  item.consumed = true;
+  resolveHit(item);
+  return true;
+}
+
+/* ------------------------------- 每帧更新 ------------------------------- */
+
+/**
+ * 推进一帧游戏逻辑。
+ * @param {number} dt 距上一帧的秒数（已封顶，避免切后台回来瞬移）
+ */
+function update(dt, now = performance.now()) {
+  // 只有「游戏中」才推进：暂停与结束都冻结场景
+  if (state.phase !== PHASE.PLAYING) return;
+
+  // 1) 定时生成掉落物
+  state.spawnTimer += dt;
+  while (state.spawnTimer >= SPAWN_INTERVAL) {
+    state.spawnTimer -= SPAWN_INTERVAL;
+    if (state.items.length < MAX_ITEMS) {
+      state.items.push(createItem());
+    }
+  }
+
+  // 2) 匀速下落 → 3) 碰撞判定 → 4) 掉出画面的清理
+  const survivors = [];
+  for (const item of state.items) {
+    item.y += FALL_SPEED * dt;
+
+    // 整颗都已掉出画面底部：直接移除，不计分也不扣血
+    if (item.y - item.r > H) continue;
+
+    // 指尖碰到就尝试结算；tryHit 内部还有「同目标冷却」与 consumed 双保险
+    if (state.tip && isHit(item, state.tip) && tryHit(item, now)) continue;
+
+    survivors.push(item);
+  }
+  state.items = survivors;
+}
+
+/** 血量归零：结束本局 */
+function endGame() {
+  state.phase = PHASE.OVER;
+  finalScoreEl.textContent = state.score;
+  overEl.hidden = false;
+  setStatus('游戏结束：3 滴血掉光了。点「再来一局」重开。', true);
+
+  // 清掉指尖与刀痕，避免遮住结算面板
+  state.tip = null;
+  resetSmooth();
+  clearTrail();
+}
+
+/** 重开一局：所有状态回到初始值 */
+function resetGame() {
+  state.items = [];
+  state.score = 0;
+  state.lives = MAX_LIVES;
+  state.phase = PHASE.PLAYING;
+  state.spawnTimer = 0;
+  state.lastTime = 0;
+
+  resetGesture();
+  hitLog.clear();
+
+  scoreEl.textContent = '0';
+  overEl.hidden = true;
+  clearTrail();
+  resetSmooth();
+
+  setStatus('就位：切开西瓜得分，别碰炸弹');
+}
+
+/* ------------------------------- 绘制 ------------------------------- */
+
+function draw() {
+  // 摄像头画面做背景，并左右翻转成"照镜子"，这样手往右画面里的指尖也往右
+  if (video.readyState >= 2) {
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, -W, 0, W, H);
+    ctx.restore();
+
+    // 压暗一点，让西瓜、炸弹和刀痕更醒目
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+    ctx.fillRect(0, 0, W, H);
+  } else {
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  for (const item of state.items) drawItem(item);
+
+  // 刀痕压在掉落物之上，视觉上像是刚划过去
+  drawTrail();
+
+  // 血条最后画，始终在最上层
+  drawLives();
+
+  if (state.tip) drawTip(state.tip);
+
+  // 当前识别到的手势（现场调参用，不影响玩法）
+  drawGestureTag();
+
+  // 暂停遮罩
+  if (state.phase === PHASE.PAUSED) drawPauseOverlay();
+}
+
+/** 左下角显示当前手势，方便调 gEnter / gFinger */
+function drawGestureTag() {
+  ctx.font = '13px -apple-system, "PingFang SC", sans-serif';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+  ctx.fillText(`手势：${GESTURE_TEXT[GS.current] || "—"}`, 16, H - 16);
+}
+
+/** 暂停遮罩 */
+function drawPauseOverlay() {
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 34px -apple-system, "PingFang SC", sans-serif';
+  ctx.fillStyle = '#e6edf3';
+  ctx.fillText('已暂停', W / 2, H / 2 - 4);
+
+  ctx.font = '15px -apple-system, "PingFang SC", sans-serif';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+  ctx.fillText('握拳（连续 3 帧）继续', W / 2, H / 2 + 30);
+  ctx.textAlign = 'left';
+}
+
+/** 按种类分发绘制 */
+function drawItem(item) {
+  if (item.kind === 'bomb') drawBomb(item);
+  else drawWatermelon(item);
+}
+
+/** 画一颗西瓜：绿皮 + 深绿条纹 + 红瓤 + 籽 */
+function drawWatermelon(item) {
+  const { x, y, r } = item;
+
+  // 绿皮
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, TAU);
+  ctx.fillStyle = '#1c7c3c';
+  ctx.fill();
+
+  // 深绿条纹（裁剪在圆内，超出部分自然被切掉）
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, TAU);
+  ctx.clip();
+  ctx.strokeStyle = '#14602e';
+  ctx.lineWidth = Math.max(2, r * 0.12);
+  for (let i = 0; i < 5; i++) {
+    const ox = (i - 2) * r * 0.42;
+    ctx.beginPath();
+    ctx.moveTo(x + ox, y - r);
+    ctx.lineTo(x + ox, y + r);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // 红瓤
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.78, 0, TAU);
+  ctx.fillStyle = '#ff5a5f';
+  ctx.fill();
+
+  // 籽
+  ctx.fillStyle = '#2a2a2a';
+  for (const s of item.seeds) {
+    ctx.beginPath();
+    ctx.ellipse(x + s.ax * r, y + s.ay * r, r * 0.055, r * 0.085, 0, 0, TAU);
+    ctx.fill();
+  }
+}
+
+/** 画一颗炸弹：深色金属弹体 + 高光 + 引线 + 火星 + 红色危险光圈 */
+function drawBomb(item) {
+  const { x, y, r } = item;
+
+  // 危险光圈：和西瓜的绿红配色形成明显区分
+  ctx.beginPath();
+  ctx.arc(x, y, r + 4, 0, TAU);
+  ctx.strokeStyle = 'rgba(255, 82, 82, 0.55)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // 弹体（径向渐变做出球感）
+  const grad = ctx.createRadialGradient(
+    x - r * 0.3, y - r * 0.3, r * 0.1,
+    x, y, r
+  );
+  grad.addColorStop(0, '#6b6b6b');
+  grad.addColorStop(1, '#1b1b1b');
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, TAU);
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // 高光
+  ctx.beginPath();
+  ctx.arc(x - r * 0.32, y - r * 0.34, r * 0.18, 0, TAU);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.fill();
+
+  // 引线
+  ctx.beginPath();
+  ctx.moveTo(x, y - r);
+  ctx.quadraticCurveTo(x + r * 0.45, y - r * 1.35, x + r * 0.15, y - r * 1.75);
+  ctx.strokeStyle = '#c8a165';
+  ctx.lineWidth = Math.max(2, r * 0.09);
+  ctx.stroke();
+
+  // 火星（外圈橙 + 内圈亮黄）
+  ctx.beginPath();
+  ctx.arc(x + r * 0.15, y - r * 1.78, r * 0.16, 0, TAU);
+  ctx.fillStyle = '#ffb020';
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(x + r * 0.15, y - r * 1.78, r * 0.07, 0, TAU);
+  ctx.fillStyle = '#fff6c0';
+  ctx.fill();
+}
+
+/** 画左上角血条：MAX_LIVES 段方块，亮的是剩余血量 */
+function drawLives() {
+  const { x, y, segW, segH, gap } = HP_BAR;
+
+  for (let i = 0; i < MAX_LIVES; i++) {
+    const sx = x + i * (segW + gap);
+    const alive = i < state.lives;
+
+    roundRect(sx, y, segW, segH, 5);
+    ctx.fillStyle = alive ? '#ff5a5f' : 'rgba(255, 255, 255, 0.14)';
+    ctx.fill();
+
+    if (alive) {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
+
+  // 文字说明
+  ctx.font = '13px -apple-system, "PingFang SC", sans-serif';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+  ctx.fillText(`HP ${state.lives}/${MAX_LIVES}`, x, y + segH + 18);
+}
+
+/** 圆角矩形路径（不含 fill/stroke，由调用方决定） */
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+/**
+ * 画指尖轨迹（刀痕）。
+ * 越靠近指尖（越新）的线段越粗越亮，越旧越淡，形成拖尾。
+ */
+function drawTrail() {
+  if (trail.length < 2) return;
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.shadowColor = 'rgba(255, 226, 120, 0.85)';
+  ctx.shadowBlur = 12;
+
+  for (let i = 1; i < trail.length; i++) {
+    const t = i / (trail.length - 1);    // 0 = 最旧，1 = 最新
+    ctx.beginPath();
+    ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
+    ctx.lineTo(trail[i].x, trail[i].y);
+    ctx.strokeStyle = `rgba(255, 248, 210, ${0.12 + t * 0.78})`;
+    ctx.lineWidth = 2 + t * 6;           // 2px → 8px
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+/** 画指尖：一个黄色圆圈 + 中心点 */
+function drawTip(tip) {
+  ctx.beginPath();
+  ctx.arc(tip.x, tip.y, TIP_RADIUS, 0, TAU);
+  ctx.strokeStyle = '#ffe14d';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(tip.x, tip.y, 4, 0, TAU);
+  ctx.fillStyle = '#ffe14d';
+  ctx.fill();
+}
+
+/* ------------------------------- 主循环 ------------------------------- */
+
+function loop(now) {
+  // 首帧没有上一帧时间，dt 记为 0
+  const dt = state.lastTime ? Math.min((now - state.lastTime) / 1000, 0.05) : 0;
+  state.lastTime = now;
+
+  update(dt, now);
+  draw();
+
+  requestAnimationFrame(loop);
+}
+
+/* ------------------------------- 初始化 ------------------------------- */
+
+/** 启动摄像头与 MediaPipe Hands */
+async function start() {
+  // getUserMedia 只在安全上下文可用：https 或 127.0.0.1 / localhost
+  if (!window.isSecureContext) {
+    setStatus('需要 https 或 http://127.0.0.1 才能打开摄像头（file:// 不行）', true);
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    setStatus('当前浏览器不支持摄像头采集', true);
+    return;
+  }
+  if (!window.Hands || !window.Camera) {
+    setStatus('MediaPipe 脚本没有加载成功，检查网络（jsdelivr CDN）', true);
+    return;
+  }
+
+  // ---- 1. 手势检测器 ----
+  const hands = new window.Hands({
+    // 明确指向同版本的资源目录，避免脚本与模型版本错配
+    locateFile: (file) =>
+      `https://cdn.jsdelivr.net/npm/@mediapipe/hands@${HANDS_VERSION}/${file}`,
+  });
+
+  hands.setOptions({
+    maxNumHands: 1,                 // 只需要一只手
+    modelComplexity: 1,             // 0 更快、1 更准
+    minDetectionConfidence: 0.5,
+    minTrackingConfidence: 0.5,
+  });
+
+  // 每帧推理完成后回调：只取第一只手的食指指尖
+  hands.onResults((results) => {
+    const landmarks = results.multiHandLandmarks && results.multiHandLandmarks[0];
+    const now = performance.now();
+
+    if (!landmarks) {
+      // 没检测到手：清掉滤波缓冲和刀痕，否则手再次出现时刀痕会从上次位置直线拉过来
+      state.tip = null;
+      resetSmooth();
+      clearTrail();
+      // 手离开镜头 => 候选手势自动复位（对齐 controller-demo 的做法）
+      feedGesture('none', now);
+      return;
+    }
+
+    // 手势判定始终进行：暂停中也要能握拳继续
+    feedGesture(classifyHand(landmarks), now);
+
+    // 非「游戏中」不更新指尖，避免刀痕在暂停 / 结算面板后面继续动
+    if (state.phase !== PHASE.PLAYING) { state.tip = null; return; }
+
+    const tip = landmarks[INDEX_TIP];
+    // 关键点是 0~1 的归一化坐标。画面做了镜像显示，
+    // 所以 x 要翻转：屏幕 x = (1 - 归一化 x) * 宽
+    const rawX = (1 - tip.x) * W;
+    const rawY = tip.y * H;
+
+    // 【滤波模块】原始坐标 → 8 帧滑动平均，得到平滑坐标
+    const smooth = smoothTip(rawX, rawY);
+
+    // 碰撞判定用平滑后的点，避免抖动造成擦边误判
+    state.tip = smooth;
+    // 刀痕同样只记录平滑后的点
+    pushTrail(smooth);
+  });
+
+  setStatus('正在下载并初始化手部模型（首次约几秒）…');
+
+  try {
+    await hands.initialize();
+  } catch (err) {
+    setStatus(`模型初始化失败：${err && err.message ? err.message : err}`, true);
+    return;
+  }
+
+  // ---- 2. 摄像头 ----
+  setStatus('模型已就绪，正在请求摄像头权限…');
+
+  const camera = new window.Camera(video, {
+    // camera_utils 会保证上一帧推理结束才排下一帧，天然不会并发 send
+    onFrame: async () => {
+      await hands.send({ image: video });
+    },
+    width: W,
+    height: H,
+  });
+
+  try {
+    await camera.start();
+  } catch (err) {
+    setStatus(describeCameraError(err), true);
+    return;
+  }
+
+  // ---- 3. 开始游戏 ----
+  setStatus('就位：切开西瓜得分，别碰炸弹');
+  requestAnimationFrame(loop);
+}
+
+/** 把常见的摄像头异常翻译成能看懂的提示 */
+function describeCameraError(err) {
+  const name = err && err.name;
+  switch (name) {
+    case 'NotAllowedError':
+    case 'SecurityError':
+    case 'PermissionDeniedError':
+      return '摄像头权限被拒绝。点地址栏左侧的权限图标允许摄像头后刷新页面。';
+    case 'NotFoundError':
+    case 'DevicesNotFoundError':
+    case 'OverconstrainedError':
+      return '没有找到可用的摄像头设备。';
+    case 'NotReadableError':
+    case 'TrackStartError':
+    case 'AbortError':
+      return '摄像头被其他程序占用了（比如会议软件），关掉后刷新重试。';
+    default:
+      return `摄像头启动失败：${name || err}`;
+  }
+}
+
+/* ------------------------------- 小工具 ------------------------------- */
+
+/** 区间内的随机整数（含两端） */
+function randInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+/* ------------------------------- 事件绑定 ------------------------------- */
+
+restartEl.addEventListener('click', resetGame);
+
+// 结束后按空格 / 回车也可以重开
+window.addEventListener('keydown', (e) => {
+  if (state.phase === PHASE.OVER && (e.key === ' ' || e.key === 'Enter')) {
+    e.preventDefault();
+    resetGame();
+  }
+});
+
+start();
+</script>
+</body>
+</html>
