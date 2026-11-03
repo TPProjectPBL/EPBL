@@ -30,6 +30,8 @@
 | 目录 | 说明 |
 |---|---|
 | `dual-test/` | **主测试台**：眼动光标 + 手势控制（标定、眼动/手势/联合点击测试、结果导出） |
+| `control-backend/` | 控制后端：FastAPI + Playwright 控制浏览器（含**控制小窗启动器** `launcher.command`） |
+| `control-frontend/` | 控制前端：眼动 + 手势采集，经 WebSocket 上报后端 |
 | `controller-demo/` | 控制器基础 demo（含 WebGazer / MediaPipe 本地 vendor） |
 | `draw/` | 眼动 / 手势绘图 |
 | `eye-page-turner/` | 眼动翻页 |
@@ -53,6 +55,23 @@ open http://localhost:8125/dual-test/
 ```bash
 python3 .deepworks/tmp/ssl/https_server.py
 # 访问 https://<内网IP>:8443/dual-test/
+```
+
+## 控制后端（浏览器控制）
+
+免终端一键启停：双击 `control-backend/launcher.command` 打开**控制小窗**，点 **Start** 启动（自动拉起静态服务 + 后端 + 受控 Chrome），点 **End** 优雅终止（关闭受控 Chrome）。小窗里点「前端」可打开控制前端。
+
+手动方式（等价）：
+
+```bash
+# 终端 1：静态服务（测试页 + 前端页面）
+python3 -m http.server 8125
+
+# 终端 2：控制后端（弹出受控 Chrome）
+cd control-backend && ./run.sh
+
+# 打开控制前端
+open http://localhost:8125/control-frontend/index.html
 ```
 
 ## 使用流程
