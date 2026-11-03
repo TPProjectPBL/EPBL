@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>隔空控制器 · 控制后端系统设计报告 v2.0</title>
+<style>
+  :root {
+    --ink: #1a2033;
+    --muted: #5b6577;
+    --line: #e4e8f0;
+    --brand: #2f6bff;
+    --brand-deep: #1a2a5e;
+    --accent: #ffb020;
+    --bg: #ffffff;
+    --bg-soft: #f6f8fc;
+    --mono: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    color: var(--ink);
+    font-size: 15px;
+    line-height: 1.8;
+    background: var(--bg);
+  }
+  a { color: var(--brand); text-decoration: none; }
+
+  .hero { background: linear-gradient(135deg, #0f1728 0%, #1a2a5e 55%, #2f4aa8 100%); color: #eaf0ff; padding: 64px 32px 48px; }
+  .hero .wrap { max-width: 980px; margin: 0 auto; }
+  .hero .tag { display: inline-block; font-size: 12px; letter-spacing: 2px; color: #ffd479; font-weight: 700; text-transform: uppercase; }
+  .hero h1 { font-size: 34px; margin: 16px 0 10px; line-height: 1.3; }
+  .hero .sub { font-size: 16px; color: #b9c6e8; max-width: 800px; }
+  .hero .meta { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 10px; }
+  .hero .meta span { font-size: 12.5px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); border-radius: 20px; padding: 4px 14px; }
+
+  .layout { max-width: 1160px; margin: 0 auto; padding: 0 32px 80px; display: grid; grid-template-columns: 230px 1fr; gap: 40px; }
+  nav.toc { position: sticky; top: 24px; align-self: start; font-size: 13.5px; padding-top: 40px; }
+  nav.toc .ttl { font-size: 11px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; margin-bottom: 10px; }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--line); }
+  nav.toc a { display: block; padding: 6px 14px; color: var(--muted); border-left: 2px solid transparent; margin-left: -2px; }
+  nav.toc a:hover { color: var(--brand); }
+
+  article { padding-top: 40px; min-width: 0; }
+  h2 { font-size: 24px; color: var(--brand-deep); margin: 52px 0 16px; padding-bottom: 10px; border-bottom: 2px solid var(--line); scroll-margin-top: 24px; }
+  h2 .no { color: var(--brand); font-weight: 800; margin-right: 10px; }
+  h3 { font-size: 17px; color: var(--ink); margin: 28px 0 10px; }
+  h4 { font-size: 15px; margin: 20px 0 8px; color: var(--brand-deep); }
+  p { margin: 10px 0; color: #2a3142; }
+  ul, ol { margin: 10px 0; padding-left: 24px; color: #2a3142; }
+  li { margin: 5px 0; }
+  strong { color: var(--brand-deep); }
+  .lead { font-size: 16px; color: #3a4154; background: var(--bg-soft); border-left: 3px solid var(--accent); padding: 16px 20px; border-radius: 0 12px 12px 0; margin: 16px 0; }
+
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--bg-soft); color: var(--brand-deep); font-weight: 600; }
+  tr:nth-child(even) td { background: #fafbfe; }
+
+  code { background: #eef2fb; color: #2345a8; padding: 1px 6px; border-radius: 4px; font-family: var(--mono); font-size: 13px; }
+  pre { background: #0f1728; color: #cfe0ff; border-radius: 12px; padding: 18px 20px; font-family: var(--mono); font-size: 12.8px; line-height: 1.7; overflow-x: auto; margin: 14px 0; }
+  pre code { background: none; color: inherit; padding: 0; }
+
+  .tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 10px; border-radius: 20px; margin: 0 4px 4px 0; }
+  .tag.p0 { background: #ffe8e0; color: #b33a1e; }
+  .tag.p1 { background: #fff2d9; color: #8a5a00; }
+  .tag.p2 { background: #eaf0f8; color: #4a5a78; }
+  .tag.core { background: #e6f4ea; color: #1a7f37; }
+  .tag.new { background: #e8ecff; color: #2f4aa8; }
+  .callout { background: #eef6ff; border: 1px solid #d5e6ff; border-radius: 10px; padding: 14px 18px; margin: 14px 0; }
+  .warn { background: #fff7ec; border: 1px solid #ffe1b8; border-radius: 10px; padding: 14px 18px; margin: 14px 0; }
+  .warn b { color: #9a5b00; }
+  .step { border-left: 3px solid var(--brand); padding-left: 18px; margin: 20px 0; }
+  .step h3 { margin-top: 0; }
+  .step .acc { font-size: 13px; color: var(--muted); background: var(--bg-soft); border-radius: 8px; padding: 10px 14px; margin-top: 8px; }
+  .step .acc b { color: var(--brand-deep); }
+
+  /* 架构图 */
+  .arch { margin: 18px 0; font-size: 13px; }
+  .arch .layer { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 10px 0; }
+  .arch .layer .lname { font-weight: 700; color: var(--brand-deep); margin-bottom: 8px; letter-spacing: 1px; }
+  .arch .boxes { display: flex; flex-wrap: wrap; gap: 8px; }
+  .arch .box { background: var(--bg-soft); border: 1px solid #dbe4f2; border-radius: 8px; padding: 6px 12px; color: #2a3142; }
+  .arch .box.hl { background: #eef6ff; border-color: #b9d3ff; color: #1a2a5e; font-weight: 600; }
+  .arch .arrow { text-align: center; color: var(--muted); font-family: var(--mono); margin: 4px 0; }
+  .legend { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+  .footer { border-top: 1px solid var(--line); margin-top: 60px; padding: 20px 0; font-size: 12px; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="wrap">
+    <span class="tag">System Design Report v2.0 · 控制后端系统设计</span>
+    <h1>隔空控制器 —— 控制后端（Control Backend）</h1>
+    <p class="sub">把「眼动 + 手势」从演示级网页按钮，升级为可控制<strong>通用目标</strong>的隔空控制系统。核心是引入一个本地<strong>控制后端</strong>，接收标准化指令并通过可插拔适配器执行；<strong>第一阶段以「浏览器通用页面」为控制目标</strong>，用 Chrome DevTools Protocol（CDP）驱动，验证整条链路后再扩展到系统级控制。</p>
+    <div class="meta">
+      <span>文档版本 v2.0（v1.0 演进）</span>
+      <span>状态：需求确认 + 总体设计</span>
+      <span>日期 2026-11-03</span>
+      <span>第一阶段控制目标：浏览器通用页面（CDP）</span>
+      <span>信号采集：复用 dual-test 眼动 + 手势</span>
+      <span>控制后端：Python + FastAPI + Playwright</span>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <nav class="toc">
+    <div class="ttl">目录</div>
+    <ol>
+      <li><a href="#s1">1 需求确认</a></li>
+      <li><a href="#s2">2 可行性分析</a></li>
+      <li><a href="#s3">3 整体架构</a></li>
+      <li><a href="#s4">4 模块划分</a></li>
+      <li><a href="#s5">5 技术选型与理由</a></li>
+      <li><a href="#s6">6 风险点与应对</a></li>
+      <li><a href="#s7">7 可扩展性</a></li>
+      <li><a href="#s8">8 安全性</a></li>
+      <li><a href="#s9">9 实现步骤与验收</a></li>
+      <li><a href="#s10">10 里程碑与 KPI 汇总</a></li>
+    </ol>
+  </nav>
+
+  <article>
+
+    <h2 id="s1"><span class="no">1</span>需求确认</h2>
+    <p class="lead">项目从「页面内自绘按钮的演示」升级为「通用隔空控制系统」：前端负责采集眼动 / 手势信号并输出标准化输入事件流，<strong>控制后端</strong>负责命令解释、路由与执行，通过<strong>目标适配器</strong>把指令落到具体目标上。<strong>第一阶段目标 = 浏览器通用页面</strong>（真实网页，而非自绘按键）。</p>
+
+    <h3>1.1 与 v1.0 的定位差异（为什么要改）</h3>
+    <table>
+      <tr><th style="width:180px">维度</th><th>v1.0（2026-10-17）</th><th>v2.0（本次）</th></tr>
+      <tr><td>控制目标</td><td>操作系统鼠标 / 缩放（pyautogui）</td><td><strong>浏览器通用页面</strong>（CDP / Playwright）</td></tr>
+      <tr><td>坐标体系</td><td>屏幕像素（多屏 / 窗口定位复杂）</td><td><strong>页面视口坐标</strong>（简单、无窗口定位问题）</td></tr>
+      <tr><td>系统权限</td><td>需 macOS「辅助功能」权限</td><td><strong>无需系统权限</strong>（仅摄像头）</td></tr>
+      <tr><td>架构核心</td><td>「前端检测 + 后端执行」</td><td>「前端采集 + 后端路由 + <strong>适配器</strong>执行」</td></tr>
+      <tr><td>演进价值</td><td>单一目标</td><td><strong>多目标可扩展</strong>（浏览器 → 系统 → 应用 → IoT）</td></tr>
+    </table>
+    <div class="callout"><b>核心判断</b>：先「控制浏览器通用页面」是最低风险、最快见效的第一步——它规避了系统权限与坐标映射两大难点，同时能完整验证「信号 → 指令 → 执行」这条链路；链路跑通后，再以同一套命令模型接入系统级适配器。</div>
+
+    <h3>1.2 功能需求</h3>
+    <table>
+      <tr><th style="width:90px">编号</th><th>需求</th><th style="width:120px">优先级</th></tr>
+      <tr><td>F1</td><td>眼动光标：视线在<strong>浏览器页面内</strong>移动光标（视口坐标），EMA 平滑 + 死区。</td><td><span class="tag p0">P0 核心</span></td></tr>
+      <tr><td>F2</td><td>手势命令：6 件套手势映射为通用页面动作（滚动 / 点击 / 返回 / 主页 / 菜单）。</td><td><span class="tag p0">P0 核心</span></td></tr>
+      <tr><td>F3</td><td>控制后端：本地后端进程接收指令流，解释并路由到浏览器适配器。</td><td><span class="tag p0">P0 核心</span></td></tr>
+      <tr><td>F4</td><td>浏览器控制：后端通过 CDP 驱动 Chrome，执行移动光标、点击、滚动、导航、元素高亮。</td><td><span class="tag p0">P0 核心</span></td></tr>
+      <tr><td>F5</td><td>通用测试页：提供含按钮 / 链接 / 长滚动区 / 输入框 / 翻页的页面，作为第一阶段验收靶场。</td><td><span class="tag p1">P1</span></td></tr>
+      <tr><td>F6</td><td>状态反馈：前端状态面板实时显示检测状态、注视点、手势、后端连接、当前控制目标。</td><td><span class="tag p1">P1</span></td></tr>
+      <tr><td>F7</td><td>驻留点击：视线在元素上驻留 ≥ 阈值触发点击（可选开关）。</td><td><span class="tag p2">P2</span></td></tr>
+    </table>
+
+    <h3>1.3 非功能需求（NFR）</h3>
+    <table>
+      <tr><th style="width:160px">维度</th><th>要求</th></tr>
+      <tr><td>实时性</td><td>眼动光标增量端到端延迟 &lt; 100 ms；滚动 / 点击响应 &lt; 200 ms。</td></tr>
+      <tr><td>稳定性</td><td>光标无漂移抖动（平滑 + 死区 + 限速）；断连可自动重连。</td></tr>
+      <tr><td>安全性</td><td>后端仅监听 127.0.0.1；指令带一次性 token；摄像头数据本地处理不上传。</td></tr>
+      <tr><td>可维护性</td><td>命令模型标准化；目标通过适配器插拔，不改核心逻辑。</td></tr>
+      <tr><td>跨平台</td><td>浏览器控制跨平台；系统级控制（后续）以 macOS 优先、跨平台库兜底。</td></tr>
+    </table>
+
+    <h3>1.4 关键假设与待确认决策点</h3>
+    <p>以下为本报告的默认假设，<strong>标注 ⚑ 的请在开发前拍板</strong>；未拍板前按「推荐」执行。</p>
+    <table>
+      <tr><th style="width:210px">决策点</th><th>推荐（默认）</th><th>备选</th></tr>
+      <tr><td>⚑ 后端语言</td><td>Python 3.11 + FastAPI</td><td>Node.js + Playwright（浏览器生态更原生）</td></tr>
+      <tr><td>⚑ 浏览器控制方式</td><td>Playwright 托管启动 Chrome</td><td>连接已有 Chrome（`--remote-debugging-port`）</td></tr>
+      <tr><td>⚑ 「通用页面」来源</td><td>自建通用测试页（可编排交互元素）</td><td>直接用任意公开网站</td></tr>
+      <tr><td>⚑ 控制范围</td><td>仅页面内容（滚动 / 点击 / 导航）</td><td>含浏览器 UI（标签页 / 缩放）</td></tr>
+      <tr><td>⚑ 点击方式</td><td>坐标点击（CDP 鼠标事件）为主，元素级高亮辅助</td><td>语义化元素定位（注入 JS 查 DOM）</td></tr>
+      <tr><td>摄像头采集端</td><td>前端浏览器（复用 dual-test 已有能力）</td><td>下沉后端（后续阶段）</td></tr>
+    </table>
+
+    <h2 id="s2"><span class="no">2</span>可行性分析</h2>
+
+    <h3>2.1 技术可行性</h3>
+    <table>
+      <tr><th style="width:190px">关键点</th><th>结论</th><th>依据</th></tr>
+      <tr><td>眼动光标（页面内）</td><td>可行</td><td>dual-test 已用 WebGazer 2.1.2 + 13 点标定 + EMA + 磁吸跑通，可复用。</td></tr>
+      <tr><td>手势识别</td><td>可行</td><td>MediaPipe GestureRecognizer + 自定义 classifyHand（21 点）已跑通 6 件套。</td></tr>
+      <tr><td>浏览器控制</td><td>可行</td><td>CDP 提供 Input.dispatchMouseEvent / Input.dispatchKeyEvent / Runtime.evaluate / Page.navigate 等标准能力；Playwright 官方封装。</td></tr>
+      <tr><td>前端 ↔ 后端通信</td><td>可行</td><td>WebSocket 低延迟双向，适合连续坐标流；浏览器原生支持。</td></tr>
+      <tr><td>命令路由 + 适配器</td><td>可行</td><td>命令模型用 Pydantic 定义，适配器用接口抽象，工程成熟模式。</td></tr>
+    </table>
+
+    <h3>2.2 关键约束与难点</h3>
+    <ul>
+      <li><strong>眼动精度</strong>：普通摄像头注视点有百像素级误差，需「相对移动 + 平滑 + 死区 + 限速」，点击配合驻留或手势确认，避免误触。</li>
+      <li><strong>坐标口径统一</strong>：前端视口坐标（归一化 0–1）→ 后端换算为目标页面视口像素；需明确「谁负责换算」（约定：前端上报归一化，后端按目标视口尺寸换算）。</li>
+      <li><strong>CDP 连接稳定性</strong>：Chrome 由 Playwright 托管时端口 / 生命周期需管理；连接断开要可重连、不影响前端。</li>
+      <li><strong>实时链路延迟</strong>：检测（~50ms）+ 通信（&lt;10ms）+ 执行（&lt;10ms）合成，目标 &lt; 100ms；需在前端做节流（不逐帧全量上报，按 20–30Hz 采样）。</li>
+      <li><strong>跨域 / 页面类型</strong>：CDP 在页面上下文注入高亮是「浏览器特权」，不受网页跨域限制；但部分页面（如浏览器内置页、扩展页）不可控，需限定目标为普通 http/https 页面。</li>
+    </ul>
+
+    <h3>2.3 结论</h3>
+    <p>技术路线<strong>可行</strong>，且相较 v1.0 直接控制系统鼠标，本方案的<strong>环境障碍更少</strong>（无需辅助功能权限）、<strong>坐标更简单</strong>（视口坐标）、<strong>反馈更直观</strong>（页面内可见光标 / 高亮 / 滚动）。主要风险集中在眼动精度与 CDP 连接稳定性，均可通过分步实现 + 每步验收控制。</p>
+
+    <h2 id="s3"><span class="no">3</span>整体架构</h2>
+    <p>采用<strong>三层解耦</strong>：信号采集层（前端）→ 控制后端（命令路由）→ 目标适配层（浏览器 / 系统 / …）。</p>
+
+    <div class="arch">
+      <div class="layer">
+        <div class="lname">① 信号采集层 · 前端（浏览器，复用 dual-test 能力）</div>
+        <div class="boxes">
+          <span class="box">摄像头采集 getUserMedia</span>
+          <span class="box">眼动 WebGazer + 标定</span>
+          <span class="box">手势 MediaPipe GestureRecognizer</span>
+          <span class="box hl">事件生成：归一化坐标 + 手势 + 驻留</span>
+          <span class="box hl">WebSocket 客户端</span>
+          <span class="box">状态面板 UI</span>
+        </div>
+      </div>
+      <div class="arrow">▲ 标准化输入事件流（JSON）· ws://127.0.0.1:8899 · 仅本地 ▼</div>
+      <div class="layer">
+        <div class="lname">② 控制后端 · Python 本地进程</div>
+        <div class="boxes">
+          <span class="box">FastAPI WebSocket 端点</span>
+          <span class="box">Token 校验 / 心跳</span>
+          <span class="box hl">命令解析 Pydantic</span>
+          <span class="box hl">平滑 / 死区 / 限速 / 防抖</span>
+          <span class="box hl">命令路由器 Router</span>
+          <span class="box">状态回传</span>
+        </div>
+      </div>
+      <div class="arrow">▲ 目标无关的统一 Command · 适配器接口 TargetAdapter ▼</div>
+      <div class="layer">
+        <div class="lname">③ 目标适配层（可插拔）</div>
+        <div class="boxes">
+          <span class="box hl">BrowserAdapter（第一阶段）<br/>Playwright / CDP → 光标·点击·滚动·导航·高亮</span>
+          <span class="box">SystemAdapter（后续）<br/>pyautogui → 系统鼠标·缩放</span>
+          <span class="box">AppAdapter（后续）<br/>应用 API / 快捷键</span>
+          <span class="box">IoTAdapter（后续）</span>
+        </div>
+        <div class="legend">第一阶段仅实现 BrowserAdapter；其余为预留接口，验证可插拔性即可。</div>
+      </div>
+    </div>
+
+    <h3>3.1 数据流</h3>
+    <ol>
+      <li>前端取帧 → 眼动检测生成注视点、手势检测生成手势状态。</li>
+      <li>前端将结果封装为<strong>标准化输入事件</strong>（光标归一化坐标 / 手势名与状态 / 驻留点击），按 ~20–30Hz 经 WebSocket 上报后端。</li>
+      <li>后端校验 token，解析命令，做平滑 / 死区 / 限速，路由给当前激活的目标适配器。</li>
+      <li>BrowserAdapter 将命令翻译为 CDP 调用（移动 / 点击 / 滚动 / 导航 / 注入高亮），作用于目标页面。</li>
+      <li>后端把执行结果与状态（连接、目标、缩放级别、错误）回传前端展示。</li>
+    </ol>
+
+    <h3>3.2 命令模型（协议草案）</h3>
+    <pre><code>// 前端 → 后端：输入事件流
+{ "type": "cursor",  "x": 0.52, "y": 0.31, "ts": 1730620000000 }
+{ "type": "gesture", "name": "scroll_up", "state": "start" | "hold" | "end" }
+{ "type": "dwell",   "x": 0.52, "y": 0.31 }                 // 驻留点击（可选）
+
+// 后端 → 前端：状态回传
+{ "type": "state",   "target": "browser", "connected": true, "page": "https://..." }
+{ "type": "highlight", "x": 0.52, "y": 0.31 }               // 页面内高亮反馈</code></pre>
+    <div class="callout"><b>口径约定</b>：前端只上报<strong>归一化坐标</strong>（0–1）与<strong>语义手势名</strong>；换算为目标视口像素、以及手势→动作的映射，全部由后端负责。这样前端不变，扩展新目标只改后端适配器。</div>
+
+    <h2 id="s4"><span class="no">4</span>模块划分</h2>
+
+    <h3>4.1 前端模块（基于 dual-test 抽离）</h3>
+    <table>
+      <tr><th style="width:190px">模块</th><th>职责</th></tr>
+      <tr><td>采集模块</td><td>getUserMedia 取流，输出到检测器与预览。</td></tr>
+      <tr><td>眼动检测模块</td><td>WebGazer 2.1.2 注视点 + 标定 + EMA 平滑 + 磁吸。</td></tr>
+      <tr><td>手势检测模块</td><td>GestureRecognizer + classifyHand，输出 6 件套手势状态。</td></tr>
+      <tr><td>事件生成模块</td><td>把检测结果转为「归一化坐标 + 手势名 + 驻留」，做节流采样。</td></tr>
+      <tr><td>通信模块</td><td>WebSocket 客户端：上报事件、接收状态、自动重连。</td></tr>
+      <tr><td>测试台 UI</td><td>状态面板（检测 / 手势 / 连接 / 目标）、开关（驻留点击、发送开关）。</td></tr>
+    </table>
+
+    <h3>4.2 后端模块</h3>
+    <table>
+      <tr><th style="width:190px">模块</th><th>职责</th></tr>
+      <tr><td>接入层</td><td>FastAPI WebSocket 端点、token 校验、心跳、连接管理。</td></tr>
+      <tr><td>命令解析</td><td>Pydantic 校验输入事件，过滤非法 / 越界值。</td></tr>
+      <tr><td>信号处理</td><td>平滑（EMA）、死区、限速、防抖，抑制抖动与瞬移。</td></tr>
+      <tr><td>路由层</td><td>维护「当前激活适配器」，把统一 Command 分发给适配器。</td></tr>
+      <tr><td>BrowserAdapter</td><td>Playwright 托管 Chrome，执行光标 / 点击 / 滚动 / 导航 / 高亮。</td></tr>
+      <tr><td>状态服务</td><td>把连接、目标页面、错误、指标回传前端。</td></tr>
+    </table>
+
+    <h3>4.3 目标适配层</h3>
+    <table>
+      <tr><th style="width:190px">模块</th><th>职责</th></tr>
+      <tr><td>TargetAdapter 接口</td><td>定义 <code>execute(cmd)</code> / <code>start()</code> / <code>stop()</code> / <code>status()</code> 契约。</td></tr>
+      <tr><td>BrowserAdapter</td><td>第一阶段唯一实现：CDP 驱动浏览器页面。</td></tr>
+      <tr><td>SystemAdapter 等</td><td>预留（后续阶段），验证接口可插拔即可。</td></tr>
+    </table>
+
+    <h2 id="s5"><span class="no">5</span>技术选型与理由</h2>
+    <table>
+      <tr><th style="width:190px">技术项</th><th>选型</th><th>选型理由</th></tr>
+      <tr><td>眼动追踪</td><td>WebGazer 2.1.2（本地 vendor + facemesh 模型）</td><td>已在 dual-test 跑通、离线可跑、有 13 点标定，零迁移成本。</td></tr>
+      <tr><td>手势识别</td><td>MediaPipe GestureRecognizer + 自定义 classifyHand</td><td>21 点判定 6 件套手势已定稿且可靠，复用现有实现。</td></tr>
+      <tr><td>前端 ↔ 后端通信</td><td>WebSocket（原生）</td><td>低延迟双向、连续坐标流场景合适、无额外依赖。</td></tr>
+      <tr><td>后端框架</td><td>Python 3.11 + FastAPI + uvicorn</td><td>异步高并发、WebSocket 支持好；延续 v1.0 技术栈，减少切换成本。</td></tr>
+      <tr><td>命令校验</td><td>Pydantic v2</td><td>类型安全、校验 + 序列化一体，命令模型稳定可靠。</td></tr>
+      <tr><td>浏览器控制</td><td>Playwright（Python）</td><td>官方 Python 支持、封装 CDP 成熟、可托管启动 Chrome、元素级操作与 JS 注入齐全。</td></tr>
+      <tr><td>测试</td><td>pytest + websockets（客户端）+ Playwright 断言</td><td>后端接口可测、浏览器行为可自动断言。</td></tr>
+    </table>
+    <div class="callout"><b>为何第一阶段选 Python 而非 Node</b>：① 延续 v1.0 已定的 Python 后端方向，降低切换成本；② Playwright 对 Python 与 Node 支持同等完善，能力无短板；③ 为后续「系统级控制（pyautogui）」留同一语言栈，避免前后两阶段语言割裂。</div>
+
+    <h2 id="s6"><span class="no">6</span>风险点与应对</h2>
+    <table>
+      <tr><th style="width:190px">风险</th><th>影响</th><th>应对</th></tr>
+      <tr><td>眼动精度不足 / 抖动</td><td>光标漂移、难对准、误触</td><td>相对移动 + EMA 平滑 + 死区 + 限速；点击配合驻留或手势确认。</td></tr>
+      <tr><td>CDP / Chrome 连接不稳定</td><td>控制中断</td><td>Playwright 托管生命周期；断连自动重连；状态面板显式提示。</td></tr>
+      <tr><td>坐标口径不一致</td><td>光标 / 点击错位</td><td>约定前端只报归一化坐标，后端统一换算；单测覆盖坐标换算。</td></tr>
+      <tr><td>页面类型不可控</td><td>部分页面无法控制</td><td>限定目标为普通 http/https 页面；内置页 / 扩展页明确排除。</td></tr>
+      <tr><td>高频上报导致延迟 / 卡顿</td><td>链路延迟超标</td><td>前端按 20–30Hz 节流采样；后端限速。</td></tr>
+      <tr><td>隐私顾虑</td><td>用户拒绝摄像头</td><td>全程本地处理、不上传不落盘；明示隐私边界。</td></tr>
+      <tr><td>多目标切换混淆</td><td>指令发错目标</td><td>路由层单一「激活适配器」；状态面板展示当前目标。</td></tr>
+    </table>
+
+    <h2 id="s7"><span class="no">7</span>可扩展性</h2>
+    <ul>
+      <li><strong>新控制目标</strong>：实现新的 <code>TargetAdapter</code>（系统 / 应用 / IoT）即可接入，命令模型与前端不变。</li>
+      <li><strong>新手势 / 动作</strong>：手势集与「手势→动作」映射集中在后端路由层配置，新增手势不改前端核心。</li>
+      <li><strong>检测下沉后端</strong>：后续可把 MediaPipe 移到后端（Python mediapipe + opencv），前端退化为纯展示 / 遥控，复用同一命令协议。</li>
+      <li><strong>参数化配置</strong>：灵敏度、死区、平滑系数、手势阈值、点击驻留时长集中配置，支持热更新。</li>
+      <li><strong>元素级智能</strong>：BrowserAdapter 后续可加「注入 JS 查 DOM → 语义化点击」，从坐标点击升级到元素点击。</li>
+      <li><strong>多浏览器 / 多页面</strong>：Playwright 支持 Chromium / Firefox / WebKit，可扩展到多目标页面。</li>
+    </ul>
+
+    <h2 id="s8"><span class="no">8</span>安全性</h2>
+    <ul>
+      <li><strong>本地闭环</strong>：后端仅监听 <code>127.0.0.1</code>，不接受外部网络连接，防止远程控制。</li>
+      <li><strong>认证</strong>：WebSocket 连接带一次性 token（后端启动时生成，仅回显给前端），避免其他本地进程误连。</li>
+      <li><strong>数据本地化</strong>：摄像头画面与生物特征仅在本地处理，不上传、不落盘。</li>
+      <li><strong>最小权限</strong>：第一阶段仅需摄像头权限；无需系统辅助功能 / 输入监控等敏感权限。</li>
+      <li><strong>CDP 隔离</strong>：Chrome 由 Playwright 以独立用户数据目录启动（`--user-data-dir` 临时目录），不与用户日常浏览器共享会话与登录态，避免污染或泄露。</li>
+      <li><strong>命令白名单</strong>：后端只接受命令模型内定义的动作，非法类型 / 越界坐标直接拒绝。</li>
+    </ul>
+
+    <h2 id="s9"><span class="no">9</span>实现步骤与验收</h2>
+    <p>采用「后端先行（可独立用脚本驱动）→ 前端接入 → 端到端联调」的分步推进，<strong>每步独立可测、可验收</strong>。</p>
+
+    <div class="step">
+      <h3>步骤 1 · 命令协议 + 后端骨架</h3>
+      <p>FastAPI WebSocket 端点、Pydantic 命令模型、Token 校验、心跳、TargetAdapter 接口与空实现、统一 Command 定义。</p>
+      <div class="acc"><b>测试</b>：pytest 校验命令模型（合法 / 非法 / 越界）；用测试客户端连上 WebSocket 做心跳与命令往返。<br/><b>验收</b>：后端可启动、仅监听 127.0.0.1；非法命令被拒绝；心跳正常；连接断开可重连。</div>
+    </div>
+
+    <div class="step">
+      <h3>步骤 2 · BrowserAdapter（Playwright / CDP）</h3>
+      <p>Playwright 托管启动 Chrome（独立 user-data-dir），实现移动光标、点击、滚动、导航、元素高亮（Runtime.evaluate 注入覆盖层）。</p>
+      <div class="acc"><b>测试</b>：写脚本向后端发固定 Command，观察浏览器页面光标移动 / 滚动 / 点击 / 导航 / 高亮；Playwright 断言页面变化。<br/><b>验收</b>：后端能启动并控制 Chrome；滚动 / 点击 / 导航生效；高亮出现在指定视口坐标；断连可重连。</div>
+    </div>
+
+    <div class="step">
+      <h3>步骤 3 · 前端信号采集模块化</h3>
+      <p>从 dual-test 抽出眼动 + 手势，封装为「事件生成器」，输出归一化坐标 + 手势名 + 驻留，按 20–30Hz 经 WebSocket 上报，加自动重连。</p>
+      <div class="acc"><b>测试</b>：前端日志观察事件流；手动断开后端看自动重连；状态面板显示连接态。<br/><b>验收</b>：前端稳定输出标准化事件；WebSocket 断线自动重连；状态面板正确反映检测 / 连接 / 目标。</div>
+    </div>
+
+    <div class="step">
+      <h3>步骤 4 · 前后端联调（视线 → 浏览器光标 / 滚动）</h3>
+      <p>前端上报归一化坐标，后端换算为页面视口像素，驱动浏览器内光标移动；手势映射滚动。</p>
+      <div class="acc"><b>测试</b>：转动眼球，观察浏览器页面光标随视线移动、页面滚动；对照前端「视线光标」与浏览器光标。<br/><b>验收</b>：端到端增量延迟 &lt; 100 ms；移动方向与视线一致；死区与限速生效无抖动；滚动方向正确且连续。</div>
+    </div>
+
+    <div class="step">
+      <h3>步骤 5 · 通用测试页 + 点击 / 导航 / 完整手势映射</h3>
+      <p>提供通用测试页（按钮 / 链接 / 长滚动区 / 输入框 / 翻页）；接入驻留点击；6 件套手势映射到返回 / 主页 / 菜单 / 上滚 / 下滚 / 确认。</p>
+      <div class="acc"><b>测试</b>：眼动 + 手势完整操控测试页走查（点按钮、点链接跳转、滚动长页、翻页、返回）。<br/><b>验收</b>：真实用户操作可用；点击准确（配合驻留 / 手势确认）；手势误触可控；状态面板全程反馈。</div>
+    </div>
+
+    <div class="step">
+      <h3>步骤 6 · 稳健性与安全加固</h3>
+      <p>异常降级（无脸 / 无手 / 低置信度提示）、限速、token、独立 Chrome 会话、日志与指标。</p>
+      <div class="acc"><b>测试</b>：遮挡镜头、移开手、拔断连接、重启后端等异常场景逐一验证。<br/><b>验收</b>：所有异常均有明确反馈与降级，不崩溃；后端不监听外部网络；Chrome 会话隔离生效。</div>
+    </div>
+
+    <div class="step">
+      <h3>步骤 7 · 端到端验收</h3>
+      <p>全链路联调：眼动 + 手势同时运行，以通用测试页为靶场完整走查，测性能与稳定性。</p>
+      <div class="acc"><b>测试</b>：真实用户盲测 + 性能记录（延迟 / 帧率 / 误触率）。<br/><b>验收</b>：达到第 10 章 KPI；链路稳定运行 ≥ 5 分钟无崩溃；异常场景均降级。</div>
+    </div>
+
+    <h2 id="s10"><span class="no">10</span>里程碑与 KPI 汇总</h2>
+    <table>
+      <tr><th>里程碑</th><th>内容（对应步骤）</th><th>验收标准</th></tr>
+      <tr><td>M1</td><td>后端骨架 + 浏览器适配器（步骤 1–2）</td><td>脚本可驱动浏览器滚动 / 点击 / 导航。</td></tr>
+      <tr><td>M2</td><td>前端采集 + 前后端联调（步骤 3–4）</td><td>视线驱动浏览器页面光标与滚动。</td></tr>
+      <tr><td>M3</td><td>通用测试页完整操控（步骤 5–6）</td><td>眼动 + 手势完成测试页全走查。</td></tr>
+      <tr><td>M4</td><td>端到端验收（步骤 7）</td><td>真实用户盲测通过、KPI 达标。</td></tr>
+    </table>
+
+    <h3>10.1 关键指标（KPI）</h3>
+    <table>
+      <tr><th>指标</th><th>目标</th></tr>
+      <tr><td>检测帧率</td><td>≥ 20 FPS</td></tr>
+      <tr><td>光标增量端到端延迟</td><td>&lt; 100 ms</td></tr>
+      <tr><td>滚动 / 点击响应</td><td>&lt; 200 ms</td></tr>
+      <tr><td>手势判定（6 件套）</td><td>≥ 95%（真人盲测）</td></tr>
+      <tr><td>稳定性</td><td>连续运行 ≥ 5 分钟无崩溃；断连可自愈</td></tr>
+      <tr><td>误触率</td><td>无手势时零误动作（死区 + 冷却生效）</td></tr>
+    </table>
+
+    <div class="footer">隔空控制器 Air Controller · 控制后端系统设计报告 v2.0 · 2026-11-03 · 供后续开发指导使用</div>
+  </article>
+</div>
+
+</body>
+</html>
