@@ -29,6 +29,10 @@ app = FastAPI(title="Air Controller Backend")
 adapter = BrowserAdapter(home_url=HOME_URL)
 smoother = CursorSmoother()
 
+# 已连接的前端 WebSocket（用于向后端广播摄像头等指令）
+connections: list[WebSocket] = []
+camera_state: str = "off"
+
 
 @app.on_event("startup")
 async def on_startup() -> None:
@@ -43,6 +47,27 @@ async def on_shutdown() -> None:
 @app.get("/health")
 async def health() -> dict:
     return await adapter.status()
+
+
+async def broadcast(msg: dict) -> None:
+    """向所有已连接前端广播指令。"""
+    payload = json.dumps(msg)
+    for ws in list(connections):
+        try:
+            await ws.send_text(payload)
+        except Exception:  # noqa: BLE001
+            pass
+
+
+@app.get("/camera")
+async def set_camera(state: str = "off") -> dict:
+    """控制前端摄像头开关：GET /camera?state=on|off。"""
+    global camera_state
+    if state not in ("on", "off"):
+        return {"error": "invalid state", "camera": camera_state}
+    camera_state = state
+    await broadcast({"type": "camera", "state": state})
+    return {"camera": state, "connections": len(connections)}
 
 
 async def handle_cursor(ev: CursorEvent) -> None:
@@ -86,10 +111,14 @@ async def ws_endpoint(ws: WebSocket) -> None:
         await ws.close(code=4001, reason="invalid token")
         return
 
+    connections.append(ws)
+
     status = await adapter.status()
     await ws.send_text(
         StateMessage(connected=True, page=status["page"]).model_dump_json()
     )
+    # 下发当前摄像头状态，让晚连接的前端也能同步
+    await ws.send_text(json.dumps({"type": "camera", "state": camera_state}))
 
     try:
         while True:
@@ -113,3 +142,6 @@ async def ws_endpoint(ws: WebSocket) -> None:
                 )
     except WebSocketDisconnect:
         pass
+    finally:
+        if ws in connections:
+            connections.remove(ws)

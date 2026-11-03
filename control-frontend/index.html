@@ -230,8 +230,19 @@ function onBackendMsg(msg) {
     setPill($("pillBack"), msg.connected ? true : false, msg.connected ? "后端 · 已连接" : "后端 · 断开");
     if (msg.connected) log("已连接后端" + (msg.page ? `（${msg.page}）` : ""), "ok");
     else log("后端连接断开，自动重连中…", "er");
+  } else if (msg.type === "camera") {
+    applyCamera(msg.state);
   } else if (msg.type === "error") {
     log("后端错误：" + (msg.message || ""), "er");
+  }
+}
+
+// 应用后端下发的摄像头开关指令
+function applyCamera(state) {
+  if (state === "on") {
+    if (!S.running) { log("后端指令：开启摄像头"); boot(); }
+  } else {
+    stopCamera();
   }
 }
 
@@ -409,6 +420,35 @@ async function boot() {
   log(okHand ? "全部就绪 ✓" : "手势不可用，仅眼动", okHand ? "ok" : "er");
 }
 $("btnBoot").addEventListener("click", boot);
+
+/* ---------- 停止摄像头 ---------- */
+function stopCamera() {
+  if (!S.running && !gInit) { log("摄像头本就未开启"); return; }
+  try {
+    if (typeof webgazer !== "undefined") {
+      try { webgazer.clearGazeListener(); } catch (e) {}
+      try { webgazer.end(); } catch (e) {}
+    }
+  } catch (e) {}
+  // 兜底：直接停掉视频轨（webgazer.end 可能不彻底）
+  try {
+    const vf = document.getElementById("webgazerVideoFeed");
+    if (vf && vf.srcObject) {
+      vf.srcObject.getTracks().forEach(t => { try { t.stop(); } catch (e) {} });
+    }
+  } catch (e) {}
+  recognizer = null;
+  handImg = null;
+  S.running = false;
+  S.raw = "none";
+  gInit = false;
+  cursorEl.classList.remove("live");
+  renderHand();
+  $("btnBoot").disabled = false;
+  setPill($("pillCam"), false, "摄像头 · 已关闭");
+  setPill($("pillHand"), false, "手势 · 已关闭");
+  log("摄像头已关闭");
+}
 
 /* ---------- 模拟模式 ---------- */
 $("stage").addEventListener("mousemove", (e) => {

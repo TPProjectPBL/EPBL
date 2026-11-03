@@ -59,7 +59,9 @@ python3 .deepworks/tmp/ssl/https_server.py
 
 ## 控制后端（浏览器控制）
 
-免终端一键启停：双击 `control-backend/launcher.command` 打开**控制小窗**，点 **Start** 启动（自动拉起静态服务 + 后端 + 受控 Chrome），点 **End** 优雅终止（关闭受控 Chrome）。小窗里点「前端」可打开控制前端。
+免终端一键启停：双击 `control-backend/launcher.command`（或桌面「隔空控制器.command」）打开**控制小窗**，点 **Start** 启动（自动拉起静态服务 + 后端 + 受控 Chrome），点 **Stop** 优雅终止（关闭受控 Chrome）。小窗里点「前端」可打开控制前端；点「摄像头：开/关」可经后端向已连接的前端广播指令，远程开关前端摄像头。
+
+> 控制小窗用 macOS 原生 AppKit（pyobjc）实现，规避系统 Python 自带的 Tk 8.5 在新版 macOS 上无法渲染窗口的问题。运行依赖 `control-backend/.venv`（含 `pyobjc-framework-Cocoa`/`Quartz`）。
 
 手动方式（等价）：
 
