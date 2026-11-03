@@ -4,132 +4,221 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>眼动光标 + 手势控制 · 测试台</title>
+<!-- 主题：首屏前设置 data-theme，避免闪烁 -->
+<script>
+(function(){
+  function apply(t){document.documentElement.dataset.theme=t;try{localStorage.setItem("dual-test-theme",t);}catch(e){}}
+  try{
+    var t=localStorage.getItem("dual-test-theme");
+    if(t!=="light"&&t!=="dark"){t=(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches)?"light":"dark";}
+    apply(t);
+  }catch(e){document.documentElement.dataset.theme="dark";}
+  document.addEventListener("DOMContentLoaded",function(){
+    var b=document.getElementById("themeToggle");
+    if(b){b.addEventListener("click",function(){
+      apply(document.documentElement.dataset.theme==="light"?"dark":"light");
+    });}
+  });
+})();
+</script>
 <!-- WebGazer 必须用普通 script（全局变量），不能用 module -->
 <script src="../controller-demo/vendor/webgazer/webgazer.js"></script>
 <style>
   :root{
-    --bg:#05080f; --bg2:#0b1526; --panel:rgba(11,21,38,.92); --line:#1e2f4d;
-    --txt:#e6edf7; --dim:#7d8ea8; --acc:#38d996; --acc2:#4aa8ff; --warn:#ffb454; --bad:#ff6b6b;
+    --font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --font-body:-apple-system,"PingFang SC","Microsoft YaHei","Segoe UI",system-ui,sans-serif;
+    --ease:cubic-bezier(.16,1,.3,1);
+    --cut:10px;
+  }
+  /* 深色 · 黑黄（参考 alexiax dark） */
+  :root:not([data-theme]), :root[data-theme="dark"]{
+    color-scheme:dark;
+    --bg:#0b0b07; --bg2:#16160f; --panel:rgba(22,22,15,.93);
+    --line:rgba(245,197,24,.16); --line-strong:rgba(245,197,24,.5);
+    --txt:#f7f2de; --dim:#a79d72; --faint:#6b6449;
+    --acc:#f5c518; --acc-ink:#16160f; --acc2:#ffd94a;
+    --acc-soft:rgba(245,197,24,.08);
+    --warn:#f5c518; --bad:#ff5a4d;
+    --glow:rgba(245,197,24,.5);
+    --grid-line:rgba(245,197,24,.06);
+    --scan:rgba(0,0,0,.14);
+  }
+  /* 浅色 · 蓝白 */
+  :root[data-theme="light"]{
+    color-scheme:light;
+    --bg:#f3f7fc; --bg2:#ffffff; --panel:rgba(255,255,255,.96);
+    --line:rgba(37,99,235,.16); --line-strong:rgba(37,99,235,.5);
+    --txt:#16233a; --dim:#5a6b84; --faint:#8fa0b4;
+    --acc:#2563eb; --acc-ink:#ffffff; --acc2:#3b82f6;
+    --acc-soft:rgba(37,99,235,.08);
+    --warn:#2563eb; --bad:#e5484d;
+    --glow:rgba(37,99,235,.32);
+    --grid-line:rgba(37,99,235,.07);
+    --scan:rgba(37,99,235,.03);
   }
   *{box-sizing:border-box; -webkit-user-select:none; user-select:none;}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
-    font:14px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;overflow:hidden;}
+    font:14px/1.5 var(--font-body);overflow:hidden;}
 
   /* ---------- 全屏测试舞台 ---------- */
   #stage{position:fixed;inset:0;background:
-    radial-gradient(1200px 700px at 50% 40%,#0b1a2e 0%,#05080f 65%);
+    radial-gradient(1200px 700px at 50% 40%,var(--bg2) 0%,var(--bg) 65%);
     background-image:
-      radial-gradient(1200px 700px at 50% 40%,#0b1a2e 0%,#05080f 65%),
-      linear-gradient(rgba(38,64,102,.13) 1px,transparent 1px),
-      linear-gradient(90deg,rgba(38,64,102,.13) 1px,transparent 1px);
-    background-size:auto,44px 44px,44px 44px;
+      radial-gradient(1200px 700px at 50% 40%,var(--bg2) 0%,var(--bg) 65%),
+      linear-gradient(var(--grid-line) 1px,transparent 1px),
+      linear-gradient(90deg,var(--grid-line) 1px,transparent 1px);
+    background-size:auto,44px 44px,44px 44px;}
+  /* CRT 扫描线 */
+  #stage::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;
+    background:repeating-linear-gradient(0deg,transparent 0 3px,var(--scan) 3px 4px);opacity:.55;}
+
+  /* 光标轨迹方格 */
+  #trail{position:fixed;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;}
+
+  /* ---------- 品牌大字 EPBL（刷新扫光） ---------- */
+  .brand{
+    position:fixed;left:50%;top:70px;transform:translateX(-50%);z-index:3;
+    font-family:var(--font-mono);font-weight:800;font-size:clamp(44px,9vw,128px);line-height:1;
+    letter-spacing:.18em;text-indent:.18em;white-space:nowrap;pointer-events:none;user-select:none;
+    background:linear-gradient(100deg,
+      var(--faint) 0%,var(--faint) 32%,var(--acc) 45%,var(--acc2) 51%,var(--faint) 64%,var(--faint) 100%);
+    background-size:230% 100%;
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 0 16px var(--glow));
+    animation:brandRefresh 3.2s linear infinite;
+  }
+  @keyframes brandRefresh{
+    0%{background-position:115% 0;}
+    100%{background-position:-115% 0;}
   }
 
   /* ---------- 眼动光标 ---------- */
   #cursor{position:fixed;left:0;top:0;width:26px;height:26px;margin:-13px 0 0 -13px;
     border-radius:50%;pointer-events:none;z-index:50;opacity:0;transition:opacity .3s;
-    background:radial-gradient(circle at 40% 35%,#bfffe3,#38d996 55%,#0d7a52);
-    box-shadow:0 0 0 3px rgba(56,217,150,.22),0 0 22px rgba(56,217,150,.55);}
+    background:radial-gradient(circle at 40% 35%,#ffffff,var(--acc2) 40%,var(--acc) 78%);
+    box-shadow:0 0 0 3px var(--glow),0 0 24px var(--glow);}
   #cursor.live{opacity:1;}
-  #cursor::after{content:"";position:absolute;inset:9px;border-radius:50%;background:#031a10;}
+  #cursor::after{content:"";position:absolute;inset:9px;border-radius:50%;background:var(--bg);}
 
   /* ---------- 目标点 ---------- */
   #target{position:fixed;width:96px;height:96px;margin:-48px 0 0 -48px;border-radius:50%;
-    border:3px dashed rgba(74,168,255,.85);background:rgba(74,168,255,.10);
+    border:3px dashed var(--acc2);background:transparent;
     display:none;z-index:20;pointer-events:none;animation:tp 1.1s ease-in-out infinite;}
   #target::after{content:"";position:absolute;inset:38px;border-radius:50%;background:var(--acc2);}
   @keyframes tp{0%,100%{transform:scale(1)}50%{transform:scale(.92)}}
 
   /* ---------- 四按钮 ---------- */
-  .gbtn{position:fixed;width:190px;height:112px;border-radius:16px;
-    border:1px solid var(--line);background:rgba(13,24,42,.9);color:var(--txt);
+  .gbtn{position:fixed;width:190px;height:112px;border-radius:6px;
+    border:1px solid var(--line);background:var(--panel);color:var(--txt);
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
     z-index:15;transition:border-color .18s,box-shadow .18s,transform .12s;}
   .gbtn .ic{font-size:26px;line-height:1;}
-  .gbtn .nm{font-size:15px;font-weight:600;}
-  .gbtn .ac{font-size:11px;color:var(--dim);}
-  .gbtn.target{border-color:var(--acc2);box-shadow:0 0 0 2px rgba(74,168,255,.35),0 0 30px rgba(74,168,255,.35);}
-  .gbtn.ok{border-color:var(--acc);box-shadow:0 0 0 3px rgba(56,217,150,.45);transform:scale(1.03);}
-  .gbtn.bad{border-color:var(--bad);box-shadow:0 0 0 3px rgba(255,107,107,.45);}
+  .gbtn .nm{font-size:15px;font-weight:600;letter-spacing:.5px;}
+  .gbtn .ac{font-size:11px;color:var(--dim);font-family:var(--font-mono);}
+  .gbtn.target{border-color:var(--acc2);box-shadow:0 0 0 2px var(--glow),0 0 32px var(--glow);}
+  .gbtn.ok{border-color:var(--acc);box-shadow:0 0 0 3px var(--glow);transform:scale(1.03);}
+  .gbtn.bad{border-color:var(--bad);box-shadow:0 0 0 3px rgba(255,90,77,.45);}
 
   /* ---------- 面板 ---------- */
-  .panel{position:fixed;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  .panel{position:fixed;background:var(--panel);border:1px solid var(--line);border-radius:4px;
     backdrop-filter:blur(8px);z-index:40;}
+  .panel::before{content:"";position:absolute;top:-1px;left:-1px;width:14px;height:14px;
+    border-top:2px solid var(--acc);border-left:2px solid var(--acc);pointer-events:none;}
   #pCam{left:16px;top:16px;padding:10px;width:252px;}
   #pCtrl{right:16px;top:16px;padding:14px;width:296px;}
   #pLog{left:16px;bottom:16px;padding:10px 12px;width:340px;height:212px;display:flex;flex-direction:column;}
   #pRes{right:16px;bottom:16px;padding:12px 14px;width:296px;}
 
-  h1{margin:0 0 8px;font-size:14px;font-weight:700;letter-spacing:.3px;}
+  h1{margin:0 0 8px;font-size:13px;font-weight:700;letter-spacing:1.5px;font-family:var(--font-mono);}
   .sub{font-size:11px;color:var(--dim);}
+  .sub::before{content:"// ";color:var(--acc);font-family:var(--font-mono);}
 
   .gnow{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;}
   .gnow .ic{font-size:22px;}
   .gnow .nm{font-weight:600;}
-  .gnow .ac{margin-left:auto;color:var(--acc);font-size:12px;}
+  .gnow .ac{margin-left:auto;color:var(--acc);font-size:12px;font-family:var(--font-mono);}
   .meta{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
-  .pill{font-size:10px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--dim);}
-  .pill.on{color:var(--acc);border-color:rgba(56,217,150,.45);background:rgba(56,217,150,.08);}
-  .pill.bad{color:var(--bad);border-color:rgba(255,107,107,.4);}
+  .pill{font-size:10px;padding:2px 8px;border-radius:2px;border:1px solid var(--line);color:var(--dim);
+    font-family:var(--font-mono);letter-spacing:.5px;}
+  .pill.on{color:var(--acc);border-color:var(--line-strong);background:var(--acc-soft);}
+  .pill.bad{color:var(--bad);border-color:rgba(255,90,77,.4);}
 
-  button{font:inherit;cursor:pointer;border-radius:9px;border:1px solid var(--line);
-    background:#132239;color:var(--txt);padding:8px 10px;transition:.15s;}
-  button:hover:not(:disabled){border-color:#33507c;background:#17294a;}
+  button{font:inherit;cursor:pointer;position:relative;border:0;
+    background:var(--bg2);color:var(--txt);padding:9px 12px;transition:.18s;
+    clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut));}
+  button:hover:not(:disabled){background:var(--panel);color:var(--acc);}
   button:disabled{opacity:.4;cursor:not-allowed;}
-  button.primary{background:linear-gradient(180deg,#1f8f66,#14724f);border-color:#2bb985;font-weight:600;}
-  button.primary:hover:not(:disabled){background:linear-gradient(180deg,#25a175,#15805a);}
-  button.ghost{background:transparent;}
+  button.primary{background:var(--acc);color:var(--acc-ink);font-weight:600;}
+  button.primary:hover:not(:disabled){background:var(--acc2);color:var(--acc-ink);}
+  button.ghost{background:transparent;color:var(--dim);}
+  button.ghost:hover:not(:disabled){color:var(--acc);}
   .row{display:flex;gap:8px;align-items:center;}
   .row > *{flex:1;}
   .row.tight > *{flex:0 0 auto;}
-  .lbl{font-size:11px;color:var(--dim);margin:10px 0 5px;letter-spacing:.4px;}
+  .lbl{font-size:10px;color:var(--dim);margin:10px 0 5px;letter-spacing:1.5px;font-family:var(--font-mono);text-transform:uppercase;}
   .chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);}
   .chk input{accent-color:var(--acc);}
 
-  #log{flex:1;overflow:auto;font:11px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;
-    color:#9fb2cc;white-space:pre-wrap;word-break:break-word;}
+  #log{flex:1;overflow:auto;font:11px/1.55 var(--font-mono);
+    color:var(--dim);white-space:pre-wrap;word-break:break-word;}
   #log b{color:var(--txt);}
   #log .ok{color:var(--acc);}
   #log .er{color:var(--bad);}
 
   #res{font-size:12px;}
   #res table{width:100%;border-collapse:collapse;}
-  #res td{padding:4px 0;border-bottom:1px solid rgba(30,47,77,.6);}
-  #res td:last-child{text-align:right;font-variant-numeric:tabular-nums;color:var(--txt);}
+  #res td{padding:4px 0;border-bottom:1px solid var(--line);}
+  #res td:last-child{text-align:right;font-variant-numeric:tabular-nums;color:var(--txt);font-family:var(--font-mono);}
   #res tr:last-child td{border-bottom:0;}
   #res .note{color:var(--dim);font-size:11px;margin-top:8px;line-height:1.5;}
 
   /* ---------- 标定遮罩 ---------- */
-  #calib{position:fixed;inset:0;z-index:100;display:none;background:rgba(4,8,15,.94);}
+  #calib{position:fixed;inset:0;z-index:100;display:none;background:var(--bg);}
   #calib.show{display:block;}
   #calib .tips{position:absolute;left:50%;top:18px;transform:translateX(-50%);
     text-align:center;font-size:15px;line-height:1.8;color:var(--dim);}
-  #calib .tips b{color:var(--txt);}
+  #calib .tips b{color:var(--acc);}
   .cdot{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;
-    border:2px solid var(--acc2);background:rgba(74,168,255,.12);color:var(--acc2);
-    font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;}
-  .cdot:hover{background:rgba(74,168,255,.3);}
+    border:2px solid var(--acc2);background:transparent;color:var(--acc2);
+    font-weight:700;font-family:var(--font-mono);display:flex;align-items:center;justify-content:center;cursor:pointer;}
+  .cdot:hover{background:var(--acc-soft);}
   .cdot.done{opacity:.25;pointer-events:none;}
   #calibBar{position:absolute;left:50%;bottom:40px;transform:translateX(-50%);
-    font-size:13px;color:var(--dim);}
+    font-size:13px;color:var(--dim);font-family:var(--font-mono);}
   #calibClose{position:absolute;right:24px;top:20px;}
 
   .hint{position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:30;
-    font-size:12px;color:var(--dim);background:rgba(11,21,38,.8);border:1px solid var(--line);
-    padding:6px 14px;border-radius:999px;}
+    font-size:12px;color:var(--dim);background:var(--panel);border:1px solid var(--line);
+    padding:6px 14px;border-radius:2px;font-family:var(--font-mono);letter-spacing:.5px;}
 
   /* 留在视口内、完全透明：display:none 或移出视口都可能让浏览器暂停视频解码 */
   #webgazerVideoContainer{position:fixed !important;left:0 !important;top:0 !important;
     width:320px !important;height:240px !important;opacity:0 !important;
     pointer-events:none !important;z-index:0 !important;overflow:hidden !important;}
   #webgazerFaceOverlay,#webgazerFaceFeedbackBox{display:none !important;}
+
+  /* ---------- 面板头部 + 主题切换 ---------- */
+  .phead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin:0 0 8px;}
+  .phead h1{margin:0;}
+  .phead .sub{margin-top:2px;}
+  .theme-toggle{flex:0 0 auto;width:34px;height:34px;border-radius:4px;clip-path:none;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--bg2);color:var(--txt);border:1px solid var(--line);}
+  .theme-toggle:hover{color:var(--acc);border-color:var(--line-strong);}
+  .theme-toggle svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;
+    stroke-linecap:round;stroke-linejoin:round;}
+  .theme-toggle .i-moon{display:none;}
+  :root[data-theme="light"] .theme-toggle .i-sun{display:none;}
+  :root[data-theme="light"] .theme-toggle .i-moon{display:block;}
 </style>
 </head>
 <body>
 
 <div id="stage">
+  <canvas id="trail"></canvas>
   <div id="cursor"></div>
   <div id="target"></div>
+  <div class="brand" id="brand" data-text="EPBL">EPBL</div>
 </div>
 
 <div class="hint" id="hint">眼动控光标 · 手势发命令 —— 先启动并标定</div>
@@ -151,8 +240,16 @@
 
 <!-- 右上：控制 -->
 <div class="panel" id="pCtrl">
-  <h1>眼动光标 + 手势控制</h1>
-  <div class="sub">眼动负责“指哪”，手势负责“做什么”</div>
+  <div class="phead">
+    <div>
+      <h1>眼动光标 + 手势控制</h1>
+      <div class="sub">眼动负责“指哪”，手势负责“做什么”</div>
+    </div>
+    <button id="themeToggle" class="theme-toggle" title="切换深浅色" aria-label="切换深浅色">
+      <svg class="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      <svg class="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>
+  </div>
 
   <div class="lbl">第一步 · 启动</div>
   <div class="row">
@@ -355,7 +452,45 @@ function setCursor(x, y) {
   S.cursor.y = clamp(y, 0, innerHeight);
   cursorEl.style.left = S.cursor.x + "px";
   cursorEl.style.top = S.cursor.y + "px";
+  lightCellAt(S.cursor.x, S.cursor.y);
 }
+
+/* ---------- 光标轨迹 · 点亮方格 ---------- */
+const GRID = 44, TRAIL_LIFE = 650;
+const trailCanvas = $("trail");
+const tctx = trailCanvas.getContext("2d");
+const trailCells = new Map();
+let trailColor = "#f5c518";
+function readTrailColor() {
+  const v = getComputedStyle(document.documentElement).getPropertyValue("--acc").trim();
+  if (v) trailColor = v;
+}
+function sizeTrail() {
+  trailCanvas.width = innerWidth;
+  trailCanvas.height = innerHeight;
+  trailCells.clear();
+}
+function lightCellAt(x, y) {
+  trailCells.set(Math.floor(x / GRID) + "," + Math.floor(y / GRID), performance.now());
+}
+function drawTrail() {
+  tctx.clearRect(0, 0, trailCanvas.width, trailCanvas.height);
+  const now = performance.now();
+  for (const [key, t] of trailCells) {
+    const age = now - t;
+    if (age > TRAIL_LIFE) { trailCells.delete(key); continue; }
+    const k = 1 - age / TRAIL_LIFE;
+    const i = key.indexOf(",");
+    tctx.globalAlpha = 0.85 * k;
+    tctx.strokeStyle = trailColor;
+    tctx.lineWidth = 1.5;
+    tctx.strokeRect((+key.slice(0, i)) * GRID, (+key.slice(i + 1)) * GRID, GRID, GRID);
+  }
+  tctx.globalAlpha = 1;
+  requestAnimationFrame(drawTrail);
+}
+readTrailColor();
+new MutationObserver(readTrailColor).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
 /* ---------- WebGazer 眼动 ---------- */
 let gInit = false, gx = 0, gy = 0;
@@ -732,7 +867,7 @@ function buildButtons() {
 
 function layoutButtons() {
   const W = innerWidth, H = innerHeight;
-  const gap = 22, bw = 190, bh = 112;
+  const gap = 48, bw = 190, bh = 112;
   const totalW = bw * 2 + gap, totalH = bh * 2 + gap;
   const x0 = Math.round(W / 2 - totalW / 2);
   const y0 = Math.round(H / 2 - totalH / 2);
@@ -915,7 +1050,7 @@ $("btnExport").addEventListener("click", () => {
   log("已导出结果 JSON");
 });
 
-window.addEventListener("resize", () => { layoutButtons(); });
+window.addEventListener("resize", () => { layoutButtons(); sizeTrail(); });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") calibEl.classList.remove("show");
   // 调试：按 1-4 模拟手势，方便无摄像头时验证流程
@@ -925,6 +1060,8 @@ document.addEventListener("keydown", (e) => {
 
 /* ---------- 启动时构建 ---------- */
 buildButtons();
+sizeTrail();
+requestAnimationFrame(drawTrail);
 renderResults();
 log("页面就绪。点击右上「启动摄像头 + 模型」。");
 </script>
