@@ -12,3 +12,9 @@ uploads/
 
 # 旧 iOS 设计报告（已被 Web 版取代）
 outputs/眼动追踪系统设计报告.html
+
+# Python（控制后端）
+__pycache__/
+*.pyc
+.venv/
+venv/

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>通用测试页 · Air Controller Target</title>
+<style>
+  :root { --ink:#1a2033; --muted:#5b6577; --line:#e4e8f0; --brand:#2f6bff; --bg:#f6f8fc; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; color:var(--ink); background:var(--bg); line-height:1.7; }
+  header { background:linear-gradient(135deg,#0f1728,#2f4aa8); color:#eaf0ff; padding:40px 32px; }
+  header h1 { margin:0 0 8px; font-size:28px; }
+  header p { margin:0; color:#b9c6e8; }
+  main { max-width:900px; margin:0 auto; padding:24px 20px 80px; }
+  section { margin:28px 0; }
+  h2 { font-size:20px; border-bottom:2px solid var(--line); padding-bottom:8px; }
+  .btns { display:flex; flex-wrap:wrap; gap:12px; }
+  button { font-size:15px; padding:12px 22px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; transition:.15s; }
+  button:hover { border-color:var(--brand); color:var(--brand); }
+  button:active { background:#eef; }
+  #clicklog { margin-top:12px; font-size:13px; color:var(--muted); min-height:20px; }
+  .links a { display:inline-block; margin:4px 12px 4px 0; color:var(--brand); }
+  form { background:#fff; border:1px solid var(--line); border-radius:12px; padding:18px; display:grid; gap:12px; max-width:420px; }
+  input[type=text], select { font-size:15px; padding:10px 12px; border:1px solid var(--line); border-radius:8px; width:100%; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:14px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .card h3 { margin:0 0 6px; font-size:16px; }
+  .card p { margin:0; font-size:13px; color:var(--muted); }
+  footer { text-align:center; padding:24px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>通用测试页</h1>
+  <p>隔空控制器（Air Controller）第一阶段的控制靶场：覆盖按钮、链接、表单与长滚动区等标准网页交互元素。</p>
+</header>
+
+<main>
+  <section id="buttons">
+    <h2>1. 按钮区（点击测试）</h2>
+    <div class="btns">
+      <button data-action="A">按钮 A</button>
+      <button data-action="B">按钮 B</button>
+      <button data-action="C">按钮 C</button>
+      <button data-action="D">按钮 D</button>
+      <button data-action="E">按钮 E</button>
+      <button data-action="F">按钮 F</button>
+    </div>
+    <div id="clicklog">等待点击…</div>
+  </section>
+
+  <section id="links">
+    <h2>2. 链接区（导航测试）</h2>
+    <div class="links">
+      <a href="#buttons">跳到按钮区</a>
+      <a href="#form">跳到表单区</a>
+      <a href="#scroll">跳到滚动区</a>
+      <a href="#top">回到顶部</a>
+    </div>
+  </section>
+
+  <section id="form">
+    <h2>3. 表单区（输入测试）</h2>
+    <form onsubmit="event.preventDefault(); document.getElementById('formlog').textContent='已提交：'+document.getElementById('name').value;">
+      <label>姓名 <input type="text" id="name" placeholder="输入姓名" /></label>
+      <label>选项
+        <select>
+          <option>选项一</option>
+          <option>选项二</option>
+          <option>选项三</option>
+        </select>
+      </label>
+      <button type="submit">提交</button>
+      <div id="formlog" style="font-size:13px;color:var(--muted);"></div>
+    </form>
+  </section>
+
+  <section id="scroll">
+    <h2>4. 长滚动区（滚动测试）</h2>
+    <div class="cards">
+      <div class="card"><h3>卡片 1</h3><p>滚动测试内容占位。</p></div>
+      <div class="card"><h3>卡片 2</h3><p>滚动测试内容占位。</p></div>
+      <div class="card"><h3>卡片 3</h3><p>滚动测试内容占位。</p></div>
+      <div class="card"><h3>卡片 4</h3><p>滚动测试内容占位。</p></div>
+      <div class="card"><h3>卡片 5</h3><p>滚动测试内容占位。</p></div>
+      <div class="card"><h3>卡片 6</h3><p>滚动测试内容占位。</p></div>
+      <div class="card"><h3>卡片 7</h3><p>滚动测试内容占位。</p></div>
+      <div class="card"><h3>卡片 8</h3><p>滚动测试内容占位。</p></div>
+      <div class="card"><h3>卡片 9</h3><p>滚动测试内容占位。</p></div>
+      <div class="card"><h3>卡片 10</h3><p>滚动测试内容占位。</p></div>
+      <div class="card"><h3>卡片 11</h3><p>滚动测试内容占位。</p></div>
+      <div class="card"><h3>卡片 12</h3><p>滚动测试内容占位。</p></div>
+    </div>
+  </section>
+</main>
+
+<footer id="top">通用测试页 · 底部（回到顶部锚点）</footer>
+
+<script>
+  document.querySelectorAll('button[data-action]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.getElementById('clicklog').textContent = '点击了「' + b.textContent + '」';
+    });
+  });
+</script>
+</body>
+</html>
