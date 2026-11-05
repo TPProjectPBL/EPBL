@@ -58,7 +58,8 @@ cd ~/Desktop/project/outputs/fruit-slice
 ## 文件
 
 - `main.py` —— 全部代码（单文件，中文注释）
-- `models/hand_landmarker.task` —— MediaPipe 官方手部关键点模型（7.8MB，已随包提供）
+- `models/hand_landmarker.task` —— MediaPipe 官方手部关键点模型（7.8MB）
+  **未纳入仓库**（模型权重按课程要求不入库），首次运行会自动下载到该路径；也可手动放置。
 
 ## 常见问题
 
