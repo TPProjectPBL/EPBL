@@ -340,8 +340,9 @@ async function bootEye() {
   webgazer.showFaceOverlay(false);
   webgazer.showFaceFeedbackBox(false);
   webgazer.setGazeListener(onGaze);
+  // 1080p：吃满 Logitech 1080 的分辨率；负载高/掉帧可回退 ideal 1280x720。
   webgazer.params.camConstraints = {
-    video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }, audio: false,
+    video: { width: { ideal: 1920 }, height: { ideal: 1080 }, facingMode: "user" }, audio: false,
   };
   try { await webgazer.begin(); }
   catch (e) { log("WebGazer 启动失败：" + (e && e.message || e), "er"); setPill($("pillCam"), false, "摄像头 · 失败"); return false; }

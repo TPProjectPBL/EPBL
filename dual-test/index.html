@@ -561,8 +561,10 @@ async function bootEye() {
   // 让 WebGazer 自己以 720p 开流。不要页面预先 getUserMedia 再复用同一条流：
   // 一条 MediaStream 被多个 <video>（#cam + #webgazerVideoFeed + tf.data.webcam）同时消费，
   // Chrome 会静默卡住预测循环（onGaze 永不触发 → 视线灯灰、眼动 0 fps）。
+  // 1080p：吃满 Logitech 1080 的分辨率，脸部/瞳孔关键点更清晰 → 视线精度更高。
+  // 若机器负载高、眼动 fps 掉到 ~15 以下，可回退 ideal 1280x720。
   webgazer.params.camConstraints = {
-    video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
+    video: { width: { ideal: 1920 }, height: { ideal: 1080 }, facingMode: "user" },
     audio: false,
   };
   try {
