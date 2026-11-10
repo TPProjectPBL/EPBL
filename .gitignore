@@ -18,3 +18,20 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# 依赖与构建产物（老师要求不入库）
+node_modules/
+dist/
+build/
+*.log
+
+# IDE / 编辑器
+.idea/
+.vscode/
+*.swp
+.env/
+env/
+
+# 大模型权重文件（体积大，按老师要求不入库，需自行下载）
+*.task
+*.tflite

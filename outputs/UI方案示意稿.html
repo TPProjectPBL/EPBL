@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>网页「手势+眼神」双模态翻页插件 · UI 方案示意稿</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#141c30; --line:#23304d; --card:#18213a;
+    --text:#e6ebf5; --muted:#8ea2d9; --muted2:#6b7ba8;
+    --gaze:#50aaff; --gesture:#50dc96; --ok:#7ce0a5; --warn:#f0a0b0; --amber:#f0c674;
+    --grad:linear-gradient(135deg,#2f6bff,#7a3bff);
+    --r-panel:12px; --r-pill:20px; --r-ctl:8px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    line-height:1.6;font-size:14px;}
+  .wrap{max-width:1180px;margin:0 auto;padding:26px 22px 80px}
+
+  .doc-head{background:linear-gradient(135deg,#1b2a52 0%,#22305c 55%,#2a2350 100%);
+    border:1px solid var(--line);border-radius:16px;padding:22px 24px;margin-bottom:20px}
+  .doc-head h1{margin:0 0 6px;font-size:20px}
+  .doc-head p{margin:0;color:var(--muted);font-size:13px}
+  .badge{display:inline-block;margin-top:12px;background:#2a1f0e;border:1px solid #6b4d1f;
+    color:var(--amber);border-radius:var(--r-pill);padding:3px 12px;font-size:12px}
+
+  h2.sec{font-size:15px;margin:34px 0 12px;padding-left:10px;border-left:3px solid #2f6bff;letter-spacing:.3px}
+  h2.sec span{color:var(--muted2);font-weight:400;font-size:12.5px;margin-left:8px}
+  .hintline{color:var(--muted);font-size:12.5px;margin:-4px 0 14px}
+
+  /* ---------- 调试态 ---------- */
+  .grid{display:grid;grid-template-columns:340px 1fr;gap:16px}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-panel);padding:14px 16px;margin-bottom:14px}
+  .panel h3{margin:0 0 10px;font-size:13px;color:var(--muted);letter-spacing:.4px;font-weight:600}
+
+  /* 距离刻度 */
+  .dist-num{display:flex;align-items:baseline;gap:8px;margin-bottom:8px}
+  .dist-num b{font-size:26px;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+  .dist-num small{color:var(--muted);font-size:12px}
+  .scale{position:relative;height:44px;margin-top:4px}
+  .scale .track{position:absolute;top:20px;left:0;right:0;height:6px;background:#101c33;border-radius:3px;border:1px solid #1e2b49}
+  .scale .hyst{position:absolute;top:18px;height:10px;background:rgba(240,198,116,.16);border-left:1px dashed rgba(240,198,116,.55);border-right:1px dashed rgba(240,198,116,.55)}
+  .scale .crit{position:absolute;top:12px;width:2px;height:22px;background:var(--amber)}
+  .scale .cursor{position:absolute;top:12px;width:4px;height:22px;border-radius:2px;background:var(--gaze);
+    box-shadow:0 0 10px rgba(80,170,255,.8);transition:left .12s linear,background .3s}
+  .scale .tk{position:absolute;top:32px;transform:translateX(-50%);font-size:10.5px;color:var(--muted2)}
+  .legend-scale{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:2px}
+  .legend-scale i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+
+  /* 模式指示 */
+  .modes{display:flex;gap:10px}
+  .mode{flex:1;display:flex;align-items:center;gap:9px;padding:10px 12px;border-radius:10px;
+    border:1px solid var(--line);background:#101a2e;color:var(--muted2);transition:.25s}
+  .mode .ico{font-size:19px;filter:grayscale(1) opacity(.5);transition:.25s}
+  .mode .tx{font-size:13px;font-weight:600}
+  .mode .sub{font-size:11px;color:var(--muted2);display:block;font-weight:400}
+  .mode.active{color:var(--text);background:#0d2036;border-color:currentColor;box-shadow:0 0 0 1px rgba(255,255,255,.04) inset}
+  .mode.active .ico{filter:none}
+  .mode.gaze.active{color:var(--gaze);background:rgba(80,170,255,.10)}
+  .mode.gesture.active{color:var(--gesture);background:rgba(80,220,150,.10)}
+  .mode .sub{color:inherit;opacity:.75}
+  .cool{font-size:11.5px;color:var(--muted);margin-top:9px;display:flex;align-items:center;gap:6px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--muted2);display:inline-block}
+
+  /* 方向 + 置信度 + 驻留环 */
+  .dirrow{display:flex;align-items:center;gap:16px}
+  .arrowbox{width:74px;height:74px;border-radius:50%;background:#0d1729;border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;flex:none;position:relative}
+  .arrow{font-size:30px;transition:transform .35s ease,opacity .3s;color:var(--gaze)}
+  .arrow.low{opacity:.35}
+  .ring{position:relative;flex:none}
+  .ring svg{transform:rotate(-90deg)}
+  .ring .lab{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-size:10.5px;color:var(--muted)}
+  .ring .lab b{font-size:14px;color:var(--text);font-variant-numeric:tabular-nums}
+  .bars{flex:1;min-width:0}
+  .barline{display:flex;align-items:center;gap:8px;font-size:12px;margin:7px 0}
+  .barline .name{width:52px;color:var(--muted);flex:none}
+  .bar{flex:1;height:8px;background:#101c33;border-radius:4px;overflow:hidden;border:1px solid #1e2b49}
+  .bar i{display:block;height:100%;width:0;background:var(--gaze);transition:width .18s,background .3s}
+  .barline .val{width:40px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums;flex:none}
+
+  /* 事件日志 */
+  .log{background:#0c1526;border:1px solid #1d2b48;border-radius:10px;padding:8px 10px;height:200px;overflow:hidden;position:relative}
+  .log .row{display:flex;gap:8px;font-size:11.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    padding:3px 0;border-bottom:1px dashed rgba(35,48,77,.5)}
+  .log .row:last-child{border-bottom:none}
+  .log .t{color:var(--muted2);flex:none}
+  .log .e{flex:none;font-weight:600}
+  .log .p{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .e-trigger{color:var(--ok)} .e-mode{color:var(--amber)} .e-dir{color:var(--gaze)} .e-dist{color:var(--muted2)} .e-state{color:var(--warn)}
+  .logbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .mini{font-size:11.5px;color:var(--muted);background:#101a2e;border:1px solid var(--line);
+    border-radius:var(--r-ctl);padding:3px 9px}
+  .mini.on{color:var(--ok);border-color:#2f6b3f;background:#12391f}
+
+  /* 状态 chip 行 */
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{background:#1c2a4a;border:1px solid #2c3d63;color:#b9c6e8;border-radius:var(--r-pill);padding:5px 12px;font-size:12.5px}
+  .chip.on{background:#12391f;border-color:#2f6b3f;color:var(--ok)}
+  .chip.err{background:#3a1520;border-color:#6b2f3f;color:var(--warn)}
+  .chip.warn{background:#3a2c11;border-color:#6b5520;color:var(--amber)}
+
+  /* ---------- 产品态 ---------- */
+  .reading{position:relative;background:#0c1220;border:1px solid var(--line);border-radius:var(--r-panel);
+    padding:26px 30px 120px;overflow:hidden;min-height:340px}
+  .reading h4{margin:0 0 4px;font-size:16px;color:#dfe6f5}
+  .reading .byline{color:var(--muted2);font-size:12px;margin-bottom:16px}
+  .reading p{color:#b6c1da;font-size:13.5px;margin:0 0 13px;max-width:56ch}
+  .reading p.dim{color:#8e9ab8;background:rgba(255,255,255,.03);border-radius:6px;height:12px;margin-bottom:11px}
+  .pageflash{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .18s}
+  .pager{position:absolute;right:22px;bottom:20px;display:flex;align-items:center;gap:0;
+    background:rgba(18,26,45,.92);border:1px solid var(--line);border-radius:var(--r-pill);
+    padding:7px 11px;backdrop-filter:blur(8px);transition:all .3s cubic-bezier(.3,1.2,.5,1)}
+  .pager .pulse{width:9px;height:9px;border-radius:50%;background:var(--gaze);flex:none;
+    animation:breathe 2.6s ease-in-out infinite}
+  @keyframes breathe{0%,100%{opacity:.45;transform:scale(.85)}50%{opacity:1;transform:scale(1.15)}}
+  .pager .txt{font-size:12px;color:var(--muted);margin-left:9px;max-width:0;overflow:hidden;
+    white-space:nowrap;opacity:0;transition:.3s}
+  .pager.show .txt{max-width:200px;opacity:1;margin-left:11px}
+  .pager .stop{margin-left:0;width:0;overflow:hidden;opacity:0;border:none;background:transparent;color:var(--warn);
+    font-size:12px;cursor:pointer;white-space:nowrap;transition:.3s}
+  .pager.show .stop{width:auto;opacity:1;margin-left:14px}
+  .toast{position:absolute;left:50%;bottom:78px;transform:translateX(-50%) translateY(8px);
+    background:#16223c;border:1px solid var(--line);border-radius:var(--r-pill);padding:7px 15px;
+    font-size:12.5px;color:var(--text);opacity:0;transition:.35s;pointer-events:none;box-shadow:0 6px 22px rgba(0,0,0,.4)}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.gaze{border-color:rgba(80,170,255,.6);color:#bcdcff}
+  .toast.gesture{border-color:rgba(80,220,150,.6);color:#b6f0d2}
+  .edgeglow{position:absolute;top:0;bottom:0;width:3px;left:0;opacity:0;transition:opacity .3s}
+  .edgeglow.gaze{background:linear-gradient(180deg,transparent,var(--gaze),transparent)}
+  .edgeglow.gesture{background:linear-gradient(180deg,transparent,var(--gesture),transparent)}
+  .edgeglow.show{opacity:.9}
+
+  /* ---------- 异常卡片 ---------- */
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:12px}
+  .ecard{background:var(--card);border:1px solid var(--line);border-radius:var(--r-panel);padding:14px 15px}
+  .ecard .tt{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;margin-bottom:6px}
+  .ecard .tt i{font-size:16px;font-style:normal}
+  .ecard .ds{font-size:12.5px;color:var(--muted);margin:0 0 10px}
+  .ecard .code{font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--muted2);
+    background:#0c1526;border:1px solid #1d2b48;border-radius:4px;padding:1px 6px}
+  .ecard button{border:1px solid #2c3d63;background:#1c2a4a;color:#cdd8f0;border-radius:var(--r-ctl);
+    padding:5px 12px;font-size:12px;cursor:pointer}
+  .ecard.err{border-left:3px solid var(--warn)}
+  .ecard.warn{border-left:3px solid var(--amber)}
+  .ecard.info{border-left:3px solid var(--gaze)}
+
+  /* ---------- 规范 ---------- */
+  .specs{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+  .spec{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .spec .k{font-size:12px;color:var(--muted);margin-bottom:8px}
+  .spec .v{font-size:13px;font-variant-numeric:tabular-nums}
+  .swatches{display:flex;gap:6px;margin-top:4px}
+  .swatches i{width:22px;height:22px;border-radius:6px;display:block;border:1px solid rgba(255,255,255,.09)}
+  .foot{margin-top:34px;color:var(--muted2);font-size:12px;border-top:1px solid var(--line);padding-top:14px}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="doc-head">
+    <h1>网页「手势 + 眼神」双模态翻页插件 · UI 方案示意稿</h1>
+    <p>依据仓库设计报告 v2.0（1.5m 模式切换）· 沿用现有深色主题与 status-codes.js 状态枚举</p>
+    <span class="badge">⚠ 静态示意稿：数据为模拟值，非真实检测结果</span>
+  </div>
+
+  <!-- ============ 1 调试态 ============ -->
+  <h2 class="sec">一、调试态面板 <span>阶段 2–4 的验收工具 · 数字与状态优先</span></h2>
+  <p class="hintline">阶段 2 验收要「实测 1m / 1.5m / 2m」「临界不抖动」，阶段 3/4 要「方向 ≥90%」——这些都必须靠面板读数，靠肉眼是测不出来的。</p>
+
+  <div class="grid">
+    <!-- 左列 -->
+    <div>
+      <div class="panel">
+        <h3>距离与模式（阶段 2 验收核心）</h3>
+        <div class="dist-num">
+          <b id="distVal">1.42</b><small>m · 阈值 1.5m ± 0.2m 迟滞</small>
+        </div>
+        <div class="scale">
+          <div class="track"></div>
+          <div class="hyst" id="hyst"></div>
+          <div class="crit" id="crit"></div>
+          <div class="cursor" id="cursor"></div>
+          <div class="tk" style="left:0%">0</div>
+          <div class="tk" style="left:16.6%">0.5</div>
+          <div class="tk" style="left:33.3%">1.0</div>
+          <div class="tk" style="left:50%">1.5</div>
+          <div class="tk" style="left:66.6%">2.0</div>
+          <div class="tk" style="left:83.3%">2.5</div>
+          <div class="tk" style="left:100%">3.0</div>
+        </div>
+        <div class="legend-scale">
+          <span><i style="background:var(--gaze)"></i>实时距离</span>
+          <span><i style="background:var(--amber)"></i>切换阈值</span>
+          <span><i style="background:rgba(240,198,116,.35)"></i>迟滞带（带内不切换）</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>当前模式（全局色彩语义）</h3>
+        <div class="modes">
+          <div class="mode gaze active" id="mGaze">
+            <span class="ico">👁</span>
+            <span><span class="tx">眼神</span><span class="sub">近距 · &lt;1.3m</span></span>
+          </div>
+          <div class="mode gesture" id="mGesture">
+            <span class="ico">✋</span>
+            <span><span class="tx">手势</span><span class="sub">远距 · &gt;1.7m</span></span>
+          </div>
+        </div>
+        <div class="cool"><span class="dot" id="coolDot"></span><span id="coolTxt">动作冷却：就绪</span></div>
+      </div>
+
+      <div class="panel">
+        <h3>状态与异常（复用 status-codes.js）</h3>
+        <div class="chips">
+          <span class="chip on">摄像头：运行中</span>
+          <span class="chip">FPS：31</span>
+          <span class="chip on">模型：就绪</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右列 -->
+    <div>
+      <div class="panel">
+        <h3>方向 / 置信度 / 驻留（阶段 3–4 验收）</h3>
+        <div class="dirrow">
+          <div class="arrowbox"><span class="arrow" id="arrow">↑</span></div>
+          <div class="ring">
+            <svg width="92" height="92">
+              <circle cx="46" cy="46" r="38" fill="none" stroke="#101c33" stroke-width="8"/>
+              <circle id="dwellRing" cx="46" cy="46" r="38" fill="none" stroke="#50dc96" stroke-width="8"
+                      stroke-linecap="round" stroke-dasharray="238.7" stroke-dashoffset="238.7"/>
+            </svg>
+            <div class="lab"><b id="dwellPct">0%</b><span>驻留</span></div>
+          </div>
+          <div class="bars">
+            <div class="barline">
+              <span class="name">置信度</span>
+              <span class="bar"><i id="confBar"></i></span>
+              <span class="val" id="confVal">0.00</span>
+            </div>
+            <div class="barline">
+              <span class="name">方向</span>
+              <span class="bar" style="background:none;border:none;padding:0"><b id="dirTxt" style="color:var(--gaze)">上</b></span>
+              <span class="val" id="srcVal">眼神</span>
+            </div>
+            <div class="barline">
+              <span class="name">触发</span>
+              <span class="bar" style="background:none;border:none;padding:0"><b id="trigTxt" style="color:var(--muted2)">—</b></span>
+              <span class="val" id="latVal">—</span>
+            </div>
+          </div>
+        </div>
+        <p class="hintline" style="margin:12px 0 0">低置信度时箭头只「变淡收窄」，绝不乱指方向；驻留用环形进度就地填满，符合「看着它填满」的直觉。</p>
+      </div>
+
+      <div class="panel">
+        <div class="logbar">
+          <h3 style="margin:0">事件日志抽屉 <span style="color:var(--muted2);font-weight:400">（验收直接数数用）</span></h3>
+          <span class="mini on">● 记录中</span>
+        </div>
+        <div class="log" id="log"></div>
+        <p class="hintline" style="margin:10px 0 0">
+          误触次数、触发延迟直接从这行日志统计，不用人工盯屏幕。这是投入产出比最高的一块 UI。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 2 产品态 ============ -->
+  <h2 class="sec">二、产品态（实际阅读场景） <span>UI 必须「隐身」，只在该说话时说话</span></h2>
+  <p class="hintline">翻页插件的前提是「用户正在读东西」。任何常驻遮挡都是负体验。默认只留一个吸附在边缘的呼吸点，动作发生时短暂现身 800ms 后自动淡出；摄像头预览绝不常驻。</p>
+
+  <div class="reading" id="reading">
+    <div class="edgeglow gaze" id="edgeglow"></div>
+    <h4>第三章 · 双模态切换的迟滞设计</h4>
+    <div class="byline">设计报告 v2.0 · 第 7 节</div>
+    <p>为避免用户在 1.5m 临界距离反复横跳时触发模式抖动，切换逻辑引入迟滞带：进入近距离需低于 1.3m，退回远距离需高于 1.7m，并附加切换后的动作冷却。</p>
+    <p class="dim"></p><p class="dim" style="width:92%"></p><p class="dim" style="width:78%"></p>
+    <p>这一设计使得「切过去就不再切回来」，代价是切换存在约 0.4m 的缓冲区——这也是 UI 必须在视觉上把迟滞带表达出来的原因。</p>
+    <p class="dim" style="width:96%"></p><p class="dim" style="width:64%"></p>
+
+    <div class="toast" id="toast">已切换到手势模式 ✋</div>
+
+    <div class="pager" id="pager">
+      <span class="pulse" id="pulse"></span>
+      <span class="txt" id="pagerTxt">看下方 · 正在驻留</span>
+      <button class="stop" id="stopBtn">停止采集</button>
+    </div>
+    <div class="pageflash" id="pageflash"></div>
+  </div>
+  <p class="hintline" style="margin-top:10px">
+    看点：① 呼吸点颜色 = 当前模式（蓝=眼神 / 绿=手势）② 触发翻页时整页边缘闪一次模态色 ③「停止采集」一键就在手边（隐私可控是报告第 10 节的硬要求）
+  </p>
+
+  <!-- ============ 3 异常 ============ -->
+  <h2 class="sec">三、异常状态卡片 <span>现有实现只有一行 hint 文字，这里给出可落地的替代</span></h2>
+  <div class="cards">
+    <div class="ecard err">
+      <div class="tt"><i>🚫</i>摄像头权限被拒绝</div>
+      <p class="ds">请在浏览器地址栏左侧的图标中允许摄像头访问，然后重试。</p>
+      <span class="code">err_permission_denied</span> <button>重新授权</button>
+    </div>
+    <div class="ecard err">
+      <div class="tt"><i>📷</i>未检测到摄像头设备</div>
+      <p class="ds">请确认设备已连接且未被系统禁用。</p>
+      <span class="code">err_no_device</span> <button>重试</button>
+    </div>
+    <div class="ecard err">
+      <div class="tt"><i>🔒</i>摄像头被其它程序占用</div>
+      <p class="ds">会议、录屏类软件可能正在使用摄像头，请关闭后重试。</p>
+      <span class="code">err_device_busy</span> <button>重试</button>
+    </div>
+    <div class="ecard warn">
+      <div class="tt"><i>🔐</i>需要 HTTPS 环境</div>
+      <p class="ds">浏览器仅在 HTTPS 或 localhost 下允许访问摄像头。</p>
+      <span class="code">err_insecure_context</span>
+    </div>
+    <div class="ecard warn">
+      <div class="tt"><i>💡</i>光线不足，精度下降</div>
+      <p class="ds">弱光是识别精度最大的杀手，建议面向光源或靠近屏幕。</p>
+    </div>
+    <div class="ecard info">
+      <div class="tt"><i>👀</i>暂时看不到你</div>
+      <p class="ds">检测到离开画面或长时间低头，识别已暂停，不报警、不打扰。</p>
+    </div>
+    <div class="ecard info">
+      <div class="tt"><i>🧑‍🤝‍🧑</i>画面中有多人</div>
+      <p class="ds">已自动锁定面积最大的人脸为主体，可在设置中手动切换。</p>
+    </div>
+    <div class="ecard warn">
+      <div class="tt"><i>⏳</i>检测模型加载失败</div>
+      <p class="ds">请检查网络后重试（MediaPipe 资源走 CDN）。</p>
+      <span class="code">err_detector_load</span> <button>重试</button>
+    </div>
+  </div>
+
+  <!-- ============ 4 规范 ============ -->
+  <h2 class="sec">四、视觉规范（与现有 style.css 保持一致）</h2>
+  <div class="specs">
+    <div class="spec">
+      <div class="k">模式色彩语义</div>
+      <div class="swatches">
+        <i style="background:#50aaff" title="眼神"></i>
+        <i style="background:#50dc96" title="手势"></i>
+        <i style="background:#f0c674" title="阈值/迟滞"></i>
+      </div>
+      <div class="v" style="font-size:12px;color:var(--muted);margin-top:6px">眼神蓝延续 face 蓝<br/>手势绿延续 hand 绿</div>
+    </div>
+    <div class="spec"><div class="k">圆角</div><div class="v">面板 12 · 胶囊 20 · 控件 8</div></div>
+    <div class="spec"><div class="k">动效时长</div><div class="v">交互 150–250ms · 提示自动消失 600–900ms</div></div>
+    <div class="spec"><div class="k">最小字号</div><div class="v">12px（正文以外不出现纯白 #fff）</div></div>
+    <div class="spec"><div class="k">色盲友好</div><div class="v">模式同时用图标 👁 / ✋ 区分，不只靠颜色</div></div>
+    <div class="spec"><div class="k">动效降级</div><div class="v">尊重 prefers-reduced-motion，关闭呼吸与过渡</div></div>
+  </div>
+
+  <div class="foot">
+    示意稿仅供方案讨论 · 数据为模拟值 · 对应建议文档：<b>UI阶段建议与接口契约-可发群.md</b>
+  </div>
+</div>
+
+<script>
+(function(){
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* -------- 距离刻度：0–3m 映射 -------- */
+  const MAX = 3.0;
+  const hyst = document.getElementById('hyst');
+  const crit = document.getElementById('crit');
+  const cursor = document.getElementById('cursor');
+  hyst.style.left  = (1.3/MAX*100) + '%';
+  hyst.style.width = (0.4/MAX*100) + '%';
+  crit.style.left  = (1.5/MAX*100) + '%';
+
+  /* -------- 模式：迟滞带判定 -------- */
+  let mode = 'gaze';            // gaze | gesture
+  let coolUntil = 0;            // 冷却截止时间戳
+  const mGaze = document.getElementById('mGaze');
+  const mGesture = document.getElementById('mGesture');
+  const coolDot = document.getElementById('coolDot');
+  const coolTxt = document.getElementById('coolTxt');
+  const pulse = document.getElementById('pulse');
+  const arrow = document.getElementById('arrow');
+  const confBar = document.getElementById('confBar');
+  const confVal = document.getElementById('confVal');
+  const dirTxt = document.getElementById('dirTxt');
+  const srcVal = document.getElementById('srcVal');
+  const trigTxt = document.getElementById('trigTxt');
+  const latVal = document.getElementById('latVal');
+  const dwellRing = document.getElementById('dwellRing');
+  const dwellPct = document.getElementById('dwellPct');
+  const distVal = document.getElementById('distVal');
+  const logEl = document.getElementById('log');
+  const toast = document.getElementById('toast');
+  const pager = document.getElementById('pager');
+  const pagerTxt = document.getElementById('pagerTxt');
+  const pageflash = document.getElementById('pageflash');
+  const edgeglow = document.getElementById('edgeglow');
+  const RING_LEN = 238.7;
+
+  function applyMode(next, reason){
+    if(mode === next) return;
+    mode = next;
+    const isGaze = mode === 'gaze';
+    mGaze.classList.toggle('active', isGaze);
+    mGesture.classList.toggle('active', !isGaze);
+    pulse.style.background = isGaze ? '#50aaff' : '#50dc96';
+    arrow.style.color = isGaze ? '#50aaff' : '#50dc96';
+    confBar.style.background = isGaze ? '#50aaff' : '#50dc96';
+    dirTxt.style.color = isGaze ? '#50aaff' : '#50dc96';
+    cursor.style.background = isGaze ? '#50aaff' : '#50dc96';
+    srcVal.textContent = isGaze ? '眼神' : '手势';
+    // 切换提示 + 边缘描边（迟滞带内不播报，只在此处播一次）
+    toast.textContent = isGaze ? '已切换到眼神模式 👁' : '已切换到手势模式 ✋';
+    toast.className = 'toast show ' + (isGaze ? 'gaze' : 'gesture');
+    edgeglow.className = 'edgeglow ' + (isGaze ? 'gaze' : 'gesture') + ' show';
+    setTimeout(()=>{ toast.classList.remove('show'); }, 900);
+    setTimeout(()=>{ edgeglow.classList.remove('show'); }, 700);
+    coolUntil = Date.now() + 1200;
+    addLog('mode', 'modechange', '{ mode:"'+(isGaze?'gaze':'gesture')+'", reason:"'+reason+'" }');
+  }
+
+  function addLog(cls, evt, payload){
+    const t = new Date();
+    const ts = String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0')+':'+String(t.getSeconds()).padStart(2,'0');
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = '<span class="t">'+ts+'</span><span class="e e-'+cls+'">'+evt+'</span><span class="p">'+payload+'</span>';
+    logEl.prepend(row);
+    while(logEl.children.length > 14) logEl.lastChild.remove();
+  }
+
+  /* -------- 模拟数据源 -------- */
+  let dist = 1.42, distTarget = 1.42;
+  let dir = 'up', conf = 0.86, dwell = 0;
+
+  function tickDistance(){
+    // 模拟用户前后移动：在 0.9 ~ 2.1 之间缓慢漂移
+    if(Math.random() < 0.06) distTarget = 0.9 + Math.random() * 1.2;
+    dist += (distTarget - dist) * 0.25;
+    const shown = dist + (Math.random()-0.5) * 0.03;
+    distVal.textContent = shown.toFixed(2);
+    cursor.style.left = Math.min(100, shown / MAX * 100) + '%';
+    // 占位变化日志（节流）
+    if(Math.random() < 0.12) addLog('dist','distancechange','{ meters:' + shown.toFixed(2) + ' }');
+    // 迟滞判定：<1.3 → gaze，>1.7 → gesture
+    if(shown < 1.3) applyMode('gaze','cross');
+    else if(shown > 1.7) applyMode('gesture','cross');
+    // 冷却显示
+    const cooling = Date.now() < coolUntil;
+    coolDot.style.background = cooling ? '#f0c674' : (mode==='gaze' ? '#50aaff' : '#50dc96');
+    coolTxt.textContent = '动作冷却：' + (cooling ? '冷却中…' : '就绪');
+  }
+
+  /* -------- 方向 / 驻留 / 触发 -------- */
+  const DIRS = [['up','↑','上'],['down','↓','下'],['left','←','左'],['right','→','右'],['center','·','中心']];
+  let dirTimer = 0;
+
+  function tickDirection(now){
+    if(now - dirTimer < 1400) return;
+    dirTimer = now;
+    const pick = DIRS[Math.floor(Math.random()*DIRS.length)];
+    dir = pick[0];
+    conf = dir === 'center' ? 0.55 + Math.random()*0.4 : 0.62 + Math.random()*0.38;
+    arrow.textContent = pick[1];
+    arrow.classList.toggle('low', conf < 0.7);
+    confBar.style.width = (conf*100) + '%';
+    confVal.textContent = conf.toFixed(2);
+    dirTxt.textContent = pick[2];
+    addLog('dir','directionchange','{ dir:"'+dir+'", conf:'+conf.toFixed(2)+', source:"'+mode+'" }');
+    dwell = 0;
+  }
+
+  function tickDwell(){
+    if(dir === 'center' || conf < 0.6){
+      dwell = 0;
+    } else {
+      dwell += 0.055;                    // 约 700ms 填满
+      if(dwell >= 1){
+        dwell = 0;
+        const latency = 700 + Math.round(Math.random()*280);
+        trigTxt.textContent = dir === 'up' ? '上一页' : dir === 'down' ? '下一页' : dir;
+        trigTxt.style.color = '#7ce0a5';
+        latVal.textContent = latency + 'ms';
+        addLog('trigger','trigger','{ dir:"'+dir+'", action:"'+dir+'", latencyMs:'+latency+', modal:"'+mode+'" }');
+        // 阅读区反馈：边缘闪 + 胶囊短暂现身
+        pageflash.style.background = mode==='gaze'
+          ? 'linear-gradient(90deg,rgba(80,170,255,.16),transparent)'
+          : 'linear-gradient(90deg,rgba(80,220,150,.16),transparent)';
+        pageflash.style.opacity = '1';
+        pager.classList.add('show');
+        pagerTxt.textContent = (mode==='gaze'?'眼神':'手势') + ' · ' + (dir==='up'?'上一页':'下一页') + ' ' + latency + 'ms';
+        setTimeout(()=>{ pageflash.style.opacity = '0'; }, 180);
+        setTimeout(()=>{ pager.classList.remove('show'); }, 1600);
+        setTimeout(()=>{ trigTxt.style.color = '#6b7ba8'; trigTxt.textContent = '—'; latVal.textContent = '—'; }, 1200);
+      }
+    }
+    const p = Math.max(0, Math.min(1, dwell));
+    dwellRing.setAttribute('stroke-dashoffset', String(RING_LEN * (1 - p)));
+    dwellPct.textContent = Math.round(p*100) + '%';
+  }
+
+  document.getElementById('stopBtn').addEventListener('click', function(){
+    addLog('state','statechange','{ state:"camera_stopped", message:"已停止" }');
+    pulse.style.background = '#6b7ba8';
+    pager.classList.add('show');
+    pagerTxt.textContent = '采集已停止';
+  });
+
+  /* -------- 启动 -------- */
+  addLog('state','statechange','{ state:"camera_running", message:"运行中" }');
+  addLog('dist','distancechange','{ meters:1.42 }');
+
+  if(reduce){
+    distVal.textContent = '1.42';
+    cursor.style.left = '47.3%';
+    confBar.style.width = '86%'; confVal.textContent = '0.86';
+    dwellRing.setAttribute('stroke-dashoffset', String(RING_LEN*0.45));
+    dwellPct.textContent = '45%';
+    pager.classList.add('show'); pagerTxt.textContent = '看下方 · 正在驻留';
+  } else {
+    setInterval(tickDistance, 260);                       // 距离 / 模式
+    setInterval(()=>tickDirection(performance.now()), 220); // 方向
+    setInterval(tickDwell, 40);                            // 驻留 / 触发
+    setTimeout(()=>{ pager.classList.add('show'); pagerTxt.textContent = '看下方 · 正在驻留'; }, 1200);
+  }
+})();
+</script>
+</body>
+</html>
