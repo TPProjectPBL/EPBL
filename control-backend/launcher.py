@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import os
 import queue
 import subprocess
 import sys
@@ -37,12 +38,14 @@ class BackendManager:
     state: stopped -> starting -> running -> stopping -> stopped
     """
 
-    def __init__(self, on_log=None):
+    def __init__(self, on_log=None, extra_env=None):
         self.http_proc: subprocess.Popen | None = None
         self.backend_proc: subprocess.Popen | None = None
         self.state = "stopped"
         self.page = ""
         self.on_log = on_log
+        # 启动后端时额外注入的环境变量（如 AC_HOME，用于指定受控浏览器打开的目标页）。
+        self.extra_env: dict = dict(extra_env or {})
         self._stop_evt = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -68,10 +71,12 @@ class BackendManager:
 
         self._log("正在启动控制后端（拉起受控 Chrome）…")
         try:
+            env = {**os.environ, **self.extra_env}
             self.backend_proc = subprocess.Popen(
                 [str(VENV_PY), "-m", "uvicorn", "app.server:app",
                  "--host", "127.0.0.1", "--port", str(BACKEND_PORT)],
-                cwd=str(BACKEND_DIR), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                cwd=str(BACKEND_DIR), env=env,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
         except Exception as e:
             self._log(f"后端启动失败：{e}")
