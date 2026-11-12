@@ -61,7 +61,9 @@ class BackendManager:
         self._log("正在启动静态文件服务…")
         try:
             self.http_proc = subprocess.Popen(
-                [sys.executable, "-m", "http.server", str(HTTP_PORT)],
+                # 仅绑定回环地址，避免把工作台/测试页暴露到局域网。
+                [sys.executable, "-m", "http.server", str(HTTP_PORT),
+                 "--bind", "127.0.0.1"],
                 cwd=str(ROOT), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
         except Exception as e:
