@@ -4,6 +4,8 @@
 基线：`draw/index.html`（隔空画板 v3.0 · WebGazer）
 交付：`draw/index-3-hand.html`（未覆盖原文件）
 
+> 注：基线文件 `draw/index.html` 已在后续整理中删除，功能并入 `draw/index-3-hand.html`；下文“未改原文件”等为当时记录。
+
 ## 最终参数
 
 | 项 | 最终值 |

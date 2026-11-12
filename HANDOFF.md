@@ -3,7 +3,7 @@
 > 写给**完全没有上下文的新会话**。先读完这一份再动代码，能省掉至少两小时的重踩。
 > 最后更新：2026-11-05 ｜ HEAD：`fb55ac0`（origin/main 0/0；本次文档改动尚未提交）
 > 团队仓库：`origin = TPProjectPBL/EPBL` ｜ 本机克隆**只配了 origin**（旧文档里的个人 fork `jarvis` 已移除）
-> 分工（按提交历史）：AlexiaWHsu = 眼动 / dual-test / 控制后端 ｜ Evelyn = gesture-fruit / fruit-slice / 文档 ｜ **Thriving-r = 隔空画板 `draw/`**
+> 分工（按提交历史）：AlexiaWHsu = 眼动 / dual-test / 控制后端 ｜ Evelyn = 文档 / fruit-slice ｜ **Thriving-r = 隔空画板 `draw/`**
 
 ---
 
@@ -90,14 +90,13 @@
 
 ### 隔空画板：`draw/`（Thriving-r 负责）✅ 功能完整，真机手感待复测
 
-眼动 / 手势驱动的隔空画板，两套入口共用同一套渲染与工具层：
+眼动 / 手势驱动的隔空画板，现仅保留手势优先版（原 `draw/index.html` 眼动版已删除，其渲染与工具层已合并进 `index-3-hand.html`）：
 
 | 文件 | 形态 | 落笔方式 | 适用 |
 |---|---|---|---|
-| `draw/index.html` | v3.0 眼动优先（WebGazer 9 点标定 → 视线九宫格 → 笔尖 lerp） | 右手**握拳**落笔 / **张开手掌**抬笔 | 眼动已标定的主路径 |
-| `draw/index-3-hand.html` | 手势优先版（2026-10-29 新增，**未覆盖**原文件） | 拇指+食指**捏合**落笔（<0.45 落 / >0.60 抬），握拳也可落笔；笔尖 = **食指指尖（landmark 8）** 经 One Euro 平滑 | 眼动不稳时的稳定备选 |
+| `draw/index-3-hand.html` | 手势优先版（含原 v3.0 眼动标定 + 视线九宫格 + 全套工具层） | 拇指+食指**捏合**落笔（<0.45 落 / >0.60 抬），握拳也可落笔；笔尖 = **食指指尖（landmark 8）** 经 One Euro 平滑 | 主路径 |
 
-两版都支持：
+它支持：
 
 - **画布交互**：6 色调色板（`1`–`6`，注视色块停留 0.8s 选中并自动收起，默认收起防误触）；画笔 / 橡皮（20px，`destination-out` 真擦除，**不是**用底色涂）；撤回 / 重做（最多保留最近 50 笔）；画布黑 / 白切换（擦痕随主题正确显示）；清空 / 另存 PNG；笔尖来源切换（视线 / 指尖）；左手张开拖动**平移画布内容**（世界坐标 + `panOffset`，平移期间笔尖锁定不落笔）；复位视图。
 - **双条件防误触**：清空 / 保存这类高代价操作必须「注视目标 + 握拳/捏合」，并带 450ms 二次视觉确认（`armMs`）。
@@ -124,7 +123,7 @@
 
 ### 其它已完成
 - **控制后端 + 控制前端**（AlexiaWHsu，2026-11-03）：FastAPI + Playwright 控制真实 Chrome，`control-backend/launcher.command` 一键起停，控制小窗用 pyobjc/AppKit 原生实现并带「远程开关摄像头」广播。设计报告见 `outputs/隔空控制器-控制后端-系统设计报告.html`。
-- **手势切水果**（Evelyn）：`gesture-fruit/` 纯前端 MediaPipe Hands 版（刀痕 + 8 帧滑动平均 + 炸弹/血条 + 握拳暂停三态状态机）；`outputs/fruit-slice/` 为 Python（MediaPipe Tasks）版，模型文件不入库、首次运行自动下载。
+- **手势切水果**（Evelyn）：纯前端 `gesture-fruit/` 版已删除；保留 `outputs/fruit-slice/` Python（MediaPipe Tasks）版，模型文件不入库、首次运行自动下载。
 - **文档与协作规范**（Evelyn，2026-11-05）：`CONTRIBUTING.md`、`.github/` Issue/PR 模板、`docs/`（WASM 可行性报告、开工方案、交付说明与红线自查、需求口径冻结单）。
 - 内网 HTTPS 分享：独立 CA + `server.crt`（SAN 绑 IP），白名单 `controller-demo / outputs / gesture-test / dual-test / draw`。
 - 工程蓝图：`outputs/隔空控制器-工程蓝图.html`。
@@ -248,7 +247,7 @@
 3. 快速甩线是否断点 / 折角；必要时在相邻采样点之间补点（≤8px）。
 4. 捏合阈值 0.45 / 0.60 是否灵敏、是否误触；实测后回写 `draw/index-3-hand-测试记录.md`。
 
-另外 `draw/index.html`（眼动版）的 9 点标定精度与视线九宫格手感，建议和 dual-test 一起真机复测。
+另外眼动版（已并入 `draw/index-3-hand.html`）的 9 点标定精度与视线九宫格手感，建议和 dual-test 一起真机复测。
 
 ---
 
@@ -315,10 +314,9 @@
 | 主控制器 | `http://localhost:8125/controller-demo/index.html` ｜ 内网 `https://<内网IP>:8443/controller-demo/index.html` |
 | **眼动+手势测试台（当前主战场）** | `http://localhost:8125/dual-test/index.html` |
 | 手势测试台（精度基准） | `http://localhost:8125/gesture-test/index.html` |
-| **隔空画板 · 眼动版** | `http://localhost:8125/draw/index.html` |
-| **隔空画板 · 手势版（捏合落笔）** | `http://localhost:8125/draw/index-3-hand.html` |
+| **隔空画板（手势版 / 含眼动标定）** | `http://localhost:8125/draw/index-3-hand.html` |
 | 控制前端（眼动/手势采集） | `http://localhost:8125/control-frontend/index.html` |
-| 手势切水果 | `http://localhost:8125/gesture-fruit/index.html` ｜ Python 版 `outputs/fruit-slice/` |
+| 手势切水果 | Python 版 `outputs/fruit-slice/`（纯前端 `gesture-fruit/` 已删除） |
 | 信任证书（内网 HTTPS 用） | `https://<内网IP>:8443/ca.crt` |
 
 ### 页面 URL 参数
@@ -356,13 +354,12 @@ openssl verify -CAfile ca.crt server.crt
 | `controller-demo/vendor/webgazer/` | 已 patch 的 WebGazer 2.1.2 + 本地 `facemesh_model/`（**必须提交**） |
 | `controller-demo/webgazer-gaze.html` | 眼动对照页，调 EMA / 磁吸参数用 |
 | `controller-demo/hero.html` | 协作者 hero 视觉页（`?mode=hero`），保留 |
-| **`draw/index.html`** | **隔空画板 v3.0（Thriving-r）**：眼动版，WebGazer 9 点标定 + 视线九宫格 + 握拳落笔/张开抬笔 + 左手平移 + 全套工具层 |
-| **`draw/index-3-hand.html`** | **隔空画板手势版（Thriving-r）**：食指指尖笔尖 + 捏合落笔 + 拇指切工具 / 食指撤回，`AirCanvasKit` 移植自 dual-test |
+| **`draw/index-3-hand.html`** | **隔空画板（Thriving-r）**：含 v3.0 眼动标定 + 视线九宫格 + 食指指尖笔尖 + 捏合落笔 + 拇指切工具 / 食指撤回，`AirCanvasKit` 移植自 dual-test |
 | **`draw/index-3-hand-测试记录.md`** | 画板手势版的参数、7 项合成验证结果、回归红线与待真机复测清单 |
 | **`draw/models/` + `draw/vendor/vision/`** | **共用资源**：`gesture_recognizer.task` + MediaPipe Vision wasm；gesture-test / dual-test 均以 `../draw/...` 引用，**别删别挪** |
 | `control-backend/` | 控制后端（FastAPI + Playwright），`launcher.command` 一键起停；含 `test_control.py` 真实 Chrome 回读验证 |
 | `control-frontend/` | 控制前端：眼动 + 手势采集，经 WebSocket 上报后端 |
-| `gesture-fruit/` | 手势切水果（纯前端）；`outputs/fruit-slice/` 为 Python 版 |
+| `outputs/fruit-slice/` | 手势切水果 Python 版（纯前端 `gesture-fruit/` 已删除） |
 | `outputs/隔空控制器-工程蓝图.html` | 按阶段的工程蓝图（给人看） |
 | `HANDOFF.md` | 本文件，新会话第一份要读 |
 | `.deepworks/tmp/check_js_balance.py` | JS 括号自检脚本（gitignore），**必须带文件参数**；本机当前缺失，可用 `node --check` 替代 |

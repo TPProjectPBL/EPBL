@@ -21,7 +21,7 @@
 
 | 类型 | 格式 | 示例 |
 |---|---|---|
-| 新功能 | `feat/<模块>-<简述>` | `feat/gesture-fruit-pause` |
+| 新功能 | `feat/<模块>-<简述>` | `feat/dual-test-calib` |
 | 修复 | `fix/<模块>-<简述>` | `fix/air-runner-calib-drift` |
 | 文档 | `docs/<简述>` | `docs/wasm-report` |
 
@@ -36,9 +36,9 @@
 格式：`<类型>(<模块>): <中文描述>`
 
 ```
-feat(gesture-fruit): 握拳手势暂停/继续 + 三态状态机
+feat(draw): 捏合落笔 + One Euro 平滑
 fix(air-runner): 修复标定漂移导致光标右偏
-docs: 补充 gesture-fruit 的 README
+docs: 补充 draw 的 README
 test(control-backend): 真实 Chrome 控制验证
 chore: 补充 .gitignore
 ```
@@ -71,11 +71,11 @@ chore: 补充 .gitignore
 ```bash
 # 在仓库根目录
 python3 -m http.server 8000
-# 浏览器打开 http://localhost:8000/gesture-fruit/index.html
+# 浏览器打开 http://localhost:8000/draw/index-3-hand.html
 ```
 
 摄像头权限只在 `localhost` 或 `https` 下可用。断网环境下，只有使用本地 `vendor/` 的
-demo 能跑（`gesture-test`、`controller-demo`、`draw`）；`gesture-fruit` 依赖 CDN，
+demo 能跑（`gesture-test`、`controller-demo`、`draw`）；`eye-page-turner/demo` 依赖 CDN，
 断网会加载失败。
 
 ## 五、保密与公开性

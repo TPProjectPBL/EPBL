@@ -35,7 +35,6 @@
 | `controller-demo/` | 控制器基础 demo（含 WebGazer / MediaPipe 本地 vendor） |
 | `draw/` | 眼动 / 手势绘图 |
 | `eye-page-turner/` | 眼动翻页 |
-| `gesture-fruit/` | 手势切水果 |
 | `gesture-test/` | 手势测试 |
 | `outputs/` | 工程蓝图等产物 |
 | `EyeControlApp/` | 已废弃的 iOS 原生方向 |
