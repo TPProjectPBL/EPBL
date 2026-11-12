@@ -1,0 +1,945 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>隔空控制器 · 工作台与分发系统设计报告 v1.0</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%230b0e14%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%275%27 fill=%27%234f9cf9%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2711%27 fill=%27none%27 stroke=%27%234f9cf9%27 stroke-opacity=%27.55%27 stroke-width=%271.6%27/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#0b0e14; --bg2:#11151f; --panel:#151a26; --panel2:#1b2130;
+    --line:#232b3c; --line2:#2f3a50;
+    --txt:#e6ebf5; --dim:#9aa7bd; --faint:#6b7891;
+    --acc:#4f9cf9; --acc2:#7cc4ff; --ok:#3ecf8e; --warn:#f5b942; --bad:#ff6b6b;
+    --purple:#a78bfa; --cyan:#22d3ee;
+    --radius:10px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --body:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.75 var(--body);-webkit-font-smoothing:antialiased}
+  a{color:var(--acc2);text-decoration:none}
+  code{font-family:var(--mono);font-size:.88em;background:rgba(79,156,249,.12);color:var(--acc2);padding:.12em .4em;border-radius:5px}
+  pre{background:#0a0d13;border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;overflow:auto;font-size:12.5px;line-height:1.6}
+  pre code{background:none;color:#c7d2e5;padding:0}
+  h1,h2,h3,h4{line-height:1.35;margin:0}
+  h1{font-size:30px;letter-spacing:.2px}
+  h2{font-size:23px;margin:0 0 6px;padding-top:8px}
+  h3{font-size:17px;margin:26px 0 8px;color:#dbe4f3}
+  h4{font-size:14.5px;margin:16px 0 6px;color:#c3cfe2}
+  p{margin:10px 0}
+  ul,ol{margin:8px 0 8px 22px;padding:0}
+  li{margin:4px 0}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:#cfd9ea;font-weight:600;white-space:nowrap}
+  tbody tr:nth-child(even){background:rgba(255,255,255,.015)}
+  td code{white-space:nowrap}
+
+  /* ---------- 侧栏 ---------- */
+  #toc{position:fixed;top:0;left:0;width:290px;height:100vh;overflow:auto;
+    background:linear-gradient(180deg,#0d1220,#0a0d14);border-right:1px solid var(--line);
+    padding:22px 14px 40px;z-index:100}
+  #toc .brand{padding:0 10px 18px;border-bottom:1px solid var(--line);margin-bottom:14px}
+  #toc .brand b{display:block;font-size:16px;letter-spacing:.4px}
+  #toc .brand span{display:block;font-size:11.5px;color:var(--faint);margin-top:3px;font-family:var(--mono)}
+  #toc .grp{font-size:10.5px;letter-spacing:1.6px;color:var(--faint);text-transform:uppercase;
+    padding:14px 12px 5px;font-family:var(--mono)}
+  #toc a{display:flex;gap:9px;align-items:baseline;padding:7px 12px;border-radius:7px;
+    color:var(--dim);font-size:13.5px;border-left:2px solid transparent;transition:.15s}
+  #toc a .n{font-family:var(--mono);font-size:11px;color:var(--faint);min-width:20px}
+  #toc a:hover{background:rgba(79,156,249,.08);color:var(--txt)}
+  #toc a.active{background:rgba(79,156,249,.14);color:var(--acc2);border-left-color:var(--acc)}
+  #toc a.active .n{color:var(--acc)}
+
+  main{margin-left:290px;padding:0 46px 100px;max-width:1180px}
+  section{padding-top:54px}
+  .sec-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;border-bottom:1px solid var(--line);padding-bottom:12px}
+  .sec-num{font-family:var(--mono);font-size:12px;color:var(--acc);background:rgba(79,156,249,.12);
+    border:1px solid rgba(79,156,249,.3);border-radius:6px;padding:3px 8px}
+  .sec-sub{color:var(--faint);font-size:12.5px;margin-top:4px}
+
+  /* ---------- 封面 ---------- */
+  header.cover{padding:76px 0 34px;border-bottom:1px solid var(--line)}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--acc);text-transform:uppercase}
+  header.cover h1{margin:14px 0 10px}
+  header.cover .lead{color:var(--dim);font-size:16px;max-width:820px}
+  .meta-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+  .chip{font-size:12px;font-family:var(--mono);color:var(--dim);border:1px solid var(--line2);
+    border-radius:999px;padding:4px 12px;background:var(--panel)}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:26px 0 4px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 16px}
+  .card .v{font-size:26px;font-weight:700;font-family:var(--mono);color:var(--acc2)}
+  .card .l{font-size:12px;color:var(--dim);margin-top:2px}
+
+  /* ---------- 组件 ---------- */
+  .callout{border:1px solid var(--line2);border-left:3px solid var(--acc);background:var(--panel);
+    border-radius:8px;padding:12px 16px;margin:14px 0;font-size:14px}
+  .callout.warn{border-left-color:var(--warn)}
+  .callout.bad{border-left-color:var(--bad)}
+  .callout.ok{border-left-color:var(--ok)}
+  .callout .t{font-weight:700;font-size:12.5px;letter-spacing:.6px;text-transform:uppercase;
+    color:var(--dim);margin-bottom:4px;font-family:var(--mono)}
+  .badge{display:inline-block;font-size:11px;font-family:var(--mono);padding:1px 8px;border-radius:999px;
+    border:1px solid var(--line2);color:var(--dim);white-space:nowrap}
+  .b-p0{color:#ff9db0;border-color:rgba(255,107,107,.4);background:rgba(255,107,107,.1)}
+  .b-p1{color:#ffd28a;border-color:rgba(245,185,66,.4);background:rgba(245,185,66,.1)}
+  .b-p2{color:#9fd8ff;border-color:rgba(79,156,249,.4);background:rgba(79,156,249,.1)}
+  .b-hi{color:#ff9db0;border-color:rgba(255,107,107,.4);background:rgba(255,107,107,.1)}
+  .b-mid{color:#ffd28a;border-color:rgba(245,185,66,.4);background:rgba(245,185,66,.1)}
+  .b-low{color:#8ef0c4;border-color:rgba(62,207,142,.4);background:rgba(62,207,142,.1)}
+
+  /* ---------- 架构图 ---------- */
+  .arch{margin:18px 0;border:1px solid var(--line);border-radius:var(--radius);
+    background:linear-gradient(180deg,#0c1018,#0a0d13);padding:20px 18px}
+  .layer{border:1px solid var(--line2);border-radius:8px;padding:12px 14px;margin:0 0 10px;
+    background:var(--panel);position:relative}
+  .layer .lt{font-size:11px;font-family:var(--mono);letter-spacing:1.2px;color:var(--faint);
+    text-transform:uppercase;margin-bottom:8px}
+  .boxes{display:flex;flex-wrap:wrap;gap:8px}
+  .box{flex:1 1 150px;min-width:140px;border:1px solid var(--line2);border-radius:7px;
+    background:var(--panel2);padding:9px 11px;font-size:12.5px}
+  .box b{display:block;font-size:12.5px;color:#dbe4f3}
+  .box span{font-size:11px;color:var(--faint);font-family:var(--mono)}
+  .box.acc{border-color:rgba(79,156,249,.45);background:rgba(79,156,249,.08)}
+  .box.ok{border-color:rgba(62,207,142,.4);background:rgba(62,207,142,.07)}
+  .box.warn{border-color:rgba(245,185,66,.4);background:rgba(245,185,66,.07)}
+  .arrow{text-align:center;color:var(--faint);font-size:14px;margin:-4px 0 4px}
+
+  /* ---------- 步骤时间线 ---------- */
+  .step{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);
+    padding:16px 18px;margin:14px 0}
+  .step .sh{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:8px}
+  .step .sid{font-family:var(--mono);font-size:12px;color:var(--acc);background:rgba(79,156,249,.12);
+    border:1px solid rgba(79,156,249,.3);border-radius:6px;padding:2px 8px}
+  .step .st{font-weight:700;font-size:15.5px}
+  .step .dod{margin-top:10px;border-top:1px dashed var(--line2);padding-top:10px;font-size:13.5px}
+  .step .dod b{color:var(--ok)}
+  .step .test b{color:var(--warn)}
+
+  /* ---------- 移动端 ---------- */
+  #navBtn{display:none;position:fixed;right:16px;bottom:16px;z-index:200;width:52px;height:52px;
+    border-radius:50%;border:1px solid var(--line2);background:var(--acc);color:#08121f;
+    font-size:22px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+  .nav-mask{display:none}
+  @media (max-width:980px){
+    #toc{transform:translateX(-100%);transition:transform .22s}
+    body.nav-open #toc{transform:none}
+    body.nav-open .nav-mask{display:block;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:90}
+    main{margin-left:0;padding:0 20px 90px}
+    #navBtn{display:block}
+    h1{font-size:24px}
+    table{font-size:12.5px;display:block;overflow-x:auto}
+  }
+  @media print{
+    #toc,#navBtn,.nav-mask{display:none!important}
+    main{margin:0;padding:0;max-width:none}
+    section{padding-top:26px;break-inside:avoid}
+    body{background:#fff;color:#111}
+    .card,.step,.callout,.arch,.layer,.box{background:#fff!important;border-color:#ccc!important}
+    pre{background:#f5f5f5;border-color:#ddd}
+    th{background:#eee!important;color:#111}
+    code{color:#0b5cad;background:#eef4fb}
+  }
+</style>
+</head>
+<body>
+
+<nav id="toc">
+  <div class="brand">
+    <b>隔空控制器 · 工作台</b>
+    <span>system design report · v1.0</span>
+  </div>
+
+  <div class="grp">概览</div>
+  <a href="#summary"><span class="n">00</span>执行摘要</a>
+  <a href="#req"><span class="n">01</span>需求确认</a>
+  <a href="#current"><span class="n">02</span>现状盘点</a>
+
+  <div class="grp">方案</div>
+  <a href="#feasible"><span class="n">03</span>可行性分析</a>
+  <a href="#arch"><span class="n">04</span>总体架构</a>
+  <a href="#modules"><span class="n">05</span>模块划分</a>
+  <a href="#tech"><span class="n">06</span>技术选型与理由</a>
+
+  <div class="grp">保障</div>
+  <a href="#risk"><span class="n">07</span>风险登记</a>
+  <a href="#ext"><span class="n">08</span>可扩展性</a>
+  <a href="#security"><span class="n">09</span>安全性</a>
+
+  <div class="grp">交付</div>
+  <a href="#steps"><span class="n">10</span>实现步骤与验收</a>
+  <a href="#milestone"><span class="n">11</span>里程碑与排期</a>
+  <a href="#appendix"><span class="n">12</span>附录</a>
+</nav>
+
+<button id="navBtn" aria-label="目录">☰</button>
+<div class="nav-mask"></div>
+
+<main>
+
+<header class="cover">
+  <div class="kicker">Air Controller · Workbench &amp; Distribution</div>
+  <h1>隔空控制器 · 工作台与分发系统设计报告</h1>
+  <p class="lead">
+    把仓库里分散的 12 个可用页面整合为一个带侧栏导航的统一 Web 工作台，并在工作台内提供
+    「控制小窗」的 DMG 安装包下载。本报告给出需求口径、可行性结论、总体架构、模块划分、
+    技术选型理由、风险、安全、可扩展性，以及分步实施与逐步验收标准，用于指导后续开发。
+  </p>
+  <div class="meta-row">
+    <span class="chip">版本 v1.0（设计稿）</span>
+    <span class="chip">日期 2026-11-12</span>
+    <span class="chip">状态 待评审</span>
+    <span class="chip">平台 macOS 12+</span>
+    <span class="chip">技术栈 静态 Web + Python 3.9</span>
+  </div>
+  <div class="cards">
+    <div class="card"><div class="v">12</div><div class="l">待整合页面</div></div>
+    <div class="card"><div class="v">4</div><div class="l">架构分层</div></div>
+    <div class="card"><div class="v">9</div><div class="l">功能模块</div></div>
+    <div class="card"><div class="v">9</div><div class="l">实施步骤（S0–S8）</div></div>
+    <div class="card"><div class="v">≈13.5</div><div class="l">人日估算</div></div>
+  </div>
+</header>
+
+<!-- ================= 00 摘要 ================= -->
+<section id="summary">
+  <div class="sec-head"><span class="sec-num">00</span><div><h2>执行摘要</h2><div class="sec-sub">一屏看懂结论</div></div></div>
+
+  <p>
+    现状是一组各自独立、可直接用 HTTP 静态服务打开的演示页：眼动/手势测试台、控制前端、
+    手势精度测试、隔空画板、眼动翻页、受控靶场等。它们共享 WebGazer、MediaPipe 与本地
+    vendor 资源，但缺少统一入口、统一导航、统一版本与分发方式；「控制小窗」目前只有
+    <code>launcher_cocoa.py</code> 脚本，<b>还没有 DMG</b>。
+  </p>
+
+  <div class="callout ok">
+    <div class="t">核心结论</div>
+    <b>技术上完全可行，但需分两段交付。</b>
+    ① 工作台（侧栏 + iframe 集成 + 下载中心）用「纯静态单页 + 本地服务守护」实现，零构建、可离线、
+    与现有页面同源，2–3 人日即可跑通；
+    ② DMG 分发是<b>有条件可行</b>——用 py2app 打包「控制小窗」GUI、Playwright/Chromium 走首次引导安装、
+    hdiutil 生成 DMG + ad-hoc 签名，需额外处理 Gatekeeper 与体积问题（约 4–6 人日）。
+  </div>
+
+  <div class="callout warn">
+    <div class="t">最大风险（必须前置决策）</div>
+    摄像头 API 只在 <code>localhost</code>/<code>https</code> 可用，因此工作台<b>不能以 <code>file://</code> 打开</b>；
+    同时 WebGazer/MediaPipe 各自持有摄像头，<b>多个模块不能同时占用摄像头</b>。这两点决定了架构必须包含
+    「本地服务守护」与「单实例摄像头互斥」两个强制设计。
+  </div>
+
+  <h3>关键设计决策（TL;DR）</h3>
+  <table>
+    <thead><tr><th>决策点</th><th>选择</th><th>一句话理由</th></tr></thead>
+    <tbody>
+      <tr><td>工作台形态</td><td>纯静态单文件 + 原生 JS</td><td>零构建、可离线、与现有纯静态页同构，最快落地</td></tr>
+      <tr><td>模块集成</td><td>iframe 懒加载 + 单实例互斥</td><td>业务页零改造，天然隔离，切换即销毁以释放摄像头</td></tr>
+      <tr><td>服务托管</td><td>复用 Python <code>http.server</code> :8125</td><td>已有实现，避免引入 nginx/Node 依赖</td></tr>
+      <tr><td>DMG 打包</td><td>py2app + hdiutil + ad-hoc 签名</td><td>能打包 pyobjc 原生小窗、体积可控，Playwright 首次安装</td></tr>
+      <tr><td>配置驱动</td><td><code>modules.json</code> 注册表</td><td>新增页面零改代码，扩展成本最低</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ================= 01 需求确认 ================= -->
+<section id="req">
+  <div class="sec-head"><span class="sec-num">01</span><div><h2>需求确认</h2><div class="sec-sub">先把「做什么」钉死，再谈怎么做</div></div></div>
+
+  <h3>1.1 一句话目标</h3>
+  <p>
+    交付一个<b>统一的本地 Web 工作台</b>：左侧栏列出仓库所有可用界面，点击即在右侧加载对应页面；
+    工作台内提供<b>「控制小窗」DMG 下载</b>及安装说明，让非开发用户双击安装即可使用。
+  </p>
+
+  <h3>1.2 功能需求（FR）</h3>
+  <table>
+    <thead><tr><th>编号</th><th>需求</th><th>优先级</th><th>验收要点</th></tr></thead>
+    <tbody>
+      <tr><td>FR-01</td><td>侧栏导航：按分组列出全部可用模块，点击切换内容区</td><td><span class="badge b-p0">P0</span></td><td>12 个模块均可见、可点击、定位正确</td></tr>
+      <tr><td>FR-02</td><td>内容区用 iframe 懒加载模块，切走时销毁实例</td><td><span class="badge b-p0">P0</span></td><td>切换后旧模块 <code>getUserMedia</code> 已停止</td></tr>
+      <tr><td>FR-03</td><td>单实例摄像头互斥：同一时刻仅一个模块可占用摄像头</td><td><span class="badge b-p0">P0</span></td><td>连续切换 5 次无「摄像头被占用」错误</td></tr>
+      <tr><td>FR-04</td><td>模块注册表驱动（<code>modules.json</code>）</td><td><span class="badge b-p1">P1</span></td><td>新增模块仅改 JSON，不改 JS</td></tr>
+      <tr><td>FR-05</td><td>下载中心：展示控制小窗 DMG、版本号、SHA-256、安装指引</td><td><span class="badge b-p0">P0</span></td><td>链接可下载；未构建时显示明确占位</td></tr>
+      <tr><td>FR-06</td><td>深/浅主题切换并记忆</td><td><span class="badge b-p2">P2</span></td><td>刷新后保持</td></tr>
+      <tr><td>FR-07</td><td>URL 路由（<code>#/module-id</code>），可分享与刷新保持</td><td><span class="badge b-p1">P1</span></td><td>刷新后仍停留在当前模块</td></tr>
+      <tr><td>FR-08</td><td>模块状态徽标：摄像头/后端/离线依赖状态提示</td><td><span class="badge b-p1">P1</span></td><td>后端未启动时提示「控制功能不可用」</td></tr>
+      <tr><td>FR-09</td><td>一键启动/停止本地服务（前端按钮或小窗）</td><td><span class="badge b-p1">P1</span></td><td>停止后端口释放、无残留进程</td></tr>
+      <tr><td>FR-10</td><td>「在新标签打开」兜底入口（BroadcastChannel 双页场景）</td><td><span class="badge b-p2">P2</span></td><td>眼动翻页可开引擎页 + 阅读页</td></tr>
+    </tbody>
+  </table>
+
+  <h3>1.3 非功能需求（NFR）</h3>
+  <table>
+    <thead><tr><th>编号</th><th>维度</th><th>目标</th></tr></thead>
+    <tbody>
+      <tr><td>NFR-01</td><td>零构建</td><td>工作台本身不引入 Node/Vite/打包器，<code>python3 -m http.server</code> 即可跑</td></tr>
+      <tr><td>NFR-02</td><td>离线可用</td><td>除依赖 CDN 的 demo 外，全部走本地 vendor，断网可跑核心模块</td></tr>
+      <tr><td>NFR-03</td><td>启动时延</td><td>工作台首屏 &lt; 1s；模块 iframe 懒加载，不阻塞首屏</td></tr>
+      <tr><td>NFR-04</td><td>同源</td><td>工作台与所有模块同源（同一 8125 服务），保证 iframe 通信与权限一致</td></tr>
+      <tr><td>NFR-05</td><td>隐私</td><td>摄像头画面不出本机、不上传；导出仅数值结果</td></tr>
+      <tr><td>NFR-06</td><td>分发</td><td>DMG 双击可装；未签名时给出 Gatekeeper 放行指引</td></tr>
+      <tr><td>NFR-07</td><td>可维护</td><td>新增模块 &lt; 10 分钟；目录变更只需改注册表</td></tr>
+      <tr><td>NFR-08</td><td>可复现</td><td>打包脚本一条命令产出 DMG，带版本号与校验和</td></tr>
+    </tbody>
+  </table>
+
+  <h3>1.4 范围边界</h3>
+  <table>
+    <thead><tr><th>范围内（In Scope）</th><th>范围外（Out of Scope，本期不做）</th></tr></thead>
+    <tbody><tr>
+      <td>
+        <ul style="margin:0">
+          <li>统一工作台外壳 + 侧栏 + 路由</li>
+          <li>12 个现有页面的接入与互斥</li>
+          <li>控制小窗 DMG 的构建流水线</li>
+          <li>下载中心与安装指引</li>
+          <li>本地服务守护与健康检查</li>
+        </ul>
+      </td>
+      <td>
+        <ul style="margin:0">
+          <li>各 demo 内部算法/交互重写</li>
+          <li>账号体系、云端同步、多端</li>
+          <li>Windows/Linux 分发</li>
+          <li>App Store 上架与公证（v2 再议）</li>
+          <li>远程部署/公网访问</li>
+        </ul>
+      </td>
+    </tr></tbody>
+  </table>
+
+  <h3>1.5 验收总口径</h3>
+  <ol>
+    <li><b>可用</b>：任意 macOS 机器上，双击 DMG 安装后，能打开工作台并切换至少 5 个模块。</li>
+    <li><b>不冲突</b>：模块之间切换不会触发摄像头占用冲突；切走后摄像头指示灯熄灭。</li>
+    <li><b>可分发</b>：DMG 含版本号与 SHA-256，安装指引覆盖「已签名」与「未签名」两种情况。</li>
+    <li><b>可扩展</b>：新增一个模块只需在 <code>modules.json</code> 增加一条记录。</li>
+  </ol>
+
+  <h3>1.6 待确认假设（开发前请拍板）</h3>
+  <table>
+    <thead><tr><th>#</th><th>问题</th><th>建议默认值</th><th>影响</th></tr></thead>
+    <tbody>
+      <tr><td>Q1</td><td>工作台是纯静态页，还是要桌面 App 壳（Tauri/Electron）？</td><td>纯静态 + 本地服务（v1）</td><td>决定架构复杂度与 DMG 内容</td></tr>
+      <tr><td>Q2</td><td>DMG 是否必须内置完整后端（含 Playwright Chromium）？</td><td>否：内置小窗 + 首次引导安装后端</td><td>DMG 体积 20MB vs 200MB+</td></tr>
+      <tr><td>Q3</td><td>目标芯片？</td><td>arm64 为主，x86_64 次之（分别构建）</td><td>决定构建矩阵</td></tr>
+      <tr><td>Q4</td><td>是否需要 Apple Developer 签名与公证？</td><td>v1 用 ad-hoc + 右键打开指引</td><td>决定用户首次体验</td></tr>
+      <tr><td>Q5</td><td>界面语言？</td><td>简体中文单语</td><td>决定是否引入 i18n</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ================= 02 现状盘点 ================= -->
+<section id="current">
+  <div class="sec-head"><span class="sec-num">02</span><div><h2>现状盘点</h2><div class="sec-sub">有哪些可整合的资产</div></div></div>
+
+  <h3>2.1 可整合页面（12 个，均为可直接托管的静态页）</h3>
+  <table>
+    <thead><tr><th>模块</th><th>路径</th><th>功能</th><th>摄像头</th><th>外部依赖</th></tr></thead>
+    <tbody>
+      <tr><td>眼动+手势测试台</td><td><code>dual-test/index.html</code></td><td>13 点标定、眼动精度 12 目标、眼手联合 10 轮、结果导出</td><td>是</td><td>本地 vendor</td></tr>
+      <tr><td>控制前端</td><td><code>control-frontend/index.html</code></td><td>眼动/手势采集，WS 上报后端，远程开关摄像头</td><td>是</td><td>本地 vendor + 后端</td></tr>
+      <tr><td>手势精度测试</td><td><code>gesture-test/index.html</code></td><td>6 手势+中立、帧级准确率、混淆矩阵、导出 JSON</td><td>是</td><td>本地 vendor</td></tr>
+      <tr><td>隔空画板</td><td><code>draw/index-3-hand.html</code></td><td>眼动标定 + 捏合落笔 + 全套工具层</td><td>是</td><td>本地 vendor</td></tr>
+      <tr><td>眼动翻页·引擎</td><td><code>eye-page-turner/index.html</code></td><td>距离感知 + 双模态切换，BroadcastChannel 广播</td><td>是</td><td>CDN（MediaPipe）</td></tr>
+      <tr><td>眼动翻页·阅读页</td><td><code>eye-page-turner/reader.html</code></td><td>接收广播并自动翻页（需与引擎页同开）</td><td>否</td><td>—</td></tr>
+      <tr><td>隔空画画 Demo</td><td><code>eye-page-turner/demo/air-draw/index.html</code></td><td>眼动选色 0.7s + 手势绘画</td><td>是</td><td>CDN</td></tr>
+      <tr><td>星际跑酷 Demo</td><td><code>eye-page-turner/demo/air-runner/index.html</code></td><td>眼动 + 手势操控跑酷</td><td>是</td><td>CDN</td></tr>
+      <tr><td>旧控制器（对照）</td><td><code>controller-demo/index.html</code></td><td>9 点标定、眼动控鼠标、手势缩放；眼动可用性参照实现</td><td>是</td><td>本地 vendor</td></tr>
+      <tr><td>眼动对照页</td><td><code>controller-demo/webgazer-gaze.html</code></td><td>纯 TF.js FaceMesh 眼动，调 EMA/磁吸参数</td><td>是</td><td>本地 vendor</td></tr>
+      <tr><td>Hero 视觉页</td><td><code>controller-demo/hero.html</code></td><td>flow-field 视觉，由 <code>?mode=hero</code> 视线驱动</td><td>否（被驱动）</td><td>本地 vendor</td></tr>
+      <tr><td>受控靶场</td><td><code>control-backend/targets/test-page.html</code></td><td>按钮/链接/表单/长滚动，后端默认被控目标</td><td>否</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <h3>2.2 可复用资产</h3>
+  <table>
+    <thead><tr><th>资产</th><th>位置</th><th>复用方式</th></tr></thead>
+    <tbody>
+      <tr><td>静态服务守护</td><td><code>control-backend/launcher.py</code></td><td>已管理 8125 静态服务 + 8899 后端 + 健康检查，直接复用</td></tr>
+      <tr><td>原生小窗</td><td><code>control-backend/launcher_cocoa.py</code></td><td>pyobjc AppKit 窗口，Start/Stop/前端/摄像头开关，作为 DMG 主程序</td></tr>
+      <tr><td>控制后端</td><td><code>control-backend/app/</code></td><td>FastAPI + Playwright，<code>AC_TOKEN</code> 鉴权，<code>GET /camera</code></td></tr>
+      <tr><td>Web 资源</td><td><code>controller-demo/vendor/webgazer</code>、<code>draw/vendor</code>、<code>draw/models</code></td><td>WebGazer / MediaPipe Vision / 手势模型，被多页共享</td></tr>
+      <tr><td>验证脚本</td><td><code>control-backend/scripts/test_*.py</code></td><td>可直接扩展为工作台 e2e 与打包验收</td></tr>
+    </tbody>
+  </table>
+
+  <h3>2.3 现状缺口</h3>
+  <table>
+    <thead><tr><th>缺口</th><th>影响</th><th>本报告对应设计</th></tr></thead>
+    <tbody>
+      <tr><td>无统一入口/导航</td><td>用户需记 12 条 URL</td><td>M1 工作台外壳 + M2 注册表</td></tr>
+      <tr><td>无摄像头互斥</td><td>多页同开必然抢占摄像头</td><td>M3 单实例视图容器</td></tr>
+      <tr><td>无 DMG</td><td>非开发用户无法安装</td><td>M7 打包流水线 + M4 下载中心</td></tr>
+      <tr><td>无版本/校验和</td><td>无法判断安装包新旧与完整性</td><td>M7 版本产物 + SHA-256</td></tr>
+      <tr><td>后端依赖未自举</td><td>新机器缺 venv/Playwright</td><td>M5 服务守护 + S6 bootstrap</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ================= 03 可行性 ================= -->
+<section id="feasible">
+  <div class="sec-head"><span class="sec-num">03</span><div><h2>可行性分析</h2><div class="sec-sub">哪些能做、哪些有条件、哪些不做</div></div></div>
+
+  <h3>3.1 工作台整合：可行（低风险）</h3>
+  <p>
+    12 个页面都是静态 HTML，且大多以相对路径引用本地 <code>vendor</code>，天然适合同源静态托管。
+    侧栏 + iframe 属于浏览器原生能力，不需要框架。唯一硬约束是<b>必须经 HTTP 访问</b>（摄像头权限），
+    由现有 <code>http.server 8125</code> 满足。
+  </p>
+
+  <h3>3.2 DMG 分发：有条件可行（中高风险）</h3>
+  <p>「网页里给出 DMG 下载」本身简单（放链接 + 校验和），难点在于<b>如何产出 DMG</b>。三种打包路线对比：</p>
+  <table>
+    <thead><tr><th>路线</th><th>能打包什么</th><th>体积</th><th>难点</th><th>结论</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>py2app</b></td>
+        <td>pyobjc 原生小窗 <code>launcher_cocoa.py</code></td>
+        <td>~20–40MB</td>
+        <td>uvicorn/playwright 依赖需作为 resource 或首次安装；universal2 困难</td>
+        <td><span class="badge b-low">推荐 v1</span></td>
+      </tr>
+      <tr>
+        <td>PyInstaller</td>
+        <td>Python 全依赖（含后端）</td>
+        <td>~100–200MB</td>
+        <td>Playwright Chromium 仍需单独下载；启动慢；路径/权限</td>
+        <td><span class="badge b-mid">备选</span></td>
+      </tr>
+      <tr>
+        <td>Tauri/Electron 壳</td>
+        <td>Web 工作台 + 内置服务</td>
+        <td>~60–150MB</td>
+        <td>引入新工具链；需 Rust/Node；摄像头权限与 CSP 配置</td>
+        <td><span class="badge b-mid">v2 再议</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout warn">
+    <div class="t">DMG 的真实成本在「首次运行」</div>
+    Playwright 的 Chromium 约 150MB+，且版本与 <code>playwright==1.60.0</code> 强绑定，<b>不适合塞进 DMG</b>。
+    推荐：DMG 只装「控制小窗 + 静态服务」，首次启动时检测并引导执行
+    <code>playwright install chromium</code>；失败时给出可复制的命令与诊断日志。
+  </div>
+
+  <h3>3.3 权限可行性</h3>
+  <table>
+    <thead><tr><th>约束</th><th>事实</th><th>设计应对</th></tr></thead>
+    <tbody>
+      <tr><td><code>getUserMedia</code> 安全上下文</td><td>仅 <code>https</code> 或 <code>localhost</code> 可用，<code>file://</code> 不可</td><td>强制经 8125 本地服务；DMG 的 .app 负责拉起服务</td></tr>
+      <tr><td>iframe 摄像头</td><td>需 <code>allow="camera"</code>，且父页与子页同源更稳</td><td>全部同源 + 显式 <code>allow</code> 白名单</td></tr>
+      <tr><td>macOS 系统权限</td><td>首次请求弹窗，需用户在「系统设置 → 隐私 → 摄像头」允许</td><td>安装指引 + 页内引导文案</td></tr>
+      <tr><td>Gatekeeper</td><td>未签名/未公证的 DMG 打开 .app 会被拦</td><td>ad-hoc 签名 + 「右键 → 打开」指引；v2 申请开发者签名</td></tr>
+    </tbody>
+  </table>
+
+  <h3>3.4 性能可行性</h3>
+  <ul>
+    <li>WebGazer（TF.js）与 MediaPipe Vision（wasm/GPU）都会吃 CPU/GPU；<b>同时只跑一个模块</b>可避免叠加。</li>
+    <li>1080p 采集已在本仓库落地；iframe 内与顶层页性能一致。</li>
+    <li>懒加载 + 切走销毁可保证长会话不累积内存。</li>
+  </ul>
+
+  <h3>3.5 合规与隐私可行性</h3>
+  <p>
+    生物特征（人脸/视线）属敏感数据。现状已在本地处理、不上传；工作台需在 UI 明示「画面仅本地处理」，
+    结果导出仅数值，符合当前红线。公开仓库不得提交录制/照片（<code>CONTRIBUTING.md</code> 已规定）。
+  </p>
+
+  <h3>3.6 结论矩阵</h3>
+  <table>
+    <thead><tr><th>能力</th><th>结论</th><th>前提</th></tr></thead>
+    <tbody>
+      <tr><td>侧栏工作台 + 12 页整合</td><td><span class="badge b-low">可行</span></td><td>经 8125 HTTP 访问</td></tr>
+      <tr><td>摄像头单实例互斥</td><td><span class="badge b-low">可行</span></td><td>切换时销毁 iframe</td></tr>
+      <tr><td>DMG 下载入口</td><td><span class="badge b-low">可行</span></td><td>需先产出 DMG 产物</td></tr>
+      <tr><td>DMG 内置完整后端</td><td><span class="badge b-mid">不推荐</span></td><td>体积/版本/权限成本高</td></tr>
+      <tr><td>DMG 内置小窗 + 首次装后端</td><td><span class="badge b-low">推荐</span></td><td>需网络；需失败诊断</td></tr>
+      <tr><td>公证分发</td><td><span class="badge b-mid">v2</span></td><td>需 Apple Developer 账号</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ================= 04 架构 ================= -->
+<section id="arch">
+  <div class="sec-head"><span class="sec-num">04</span><div><h2>总体架构</h2><div class="sec-sub">四层结构 + 明确的进程与端口模型</div></div></div>
+
+  <h3>4.1 分层架构</h3>
+  <div class="arch">
+    <div class="layer">
+      <div class="lt">L1 · 表现层（浏览器，http://127.0.0.1:8125）</div>
+      <div class="boxes">
+        <div class="box acc"><b>工作台外壳</b><span>sidebar + router + theme</span></div>
+        <div class="box"><b>注册表 modules.json</b><span>分组 / 路径 / 能力标记</span></div>
+        <div class="box ok"><b>视图容器 iframe</b><span>懒加载 · 单实例互斥</span></div>
+        <div class="box warn"><b>下载中心</b><span>DMG / sha256 / 指引</span></div>
+      </div>
+    </div>
+    <div class="arrow">▼ iframe（同源）加载 ▼</div>
+    <div class="layer">
+      <div class="lt">L2 · 业务模块层（现有静态页面，零改造）</div>
+      <div class="boxes">
+        <div class="box"><b>dual-test</b><span>测试台</span></div>
+        <div class="box"><b>control-frontend</b><span>控制前端</span></div>
+        <div class="box"><b>gesture-test</b><span>手势精度</span></div>
+        <div class="box"><b>draw</b><span>隔空画板</span></div>
+        <div class="box"><b>eye-page-turner</b><span>翻页 / demo</span></div>
+        <div class="box"><b>controller-demo</b><span>对照 / hero</span></div>
+        <div class="box"><b>targets</b><span>受控靶场</span></div>
+      </div>
+    </div>
+    <div class="arrow">▼ WebSocket / HTTP ▼</div>
+    <div class="layer">
+      <div class="lt">L3 · 服务层（本机回环）</div>
+      <div class="boxes">
+        <div class="box ok"><b>静态服务</b><span>http.server :8125</span></div>
+        <div class="box acc"><b>控制后端</b><span>FastAPI + WS :8899</span></div>
+        <div class="box"><b>服务守护</b><span>launcher.py 进程管理</span></div>
+        <div class="box warn"><b>受控 Chromium</b><span>Playwright 驱动</span></div>
+      </div>
+    </div>
+    <div class="arrow">▲ 由 .app 拉起 ▲</div>
+    <div class="layer">
+      <div class="lt">L4 · 分发层（DMG）</div>
+      <div class="boxes">
+        <div class="box"><b>控制小窗 .app</b><span>pyobjc AppKit</span></div>
+        <div class="box"><b>DMG 安装包</b><span>hdiutil + ad-hoc 签名</span></div>
+        <div class="box"><b>安装指引</b><span>Gatekeeper / 权限</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>4.2 进程与端口</h3>
+  <table>
+    <thead><tr><th>进程</th><th>端口/入口</th><th>由谁拉起</th><th>生命周期</th></tr></thead>
+    <tbody>
+      <tr><td>工作台浏览器标签</td><td><code>127.0.0.1:8125/workbench/</code></td><td>用户 / .app 打开</td><td>用户关闭</td></tr>
+      <tr><td>静态服务 <code>http.server</code></td><td>8125</td><td>launcher / .app</td><td>随小窗 Start/Stop</td></tr>
+      <tr><td>控制后端 <code>uvicorn</code></td><td>8899</td><td>launcher / .app</td><td>随小窗 Start/Stop</td></tr>
+      <tr><td>受控 Chromium</td><td>Playwright</td><td>后端</td><td>后端停止时关闭</td></tr>
+      <tr><td>控制小窗 App</td><td>Cocoa 窗口</td><td>用户双击</td><td>用户关闭窗口</td></tr>
+    </tbody>
+  </table>
+
+  <h3>4.3 关键交互时序（切换模块）</h3>
+  <pre><code>用户点击侧栏模块 A
+  → 工作台：若当前有激活 iframe，先 iframe.remove()（触发页面卸载 → getUserMedia 轨道停止）
+  → 工作台：创建新 &lt;iframe src=模块A allow="camera; microphone; fullscreen; autoplay"&gt;
+  → 模块A 启动 WebGazer / MediaPipe → 请求摄像头 → 系统权限（首次）
+  → 模块A 可选：WS 连接 ws://127.0.0.1:8899/ws?token=… → 上报/接收指令</code></pre>
+
+  <div class="callout">
+    <div class="t">为什么必须销毁 iframe</div>
+    仅设置 <code>display:none</code> 不会停止摄像头与预测循环，反而会持续占用并拖慢性能；
+    <code>iframe.remove()</code> 会卸载文档、释放媒体轨道，是最可靠的「单实例」实现方式。
+  </div>
+
+  <h3>4.4 部署形态</h3>
+  <table>
+    <thead><tr><th>形态</th><th>入口</th><th>适用</th></tr></thead>
+    <tbody>
+      <tr><td>开发态</td><td><code>python3 -m http.server 8125</code> → 打开 <code>/workbench/</code></td><td>开发/调试</td></tr>
+      <tr><td>分发包态</td><td>双击 DMG 内「隔空控制器.app」→ 自动拉起服务并打开工作台</td><td>最终用户</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ================= 05 模块划分 ================= -->
+<section id="modules">
+  <div class="sec-head"><span class="sec-num">05</span><div><h2>模块划分</h2><div class="sec-sub">9 个模块，职责与交付物</div></div></div>
+
+  <table>
+    <thead><tr><th>模块</th><th>职责</th><th>关键输入/输出</th><th>依赖</th><th>交付物</th></tr></thead>
+    <tbody>
+      <tr><td><b>M1 工作台外壳</b></td><td>侧栏、分组、路由、主题、响应式</td><td>modules.json → DOM</td><td>—</td><td><code>workbench/index.html</code></td></tr>
+      <tr><td><b>M2 模块注册表</b></td><td>声明模块元数据（id/名称/路径/分组/能力/依赖）</td><td>JSON → M1/M3</td><td>—</td><td><code>workbench/modules.json</code></td></tr>
+      <tr><td><b>M3 视图容器</b></td><td>iframe 懒加载、单实例互斥、加载态/错误态</td><td>模块路径 → iframe</td><td>M2</td><td><code>workbench/app.js</code></td></tr>
+      <tr><td><b>M4 下载中心</b></td><td>DMG 列表、版本、SHA-256、安装指引、占位态</td><td>release.json → UI</td><td>M7</td><td><code>workbench/releases/</code></td></tr>
+      <tr><td><b>M5 服务守护</b></td><td>启动/停止 8125+8899、健康检查、端口占用检测、退出清理</td><td>CLI/按钮 → 进程</td><td>launcher.py</td><td>复用并增强</td></tr>
+      <tr><td><b>M6 控制小窗 App</b></td><td>原生窗口、Start/Stop/前端/摄像头、日志</td><td>按钮 → M5/后端</td><td>pyobjc</td><td><code>launcher_cocoa.py</code></td></tr>
+      <tr><td><b>M7 打包流水线</b></td><td>py2app 构建 .app → hdiutil 生成 DMG → 签名 → 校验和</td><td>源码 → DMG</td><td>M6</td><td><code>packaging/build_dmg.sh</code></td></tr>
+      <tr><td><b>M8 安全与隐私</b></td><td>token、回环绑定、CSP、iframe sandbox、隐私提示</td><td>配置/策略</td><td>M1/M3/M5</td><td>策略文件 + 文档</td></tr>
+      <tr><td><b>M9 结果聚合（可选）</b></td><td>各模块导出 JSON 的本地归档与对比</td><td>JSON → 视图</td><td>—</td><td>v1.1 增量</td></tr>
+    </tbody>
+  </table>
+
+  <h3>模块依赖关系</h3>
+  <pre><code>M2(注册表) ──▶ M1(外壳) ──▶ M3(视图容器)
+                     └──▶ M4(下载中心) ──▶ M7(打包) ──▶ M6(小窗) ──▶ M5(服务守护)
+M8(安全) 横切：约束 M1 / M3 / M5 / M7</code></pre>
+</section>
+
+<!-- ================= 06 选型 ================= -->
+<section id="tech">
+  <div class="sec-head"><span class="sec-num">06</span><div><h2>关键技术选型及理由</h2><div class="sec-sub">ADR 风格逐项决策</div></div></div>
+
+  <h3>6.1 决策总表</h3>
+  <table>
+    <thead><tr><th>维度</th><th>候选</th><th>选择</th><th>核心理由</th></tr></thead>
+    <tbody>
+      <tr><td>工作台实现</td><td>静态 HTML+原生 JS / React+Vite / Next</td><td><b>静态 HTML+原生 JS</b></td><td>零构建、离线、与现有页面同构；无需 Node</td></tr>
+      <tr><td>模块集成</td><td>iframe / 重写为组件 / 新窗口</td><td><b>iframe 懒加载</b></td><td>业务页零改造、天然隔离、可独立调试</td></tr>
+      <tr><td>静态托管</td><td>http.server / nginx / FastAPI StaticFiles</td><td><b>http.server</b></td><td>已存在且被 launcher 管理；零新增依赖</td></tr>
+      <tr><td>路由</td><td>hash / history / 无</td><td><b>hash（#/id）</b></td><td>静态服务无需 rewrite，刷新可恢复</td></tr>
+      <tr><td>状态持久</td><td>localStorage / cookie</td><td><b>localStorage</b></td><td>主题与最近模块记忆，无后端</td></tr>
+      <tr><td>打包</td><td>py2app / PyInstaller / Tauri</td><td><b>py2app</b></td><td>打包 pyobjc 原生小窗最直接、体积小</td></tr>
+      <tr><td>DMG 生成</td><td>hdiutil / create-dmg</td><td><b>hdiutil</b></td><td>系统自带，脚本可控，无第三方依赖</td></tr>
+      <tr><td>签名</td><td>ad-hoc / Developer ID</td><td><b>ad-hoc（v1）</b></td><td>无需账号即可自签，配合放行指引</td></tr>
+      <tr><td>配置</td><td>JSON / 代码常量</td><td><b>modules.json</b></td><td>扩展零改代码</td></tr>
+    </tbody>
+  </table>
+
+  <h3>6.2 关键理由展开</h3>
+
+  <h4>① 为什么不用 React/Vite？</h4>
+  <p>
+    工作台本质是「导航 + 一个 iframe + 一个下载卡片」，状态极少。引入构建链会带来 Node 依赖、产物目录、
+    部署差异，而当前仓库刻意保持纯静态（<code>CONTRIBUTING.md</code> 明确所有 demo 直接起 http 服务）。
+    用原生 JS 约 200–300 行即可完成，且能被现有 DMG/服务直接托管。
+  </p>
+
+  <h4>② 为什么用 iframe 而不是把页面改造成组件？</h4>
+  <p>
+    12 个模块由不同作者、不同技术（WebGazer / MediaPipe CDN / 纯 DOM）实现，且依赖各自的相对资源路径。
+    改成组件等于重写并重测全部模块；iframe 保持它们原样、独立演进，工作台只负责装载与生命周期。
+    同时 iframe 的卸载语义天然解决摄像头占用问题。
+  </p>
+
+  <h4>③ 为什么 Playwright/Chromium 不进 DMG？</h4>
+  <p>
+    Chromium 与 <code>playwright==1.60.0</code> 版本强绑定、体积 150MB+，且安装路径与运行时校验复杂。
+    放进 DMG 会让体积翻数倍、构建矩阵膨胀。改为「首次运行引导安装」，失败时给出可复制命令与日志，
+    回收体积与维护成本。
+  </p>
+
+  <h4>④ 为什么 v1 用 ad-hoc 签名？</h4>
+  <p>
+    Apple Developer 账号与公证流程需要申请与等待。ad-hoc（<code>codesign -s -</code>）可让 .app 在本机通过
+    Gatekeeper 的完整性检查（仍需「右键 → 打开」首次放行），足够内测分发；v2 再切 Developer ID + 公证。
+  </p>
+
+  <h4>⑤ 为什么注册表用 JSON？</h4>
+  <p>
+    模块的增删改本质是数据变更。JSON 让非前端成员也能维护入口，并可直接由脚本校验路径存在性
+    （见附录 E 的验收脚本），把「文档」变成「可执行约束」。
+  </p>
+</section>
+
+<!-- ================= 07 风险 ================= -->
+<section id="risk">
+  <div class="sec-head"><span class="sec-num">07</span><div><h2>风险登记</h2><div class="sec-sub">概率 × 影响 × 缓解 × 触发信号</div></div></div>
+
+  <table>
+    <thead><tr><th>#</th><th>风险</th><th>概率</th><th>影响</th><th>等级</th><th>缓解措施</th><th>触发信号</th></tr></thead>
+    <tbody>
+      <tr><td>R1</td><td>Playwright/Chromium 打包体积与路径问题</td><td>高</td><td>高</td><td><span class="badge b-hi">高</span></td><td>不打包浏览器，首次引导安装；失败给命令与日志</td><td>DMG &gt; 200MB 或启动报找不到 chromium</td></tr>
+      <tr><td>R2</td><td>未签名被 Gatekeeper 拦截</td><td>高</td><td>中</td><td><span class="badge b-hi">高</span></td><td>ad-hoc 签名 + 「右键打开」指引；v2 公证</td><td>用户反馈「已损坏/无法验证开发者」</td></tr>
+      <tr><td>R3</td><td>iframe/权限导致摄像头不可用</td><td>中</td><td>高</td><td><span class="badge b-hi">高</span></td><td>强制 localhost + 同源 + <code>allow="camera"</code>；页内引导</td><td>模块显示「摄像头失败/黑帧」</td></tr>
+      <tr><td>R4</td><td>多模块抢占摄像头</td><td>中</td><td>高</td><td><span class="badge b-hi">高</span></td><td>单实例互斥：切换即 <code>iframe.remove()</code></td><td>切换后新模块报 NotReadableError</td></tr>
+      <tr><td>R5</td><td>arm64 / x86_64 构建矩阵</td><td>中</td><td>中</td><td><span class="badge b-mid">中</span></td><td>分别在两类机器构建，产物命名带架构后缀</td><td>对端机器打不开 .app</td></tr>
+      <tr><td>R6</td><td>BroadcastChannel 在 iframe 内的双页场景</td><td>低</td><td>中</td><td><span class="badge b-mid">中</span></td><td>提供「新标签打开」兜底（FR-10）</td><td>翻页引擎与阅读页无法联动</td></tr>
+      <tr><td>R7</td><td>端口占用 / 残留进程</td><td>中</td><td>中</td><td><span class="badge b-mid">中</span></td><td>启动前检测 8125/8899；退出清理；失败提示</td><td>启动报 Address already in use</td></tr>
+      <tr><td>R8</td><td>依赖供应链（vendor 未校验 / pip 安装）</td><td>中</td><td>中</td><td><span class="badge b-mid">中</span></td><td>requirements 锁版本；vendor 记录来源与校验和</td><td>依赖升级后行为漂移</td></tr>
+      <tr><td>R9</td><td>隐私合规（生物特征）</td><td>中</td><td>高</td><td><span class="badge b-hi">高</span></td><td>本地处理、不上传、导出仅数值、UI 明示</td><td>出现视频/照片落盘或外传</td></tr>
+      <tr><td>R10</td><td>多 wasm/GPU 模块并发导致卡顿</td><td>中</td><td>中</td><td><span class="badge b-mid">中</span></td><td>单实例 + 懒加载 + 切走销毁</td><td>切换后 fps 持续下降</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ================= 08 扩展 ================= -->
+<section id="ext">
+  <div class="sec-head"><span class="sec-num">08</span><div><h2>可扩展性</h2><div class="sec-sub">把「加一个页面」变成改一行数据</div></div></div>
+
+  <h3>8.1 注册表驱动</h3>
+  <p>新增模块只需在 <code>modules.json</code> 追加一条；工作台自动渲染侧栏项、路由与 iframe 装载。</p>
+  <pre><code>{
+  "groups": [
+    { "id": "test", "name": "测试与基准" },
+    { "id": "control", "name": "控制与后端" },
+    { "id": "demo", "name": "演示与实验" }
+  ],
+  "modules": [
+    {
+      "id": "dual-test",
+      "group": "test",
+      "name": "眼动 + 手势测试台",
+      "path": "../dual-test/index.html",
+      "capabilities": ["camera"],
+      "requires": ["local"],
+      "desc": "13 点标定 / 精度 / 联合点击"
+    }
+  ]
+}</code></pre>
+
+  <h3>8.2 扩展点</h3>
+  <table>
+    <thead><tr><th>扩展方向</th><th>做法</th><th>成本</th></tr></thead>
+    <tbody>
+      <tr><td>新增业务页</td><td>modules.json 加一条</td><td>分钟级</td></tr>
+      <tr><td>外部链接模块</td><td><code>"external": true</code> 时用新标签打开</td><td>低</td></tr>
+      <tr><td>结果对比</td><td>M9 读取各页导出的 JSON，统一列表/图表</td><td>中</td></tr>
+      <tr><td>多语言</td><td>modules.json 增加 <code>name_en</code>，外壳按语言取键</td><td>低</td></tr>
+      <tr><td>桌面壳</td><td>v2 用 Tauri 包住工作台 + sidecar 启动服务</td><td>高</td></tr>
+      <tr><td>远程/演示模式</td><td>同一工作台部署到 HTTPS 静态站点（去掉后端依赖）</td><td>中</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <div class="t">扩展的边界</div>
+    为保持「零构建」，不引入需要编译的依赖；若未来模块需打包，走 M7 流水线单独产物，
+    不污染工作台本体。
+  </div>
+</section>
+
+<!-- ================= 09 安全 ================= -->
+<section id="security">
+  <div class="sec-head"><span class="sec-num">09</span><div><h2>安全性设计</h2><div class="sec-sub">网络面、隐私、前端隔离、分发链、供应链</div></div></div>
+
+  <h3>9.1 网络面</h3>
+  <ul>
+    <li>所有服务<b>只绑定 <code>127.0.0.1</code></b>，不监听 <code>0.0.0.0</code>。</li>
+    <li>WebSocket 必须带 token：现状 <code>AC_TOKEN</code> 默认 <code>air-controller-dev</code>；<b>建议启动时随机生成并注入</b>，不写日志、不入库。</li>
+    <li>后端仅暴露必要端点（<code>/health</code>、<code>/ws</code>、<code>/camera</code>），不开放文件写入/命令执行。</li>
+  </ul>
+
+  <h3>9.2 摄像头与隐私</h3>
+  <ul>
+    <li>视频帧仅在本机内存处理；不录制、不上传、不落盘。</li>
+    <li>导出结果仅含数值（偏差、命中率、混淆矩阵），不含图像。</li>
+    <li>工作台与各模块显著位置提示「画面仅本地处理」。</li>
+  </ul>
+
+  <h3>9.3 前端隔离</h3>
+  <table>
+    <thead><tr><th>措施</th><th>配置</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>CSP</td><td><code>default-src 'self'; media-src 'self' blob:; connect-src 'self' ws://127.0.0.1:8899</code></td><td>限制外链与内联执行</td></tr>
+      <tr><td>iframe 权限</td><td><code>allow="camera; microphone; fullscreen; autoplay"</code></td><td>仅授予模块所需能力</td></tr>
+      <tr><td>iframe sandbox</td><td>使用 <code>allow-scripts allow-same-origin</code>，不加 <code>allow-top-navigation</code></td><td>防止模块劫持顶层导航</td></tr>
+      <tr><td>外链提示</td><td>external 模块用 <code>rel="noopener noreferrer"</code></td><td>防止窗口引用泄露</td></tr>
+    </tbody>
+  </table>
+
+  <h3>9.4 分发链</h3>
+  <ul>
+    <li>DMG 产物旁提供 <code>.sha256</code>，下载中心展示校验和。</li>
+    <li>构建脚本 <code>codesign --verify --deep --strict</code> 自检后再出包。</li>
+    <li>版本号写入 <code>Info.plist</code> 与 <code>releases.json</code>，安装指引说明如何核对。</li>
+  </ul>
+
+  <h3>9.5 供应链</h3>
+  <ul>
+    <li><code>requirements.txt</code> 已锁定版本；升级需单独 PR + 回归。</li>
+    <li>vendor 第三方库记录来源与版本（WebGazer 2.1.2 patched、MediaPipe Vision）。</li>
+    <li>禁止提交私钥/证书（<code>.deepworks/tmp/ssl</code> 已在 gitignore 范围，需在文档强调）。</li>
+  </ul>
+</section>
+
+<!-- ================= 10 实施 ================= -->
+<section id="steps">
+  <div class="sec-head"><span class="sec-num">10</span><div><h2>实现步骤与验收</h2><div class="sec-sub">S0–S8，每步都有可执行的测试与 DoD</div></div></div>
+
+  <div class="step">
+    <div class="sh"><span class="sid">S0</span><span class="st">需求冻结与资产盘点</span><span class="badge b-p0">0.5 人日</span></div>
+    <p><b>任务：</b>确认 1.6 的 Q1–Q5；产出 <code>modules.json</code> 草案（12 条）；确定保留/隐藏的模块。</p>
+    <div class="test"><b>测试：</b>运行校验脚本遍历注册表路径，逐一 <code>stat</code> 存在性；对比 <code>git ls-tree</code> 页面清单。</div>
+    <div class="dod"><b>验收（DoD）：</b>注册表 12 条路径 100% 存在；评审通过需求口径与边界。</div>
+  </div>
+
+  <div class="step">
+    <div class="sh"><span class="sid">S1</span><span class="st">工作台外壳与侧栏</span><span class="badge b-p0">2 人日</span></div>
+    <p><b>任务：</b>实现 <code>workbench/index.html</code>：侧栏分组、内容区、空状态、主题切换、响应式；读取 <code>modules.json</code> 渲染。</p>
+    <div class="test"><b>测试：</b>Playwright 断言：侧栏项数 = 注册表条目数；点击每项后 iframe <code>src</code> 正确；无 console error。</div>
+    <div class="dod"><b>验收：</b>12 项全部可切换；窄屏（375px）侧栏可开合；刷新保持主题。</div>
+  </div>
+
+  <div class="step">
+    <div class="sh"><span class="sid">S2</span><span class="st">视图容器：懒加载 + 单实例互斥</span><span class="badge b-p0">1 人日</span></div>
+    <p><b>任务：</b>切换时 <code>iframe.remove()</code>；加加载骨架与错误兜底；hash 路由与最近模块记忆；能力标记（camera/local）提示。</p>
+    <div class="test"><b>测试：</b>e2e 连续切换 5 个摄像头模块；每次切换后用 <code>chrome://media-internals</code>/CDP 断言旧流已停止；无 NotReadableError。</div>
+    <div class="dod"><b>验收：</b>连续切换 5 轮无摄像头冲突；切走后摄像头指示灯熄灭；刷新恢复到当前模块。</div>
+  </div>
+
+  <div class="step">
+    <div class="sh"><span class="sid">S3</span><span class="st">本地服务守护与健康检查</span><span class="badge b-p1">1.5 人日</span></div>
+    <p><b>任务：</b>复用 <code>launcher.py</code>：启动前检测 8125/8899 占用；<code>/health</code> 轮询；异常退出重启；退出时清理子进程。</p>
+    <div class="test"><b>测试：</b>扩展 <code>scripts/test_launcher_smoke.py</code>：起停 3 次、端口释放断言、模拟后端崩溃后自动重启。</div>
+    <div class="dod"><b>验收：</b>一键起停成功；停止后 <code>lsof -i :8125 -i :8899</code> 为空；崩溃 2s 内重启。</div>
+  </div>
+
+  <div class="step">
+    <div class="sh"><span class="sid">S4</span><span class="st">下载中心（先占位，后接真实产物）</span><span class="badge b-p1">0.5 人日</span></div>
+    <p><b>任务：</b><code>workbench/releases.json</code> + 下载卡片：版本、架构、大小、SHA-256、安装指引；无产物时显示「构建中」占位。</p>
+    <div class="test"><b>测试：</b>点击下载返回文件或明确占位；校验和与本地文件一致；断链检查（<code>curl -I</code>）。</div>
+    <div class="dod"><b>验收：</b>下载卡片字段完整；未构建时文案明确不误导；有产物时校验和匹配。</div>
+  </div>
+
+  <div class="step">
+    <div class="sh"><span class="sid">S5</span><span class="st">控制小窗打包（py2app + hdiutil）</span><span class="badge b-p0">4 人日</span></div>
+    <p><b>任务：</b>写 <code>packaging/setup.py</code>（py2app，<code>argv_emulation=False</code>，include pyobjc/Cocoa/Quartz）；构建 <code>隔空控制器.app</code>；<code>codesign -s -</code>；<code>hdiutil create</code> 生成 DMG；输出 SHA-256。</p>
+    <div class="test"><b>测试：</b>在<b>干净机器/新用户</b>上：挂载 DMG → 拖入 Applications → 首次右键打开 → 窗口出现 → Start 起服务 → 打开工作台。</div>
+    <div class="dod"><b>验收：</b>首次可启动；<code>codesign --verify --deep --strict</code> 通过；DMG &lt; 60MB（不含 Chromium）；安装指引覆盖 Gatekeeper 放行。</div>
+  </div>
+
+  <div class="step">
+    <div class="sh"><span class="sid">S6</span><span class="st">后端依赖自举（bootstrap）</span><span class="badge b-p1">2 人日</span></div>
+    <p><b>任务：</b>.app 首次启动检测 venv / requirements；在线时执行 <code>pip install -r</code> + <code>playwright install chromium</code>；离线给出提示与手动命令；全过程写诊断日志。</p>
+    <div class="test"><b>测试：</b>三类场景：全新机器（在线）、无网络、安装中途失败；断言每种都有明确 UI 提示与可复现命令。</div>
+    <div class="dod"><b>验收：</b>在线首装成功；离线提示可操作；失败日志可在小窗「日志」区查看。</div>
+  </div>
+
+  <div class="step">
+    <div class="sh"><span class="sid">S7</span><span class="st">安全与隐私加固</span><span class="badge b-p1">1 人日</span></div>
+    <p><b>任务：</b>随机化 <code>AC_TOKEN</code>；加 CSP 与 iframe 权限白名单；隐私提示；回环绑定审计；依赖版本校验。</p>
+    <div class="test"><b>测试：</b>按 9.1–9.5 逐条打勾；验证外部无法直连 8125/8899；验证错误 token 被拒（code 4001）。</div>
+    <div class="dod"><b>验收：</b>安全清单 100% 通过；无视频/照片落盘；无明文 token 入库。</div>
+  </div>
+
+  <div class="step">
+    <div class="sh"><span class="sid">S8</span><span class="st">文档、版本与发布</span><span class="badge b-p2">1 人日</span></div>
+    <p><b>任务：</b>更新 <code>README</code>/<code>HANDOFF</code>：工作台入口、DMG 获取与安装、常见问题；<code>packaging/README</code> 记录构建命令与矩阵。</p>
+    <div class="test"><b>测试：</b>按文档从零走一遍（新会话/新机器），记录耗时与卡点。</div>
+    <div class="dod"><b>验收：</b>他人按文档可在 15 分钟内完成构建与安装；文档命令可复制即用。</div>
+  </div>
+</section>
+
+<!-- ================= 11 里程碑 ================= -->
+<section id="milestone">
+  <div class="sec-head"><span class="sec-num">11</span><div><h2>里程碑与排期</h2><div class="sec-sub">三个可交付节点</div></div></div>
+
+  <table>
+    <thead><tr><th>里程碑</th><th>包含步骤</th><th>交付物</th><th>估算</th><th>退出标准</th></tr></thead>
+    <tbody>
+      <tr><td><b>M1 · 工作台可跑</b></td><td>S0–S3</td><td>侧栏工作台 + 单实例 + 服务守护</td><td>5 人日</td><td>5 个模块切换无冲突</td></tr>
+      <tr><td><b>M2 · 可分发</b></td><td>S4–S6</td><td>DMG 产物 + 下载中心 + bootstrap</td><td>6.5 人日</td><td>干净机器装完能用</td></tr>
+      <tr><td><b>M3 · 可发布</b></td><td>S7–S8</td><td>安全加固 + 文档 + 版本</td><td>2 人日</td><td>安全清单与文档验收通过</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <div class="t">排期建议</div>
+    先做 M1（1 周内可见效果，风险低），把 DMG（S5）放第二段单独攻坚；
+    若 S5 受阻，可先以「DMG 内仅放 .command + 说明」的方式过渡，不阻塞工作台上线。
+  </div>
+</section>
+
+<!-- ================= 12 附录 ================= -->
+<section id="appendix">
+  <div class="sec-head"><span class="sec-num">12</span><div><h2>附录</h2><div class="sec-sub">文件树、契约、命令、验收清单</div></div></div>
+
+  <h3>A. 目标文件树（新增部分）</h3>
+  <pre><code>workbench/
+├── index.html            # M1 外壳（侧栏 + 内容区 + 下载中心）
+├── app.js                # M1/M3 路由、懒加载、单实例互斥
+├── style.css             # 主题与布局
+├── modules.json          # M2 模块注册表
+├── releases.json         # M4 下载中心数据（版本/大小/sha256）
+└── releases/
+    └── 隔空控制器-v1.0.0-arm64.dmg   # M7 产物（构建后生成）
+
+packaging/
+├── setup.py              # py2app 配置
+├── build_dmg.sh          # 构建 + 签名 + hdiutil + sha256
+├── README.md             # 构建矩阵与命令
+└── resources/
+    └── 安装说明.txt       # DMG 内说明</code></pre>
+
+  <h3>B. modules.json 字段约定</h3>
+  <table>
+    <thead><tr><th>字段</th><th>类型</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td><code>id</code></td><td>string</td><td>唯一标识，用于 hash 路由</td></tr>
+      <tr><td><code>group</code></td><td>string</td><td>对应 <code>groups[].id</code></td></tr>
+      <tr><td><code>name</code></td><td>string</td><td>侧栏显示名</td></tr>
+      <tr><td><code>path</code></td><td>string</td><td>相对 workbench 的页面路径</td></tr>
+      <tr><td><code>capabilities</code></td><td>string[]</td><td><code>camera</code> / <code>backend</code> / <code>none</code></td></tr>
+      <tr><td><code>requires</code></td><td>string[]</td><td><code>local</code>（本地 vendor）或 <code>cdn</code></td></tr>
+      <tr><td><code>external</code></td><td>bool</td><td>true 时新标签打开（双页场景）</td></tr>
+      <tr><td><code>desc</code></td><td>string</td><td>一句话说明</td></tr>
+    </tbody>
+  </table>
+
+  <h3>C. 接口契约（沿用现有）</h3>
+  <table>
+    <thead><tr><th>接口</th><th>方法/协议</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td><code>/health</code></td><td>GET</td><td>返回 <code>{name, connected, page}</code>，用于守护进程探活</td></tr>
+      <tr><td><code>/ws?token=…</code></td><td>WebSocket</td><td>错误 token 关闭码 4001；连接即下发 <code>camera</code> 状态</td></tr>
+      <tr><td><code>/camera?state=on|off</code></td><td>GET</td><td>开关远程摄像头并广播 <code>{"type":"camera"}</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>D. DMG 构建命令（参考）</h3>
+  <pre><code># 1) 构建 .app（在 control-backend 目录，使用 venv）
+python3 setup.py py2app
+
+# 2) ad-hoc 签名
+codesign --force --deep --sign - "dist/隔空控制器.app"
+codesign --verify --deep --strict "dist/隔空控制器.app"
+
+# 3) 生成 DMG
+hdiutil create -volname "隔空控制器" -srcfolder "dist/隔空控制器.app" \
+  -ov -format UDZO "dist/隔空控制器-v1.0.0-arm64.dmg"
+
+# 4) 校验和
+shasum -a 256 "dist/隔空控制器-v1.0.0-arm64.dmg" | tee "dist/隔空控制器-v1.0.0-arm64.dmg.sha256"</code></pre>
+
+  <h3>E. 验收清单（可逐项打勾）</h3>
+  <table>
+    <thead><tr><th>#</th><th>检查项</th><th>通过标准</th></tr></thead>
+    <tbody>
+      <tr><td>V1</td><td>注册表路径存在</td><td>12/12 存在（脚本校验）</td></tr>
+      <tr><td>V2</td><td>侧栏与路由</td><td>点击/刷新/直达 <code>#/id</code> 均正确</td></tr>
+      <tr><td>V3</td><td>摄像头互斥</td><td>连续切换 5 次无冲突、指示灯熄灭</td></tr>
+      <tr><td>V4</td><td>服务守护</td><td>起停 3 次、端口释放、崩溃重启</td></tr>
+      <tr><td>V5</td><td>下载中心</td><td>链接/占位/校验和均正确</td></tr>
+      <tr><td>V6</td><td>干净机器安装</td><td>双击安装 → 首次放行 → 可用</td></tr>
+      <tr><td>V7</td><td>签名校验</td><td><code>codesign --verify</code> 通过</td></tr>
+      <tr><td>V8</td><td>后端自举</td><td>在线/离线/失败三路径均有明确提示</td></tr>
+      <tr><td>V9</td><td>安全清单</td><td>9.1–9.5 全部通过</td></tr>
+      <tr><td>V10</td><td>文档可复现</td><td>他人按文档 15 分钟内完成构建</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout ok" style="margin-top:24px">
+    <div class="t">下一步建议</div>
+    先就 <b>1.6 的 Q1–Q5</b> 拍板，然后直接进入 <b>S0 + S1</b>：先把工作台跑起来（1 周内可见），
+    再单独攻 DMG（S5）。这样即使打包受阻，工作台与 12 个模块的整合也能先交付价值。
+  </div>
+</section>
+
+</main>
+
+<script>
+(function(){
+  // 移动端抽屉
+  var btn = document.getElementById('navBtn');
+  var mask = document.querySelector('.nav-mask');
+  function close(){ document.body.classList.remove('nav-open'); }
+  btn.addEventListener('click', function(){ document.body.classList.toggle('nav-open'); });
+  mask.addEventListener('click', close);
+  document.querySelectorAll('#toc a').forEach(function(a){ a.addEventListener('click', close); });
+
+  // 滚动高亮
+  var links = Array.prototype.slice.call(document.querySelectorAll('#toc a'));
+  var map = {};
+  links.forEach(function(a){ map[a.getAttribute('href').slice(1)] = a; });
+  var sections = Array.prototype.slice.call(document.querySelectorAll('main section[id]'));
+  function onScroll(){
+    var y = window.scrollY + 140;
+    var cur = sections[0];
+    for (var i=0;i<sections.length;i++){
+      if (sections[i].offsetTop <= y) cur = sections[i];
+    }
+    links.forEach(function(a){ a.classList.remove('active'); });
+    if (cur && map[cur.id]) map[cur.id].classList.add('active');
+  }
+  window.addEventListener('scroll', onScroll, {passive:true});
+  onScroll();
+})();
+</script>
+</body>
+</html>
