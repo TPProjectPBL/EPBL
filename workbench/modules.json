@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "default": "dual-test",
+  "groups": [
+    { "id": "test", "name": "测试与基准" },
+    { "id": "control", "name": "控制与后端" },
+    { "id": "create", "name": "创作与浏览" },
+    { "id": "demo", "name": "演示与对照" }
+  ],
+  "modules": [
+    {
+      "id": "dual-test",
+      "group": "test",
+      "name": "眼动 + 手势测试台",
+      "path": "../dual-test/index.html",
+      "capabilities": ["camera"],
+      "requires": ["local"],
+      "desc": "13 点标定 / 12 目标精度 / 眼手联合点击 / 结果导出"
+    },
+    {
+      "id": "gesture-test",
+      "group": "test",
+      "name": "手势精度测试",
+      "path": "../gesture-test/index.html",
+      "capabilities": ["camera"],
+      "requires": ["local"],
+      "desc": "6 手势 + 中立，帧级准确率 / 混淆矩阵 / 导出 JSON"
+    },
+    {
+      "id": "control-frontend",
+      "group": "control",
+      "name": "控制前端",
+      "path": "../control-frontend/index.html",
+      "capabilities": ["camera", "backend"],
+      "requires": ["local"],
+      "desc": "眼动/手势采集并上报后端，接收远程摄像头开关指令"
+    },
+    {
+      "id": "targets",
+      "group": "control",
+      "name": "受控靶场",
+      "path": "../control-backend/targets/test-page.html",
+      "capabilities": [],
+      "requires": [],
+      "desc": "按钮 / 链接 / 表单 / 长滚动，后端默认被控目标页"
+    },
+    {
+      "id": "draw",
+      "group": "create",
+      "name": "隔空画板",
+      "path": "../draw/index-3-hand.html",
+      "capabilities": ["camera"],
+      "requires": ["local"],
+      "desc": "眼动标定 + 捏合落笔 + 画布工具层"
+    },
+    {
+      "id": "eye-page-turner",
+      "group": "create",
+      "name": "眼动翻页 · 引擎",
+      "path": "../eye-page-turner/index.html",
+      "capabilities": ["camera"],
+      "requires": ["cdn"],
+      "desc": "距离感知 + 双模态切换，通过 BroadcastChannel 通知阅读页",
+      "note": "需与「眼动翻页 · 阅读页」同时打开"
+    },
+    {
+      "id": "reader",
+      "group": "create",
+      "name": "眼动翻页 · 阅读页",
+      "path": "../eye-page-turner/reader.html",
+      "capabilities": [],
+      "requires": [],
+      "desc": "接收翻页广播并自动翻页（本身不占用摄像头）",
+      "note": "需与「眼动翻页 · 引擎」同时打开"
+    },
+    {
+      "id": "air-draw",
+      "group": "demo",
+      "name": "隔空画画 Demo",
+      "path": "../eye-page-turner/demo/air-draw/index.html",
+      "capabilities": ["camera"],
+      "requires": ["cdn"],
+      "desc": "眼动选色（悬停 0.7s）+ 手势绘画"
+    },
+    {
+      "id": "air-runner",
+      "group": "demo",
+      "name": "星际跑酷 Demo",
+      "path": "../eye-page-turner/demo/air-runner/index.html",
+      "capabilities": ["camera"],
+      "requires": ["cdn"],
+      "desc": "眼动 + 手势操控的跑酷小游戏"
+    },
+    {
+      "id": "controller-demo",
+      "group": "demo",
+      "name": "旧控制器（对照）",
+      "path": "../controller-demo/index.html",
+      "capabilities": ["camera"],
+      "requires": ["local"],
+      "desc": "9 点标定 / 眼动控鼠标 / 手势缩放，眼动可用性参照实现"
+    },
+    {
+      "id": "webgazer-gaze",
+      "group": "demo",
+      "name": "眼动对照页",
+      "path": "../controller-demo/webgazer-gaze.html",
+      "capabilities": ["camera"],
+      "requires": ["local"],
+      "desc": "纯 TF.js FaceMesh 眼动，用于调 EMA / 磁吸参数"
+    },
+    {
+      "id": "hero",
+      "group": "demo",
+      "name": "Hero 视觉页",
+      "path": "../controller-demo/hero.html",
+      "capabilities": [],
+      "requires": ["local"],
+      "desc": "flow-field 视觉，由控制页 ?mode=hero 视线驱动"
+    }
+  ]
+}

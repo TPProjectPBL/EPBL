@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>隔空控制器 · 工作台</title>
+<meta name="description" content="隔空控制器本地工作台：统一入口加载测试台、控制前端、画板、翻页与演示模块。">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' http://127.0.0.1:8899 ws://127.0.0.1:8899; frame-src 'self'; object-src 'none'; base-uri 'none'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b0e14'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%234f9cf9'/%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%234f9cf9' stroke-opacity='.55' stroke-width='1.6'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <span class="ring"></span><span class="dot"></span>
+      </div>
+      <div class="brand-txt">
+        <b>隔空控制器</b>
+        <span>workbench</span>
+      </div>
+    </div>
+
+    <nav class="nav" id="nav" aria-label="模块导航"></nav>
+
+    <div class="side-foot">
+      <div class="foot-row">
+        <span class="foot-k">服务</span>
+        <span class="pill" id="sideBackend">检测中</span>
+      </div>
+      <div class="foot-row">
+        <span class="foot-k">地址</span>
+        <code class="foot-v">127.0.0.1:8125</code>
+      </div>
+    </div>
+  </aside>
+
+  <div class="mask" id="mask"></div>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn only-mobile" id="menuBtn" aria-label="打开导航">☰</button>
+      <div class="crumbs">
+        <span class="crumb-home">工作台</span>
+        <span class="sep">/</span>
+        <span id="crumb">加载中…</span>
+      </div>
+      <div class="top-actions">
+        <span class="pill" id="backendPill">后端检测中</span>
+        <button class="icon-btn" id="themeBtn" title="切换主题" aria-label="切换主题">◐</button>
+      </div>
+    </header>
+
+    <section class="module-bar" id="moduleBar" hidden>
+      <div class="mb-left">
+        <h1 id="modName"></h1>
+        <div class="mb-meta" id="modMeta"></div>
+        <p class="mb-note" id="modNote" hidden></p>
+      </div>
+      <div class="mb-right">
+        <button class="btn ghost" id="reloadBtn">重载</button>
+        <button class="btn" id="openBtn">新标签打开</button>
+      </div>
+    </section>
+
+    <div class="stage" id="stage">
+      <div class="empty" id="placeholder">
+        <div class="empty-inner">
+          <div class="spinner"></div>
+          <p>正在加载模块注册表…</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

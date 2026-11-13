@@ -1,0 +1,30 @@
+{
+  "version": "1.0.0",
+  "channel": "dev",
+  "items": [
+    {
+      "id": "macos-arm64",
+      "name": "隔空控制器（Apple 芯片）",
+      "platform": "macOS 12+",
+      "arch": "arm64",
+      "version": "1.0.0",
+      "file": "隔空控制器-v1.0.0-arm64.dmg",
+      "size": "57 MB",
+      "sha256": "11eace86d5f0aaef3b831cfbf03aaa7df7083d803b85bbe95548ff65b3e9136e",
+      "status": "ready",
+      "note": "首次启动需联网创建运行环境并安装依赖（约 1–3 分钟）。未公证，首次打开请右键 → 打开。"
+    },
+    {
+      "id": "macos-x64",
+      "name": "隔空控制器（Intel 芯片）",
+      "platform": "macOS 12+",
+      "arch": "x86_64",
+      "version": "1.0.0",
+      "file": null,
+      "size": null,
+      "sha256": null,
+      "status": "planned",
+      "note": "尚未构建：需在 Intel 机器上执行 packaging/build_dmg.sh。"
+    }
+  ]
+}
