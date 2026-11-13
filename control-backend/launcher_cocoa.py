@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import json
+import os
 import queue
 import sys
 import urllib.request
@@ -40,6 +41,11 @@ class CocoaPanel(Cocoa.NSObject):
             0.5, self, Cocoa.NSSelectorFromString("refresh:"), None, True,
         )
         self.refresh_(None)
+        # 自动化/开机自启用：AC_AUTOSTART=1 时窗口出现后自动 Start
+        if os.environ.get("AC_AUTOSTART") == "1":
+            Cocoa.NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+                1.0, self, Cocoa.NSSelectorFromString("autostart:"), None, False,
+            )
         return self
 
     # ---------- 构造 UI ----------
@@ -120,6 +126,11 @@ class CocoaPanel(Cocoa.NSObject):
 
     # ---------- 动作 ----------
     def start_(self, sender):
+        self.mgr.start()
+        self.refresh_(None)
+
+    def autostart_(self, timer):
+        self._queue_log("AC_AUTOSTART=1：自动启动服务")
         self.mgr.start()
         self.refresh_(None)
 

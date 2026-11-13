@@ -35,3 +35,10 @@ env/
 # 大模型权重文件（体积大，按老师要求不入库，需自行下载）
 *.task
 *.tflite
+
+# 打包产物（不入库）
+packaging/stage/
+packaging/build/
+packaging/dist/
+workbench/releases/*.dmg
+workbench/releases/*.sha256

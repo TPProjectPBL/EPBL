@@ -22,14 +22,31 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+FROZEN = bool(getattr(sys, "frozen", False))
+APP_SUPPORT = Path.home() / "Library" / "Application Support" / "隔空控制器"
+SYSTEM_PY = "/usr/bin/python3"
+
+
+def _resource_root() -> Path:
+    """打包后静态资源位于 .app/Contents/Resources/site；开发态为仓库根目录。"""
+    if FROZEN:
+        return Path(sys.executable).resolve().parent.parent / "Resources" / "site"
+    return Path(__file__).resolve().parent.parent
+
+
+ROOT = _resource_root()
 BACKEND_DIR = ROOT / "control-backend"
-VENV_PY = BACKEND_DIR / ".venv" / "bin" / "python"
+
+# 打包后不内置解释器：首次启动在用户目录创建运行环境（见 _ensure_runtime）
+VENV_PY = (
+    APP_SUPPORT / "venv" / "bin" / "python" if FROZEN
+    else BACKEND_DIR / ".venv" / "bin" / "python"
+)
 
 HTTP_PORT = 8125
 BACKEND_PORT = 8899
 BACKEND_URL = f"http://127.0.0.1:{BACKEND_PORT}"
-FRONT_URL = f"http://127.0.0.1:{HTTP_PORT}/control-frontend/index.html"
+FRONT_URL = f"http://127.0.0.1:{HTTP_PORT}/workbench/"
 
 
 class BackendManager:
@@ -51,29 +68,109 @@ class BackendManager:
 
     def _log(self, msg: str):
         if self.on_log:
-            self.on_log(msg)
+            try:
+                self.on_log(msg)
+            except Exception:
+                pass
+        # 同时落盘，便于打包后（GUI 只显示 4 行）排查首次运行问题
+        try:
+            APP_SUPPORT.mkdir(parents=True, exist_ok=True)
+            with open(APP_SUPPORT / "launcher.log", "a", encoding="utf-8") as fh:
+                fh.write(f"{time.strftime('%m-%d %H:%M:%S')} {msg}\n")
+        except Exception:
+            pass
 
     # ---------- 启停 ----------
     def start(self) -> bool:
         if self.state != "stopped":
             return False
         self.state = "starting"
+        self._stop_evt.clear()
+        self._thread = threading.Thread(target=self._boot, daemon=True)
+        self._thread.start()
+        return True
+
+    def _boot(self) -> None:
+        """首次运行可能要先建venv/装依赖，整个过程放在后台线程，避免卡住窗口。"""
+        if not self._ensure_runtime():
+            self.state = "stopped"
+            return
+        if self._stop_evt.is_set():
+            self.state = "stopped"
+            return
+        if not self._start_servers():
+            self.state = "stopped"
+            return
+        self._monitor()
+
+    def _ensure_runtime(self) -> bool:
+        if VENV_PY.exists():
+            return True
+        if not FROZEN:
+            self._log(f"缺少运行环境：{VENV_PY}（先执行 control-backend/setup_env.sh）")
+            return False
+
+        self._log(f"首次运行：创建运行环境（frozen={FROZEN}, root={ROOT}）…")
+        try:
+            APP_SUPPORT.mkdir(parents=True, exist_ok=True)
+            subprocess.run(
+                [SYSTEM_PY, "-m", "venv", str(APP_SUPPORT / "venv")],
+                check=True, capture_output=True, timeout=180, env=self._clean_env(),
+            )
+        except subprocess.CalledProcessError as exc:
+            err = (exc.stderr or b"").decode("utf-8", "replace").strip().splitlines()
+            self._log(f"创建虚拟环境失败：{err[-1] if err else exc.returncode}")
+            return False
+        except Exception as exc:
+            self._log(f"创建虚拟环境失败：{exc}")
+            return False
+
+        self._run([str(VENV_PY), "-m", "pip", "install", "-q", "--upgrade", "pip"], 300)
+        self._log("安装 Python 依赖…")
+        if not self._run(
+            [str(VENV_PY), "-m", "pip", "install", "-q", "-r", str(BACKEND_DIR / "requirements.txt")],
+            900,
+        ):
+            self._log("依赖安装失败：请检查网络后重试")
+            return False
+        self._log("依赖安装完成")
+
+        self._log("安装受控浏览器 Chromium（约 150MB）…")
+        if not self._run([str(VENV_PY), "-m", "playwright", "install", "chromium"], 900):
+            self._log("Chromium 未装：远程控制不可用，可稍后手动执行 playwright install chromium")
+        return True
+
+    def _run(self, cmd: list[str], timeout: int) -> bool:
+        try:
+            return subprocess.run(
+                cmd, timeout=timeout, capture_output=True, env=self._clean_env(),
+            ).returncode == 0
+        except Exception:
+            return False
+
+    @staticmethod
+    def _clean_env() -> dict:
+        """去掉 py2app 注入的 PYTHON* 变量，避免系统解释器被带偏。"""
+        return {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")}
+
+    def _start_servers(self) -> bool:
+        # 打包后 sys.executable 是 .app 主程序，不能再 `-m http.server`，必须用运行环境里的解释器
+        py = str(VENV_PY) if FROZEN else sys.executable
         self._log("正在启动静态文件服务…")
         try:
             self.http_proc = subprocess.Popen(
                 # 仅绑定回环地址，避免把工作台/测试页暴露到局域网。
-                [sys.executable, "-m", "http.server", str(HTTP_PORT),
+                [py, "-m", "http.server", str(HTTP_PORT),
                  "--bind", "127.0.0.1"],
                 cwd=str(ROOT), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
         except Exception as e:
             self._log(f"静态服务启动失败：{e}")
-            self.state = "stopped"
             return False
 
         self._log("正在启动控制后端（拉起受控 Chrome）…")
         try:
-            env = {**os.environ, **self.extra_env}
+            env = {**self._clean_env(), **self.extra_env}
             self.backend_proc = subprocess.Popen(
                 [str(VENV_PY), "-m", "uvicorn", "app.server:app",
                  "--host", "127.0.0.1", "--port", str(BACKEND_PORT)],
@@ -84,12 +181,8 @@ class BackendManager:
             self._log(f"后端启动失败：{e}")
             self._terminate(self.http_proc)
             self.http_proc = None
-            self.state = "stopped"
             return False
 
-        self._stop_evt.clear()
-        self._thread = threading.Thread(target=self._monitor, daemon=True)
-        self._thread.start()
         return True
 
     def stop(self) -> None:
