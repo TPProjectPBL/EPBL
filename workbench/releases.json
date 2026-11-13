@@ -9,8 +9,8 @@
       "arch": "arm64",
       "version": "1.0.0",
       "file": "隔空控制器-v1.0.0-arm64.dmg",
-      "size": "57 MB",
-      "sha256": "11eace86d5f0aaef3b831cfbf03aaa7df7083d803b85bbe95548ff65b3e9136e",
+      "size": "68 MB",
+      "sha256": "a8b5bb8c57d109296ea8653508a92a9ddb68fad1963c8092eb10dfae1550ff3f",
       "status": "ready",
       "note": "首次启动需联网创建运行环境并安装依赖（约 1–3 分钟）。未公证，首次打开请右键 → 打开。"
     },
