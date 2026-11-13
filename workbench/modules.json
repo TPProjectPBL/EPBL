@@ -27,6 +27,15 @@
       "desc": "6 手势 + 中立，帧级准确率 / 混淆矩阵 / 导出 JSON"
     },
     {
+      "id": "gaze-heatmap",
+      "group": "test",
+      "name": "视线热力图",
+      "path": "../gaze-heatmap/index.html",
+      "capabilities": ["camera"],
+      "requires": ["local"],
+      "desc": "9 点标定 + 头位校验，热力 / 轨迹 / 点阵视图，导出 CSV 与 AOI 报告图"
+    },
+    {
       "id": "control-frontend",
       "group": "control",
       "name": "控制前端",
@@ -92,15 +101,6 @@
       "desc": "眼动 + 手势操控的跑酷小游戏"
     },
     {
-      "id": "controller-demo",
-      "group": "demo",
-      "name": "旧控制器（对照）",
-      "path": "../controller-demo/index.html",
-      "capabilities": ["camera"],
-      "requires": ["local"],
-      "desc": "9 点标定 / 眼动控鼠标 / 手势缩放，眼动可用性参照实现"
-    },
-    {
       "id": "webgazer-gaze",
       "group": "demo",
       "name": "眼动对照页",
@@ -108,15 +108,6 @@
       "capabilities": ["camera"],
       "requires": ["local"],
       "desc": "纯 TF.js FaceMesh 眼动，用于调 EMA / 磁吸参数"
-    },
-    {
-      "id": "hero",
-      "group": "demo",
-      "name": "Hero 视觉页",
-      "path": "../controller-demo/hero.html",
-      "capabilities": [],
-      "requires": ["local"],
-      "desc": "flow-field 视觉，由控制页 ?mode=hero 视线驱动"
     }
   ]
 }

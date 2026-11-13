@@ -182,7 +182,7 @@
   <div class="kicker">Air Controller · Workbench &amp; Distribution</div>
   <h1>隔空控制器 · 工作台与分发系统设计报告</h1>
   <p class="lead">
-    把仓库里分散的 12 个可用页面整合为一个带侧栏导航的统一 Web 工作台，并在工作台内提供
+    把仓库里分散的 11 个可用模块页面整合为一个带侧栏导航的统一 Web 工作台，并在工作台内提供
     「控制小窗」的 DMG 安装包下载。本报告给出需求口径、可行性结论、总体架构、模块划分、
     技术选型理由、风险、安全、可扩展性，以及分步实施与逐步验收标准，用于指导后续开发。
   </p>
@@ -194,7 +194,7 @@
     <span class="chip">技术栈 静态 Web + Python 3.9</span>
   </div>
   <div class="cards">
-    <div class="card"><div class="v">12</div><div class="l">待整合页面</div></div>
+    <div class="card"><div class="v">11</div><div class="l">工作台模块</div></div>
     <div class="card"><div class="v">4</div><div class="l">架构分层</div></div>
     <div class="card"><div class="v">9</div><div class="l">功能模块</div></div>
     <div class="card"><div class="v">9</div><div class="l">实施步骤（S0–S8）</div></div>
@@ -256,7 +256,7 @@
   <table>
     <thead><tr><th>编号</th><th>需求</th><th>优先级</th><th>验收要点</th></tr></thead>
     <tbody>
-      <tr><td>FR-01</td><td>侧栏导航：按分组列出全部可用模块，点击切换内容区</td><td><span class="badge b-p0">P0</span></td><td>12 个模块均可见、可点击、定位正确</td></tr>
+      <tr><td>FR-01</td><td>侧栏导航：按分组列出全部可用模块，点击切换内容区</td><td><span class="badge b-p0">P0</span></td><td>11 个模块均可见、可点击、定位正确</td></tr>
       <tr><td>FR-02</td><td>内容区用 iframe 懒加载模块，切走时销毁实例</td><td><span class="badge b-p0">P0</span></td><td>切换后旧模块 <code>getUserMedia</code> 已停止</td></tr>
       <tr><td>FR-03</td><td>单实例摄像头互斥：同一时刻仅一个模块可占用摄像头</td><td><span class="badge b-p0">P0</span></td><td>连续切换 5 次无「摄像头被占用」错误</td></tr>
       <tr><td>FR-04</td><td>模块注册表驱动（<code>modules.json</code>）</td><td><span class="badge b-p1">P1</span></td><td>新增模块仅改 JSON，不改 JS</td></tr>
@@ -291,7 +291,7 @@
       <td>
         <ul style="margin:0">
           <li>统一工作台外壳 + 侧栏 + 路由</li>
-          <li>12 个现有页面的接入与互斥</li>
+          <li>11 个现有模块页面的接入与互斥</li>
           <li>控制小窗 DMG 的构建流水线</li>
           <li>下载中心与安装指引</li>
           <li>本地服务守护与健康检查</li>
@@ -334,21 +334,20 @@
 <section id="current">
   <div class="sec-head"><span class="sec-num">02</span><div><h2>现状盘点</h2><div class="sec-sub">有哪些可整合的资产</div></div></div>
 
-  <h3>2.1 可整合页面（12 个，均为可直接托管的静态页）</h3>
+  <h3>2.1 可整合页面（11 个模块，均为可直接托管的静态页）</h3>
   <table>
     <thead><tr><th>模块</th><th>路径</th><th>功能</th><th>摄像头</th><th>外部依赖</th></tr></thead>
     <tbody>
       <tr><td>眼动+手势测试台</td><td><code>dual-test/index.html</code></td><td>13 点标定、眼动精度 12 目标、眼手联合 10 轮、结果导出</td><td>是</td><td>本地 vendor</td></tr>
       <tr><td>控制前端</td><td><code>control-frontend/index.html</code></td><td>眼动/手势采集，WS 上报后端，远程开关摄像头</td><td>是</td><td>本地 vendor + 后端</td></tr>
       <tr><td>手势精度测试</td><td><code>gesture-test/index.html</code></td><td>6 手势+中立、帧级准确率、混淆矩阵、导出 JSON</td><td>是</td><td>本地 vendor</td></tr>
+      <tr><td>视线热力图</td><td><code>gaze-heatmap/index.html</code></td><td>9 点标定 + 头位校验，热力/轨迹/点阵视图，导出 CSV 与 AOI 报告图</td><td>是</td><td>本地 vendor</td></tr>
       <tr><td>隔空画板</td><td><code>draw/index-3-hand.html</code></td><td>眼动标定 + 捏合落笔 + 全套工具层</td><td>是</td><td>本地 vendor</td></tr>
       <tr><td>眼动翻页·引擎</td><td><code>eye-page-turner/index.html</code></td><td>距离感知 + 双模态切换，BroadcastChannel 广播</td><td>是</td><td>CDN（MediaPipe）</td></tr>
       <tr><td>眼动翻页·阅读页</td><td><code>eye-page-turner/reader.html</code></td><td>接收广播并自动翻页（需与引擎页同开）</td><td>否</td><td>—</td></tr>
       <tr><td>隔空画画 Demo</td><td><code>eye-page-turner/demo/air-draw/index.html</code></td><td>眼动选色 0.7s + 手势绘画</td><td>是</td><td>CDN</td></tr>
       <tr><td>星际跑酷 Demo</td><td><code>eye-page-turner/demo/air-runner/index.html</code></td><td>眼动 + 手势操控跑酷</td><td>是</td><td>CDN</td></tr>
-      <tr><td>旧控制器（对照）</td><td><code>controller-demo/index.html</code></td><td>9 点标定、眼动控鼠标、手势缩放；眼动可用性参照实现</td><td>是</td><td>本地 vendor</td></tr>
       <tr><td>眼动对照页</td><td><code>controller-demo/webgazer-gaze.html</code></td><td>纯 TF.js FaceMesh 眼动，调 EMA/磁吸参数</td><td>是</td><td>本地 vendor</td></tr>
-      <tr><td>Hero 视觉页</td><td><code>controller-demo/hero.html</code></td><td>flow-field 视觉，由 <code>?mode=hero</code> 视线驱动</td><td>否（被驱动）</td><td>本地 vendor</td></tr>
       <tr><td>受控靶场</td><td><code>control-backend/targets/test-page.html</code></td><td>按钮/链接/表单/长滚动，后端默认被控目标</td><td>否</td><td>—</td></tr>
     </tbody>
   </table>
@@ -384,7 +383,7 @@
 
   <h3>3.1 工作台整合：可行（低风险）</h3>
   <p>
-    12 个页面都是静态 HTML，且大多以相对路径引用本地 <code>vendor</code>，天然适合同源静态托管。
+    这些页面都是静态 HTML，且大多以相对路径引用本地 <code>vendor</code>，天然适合同源静态托管。
     侧栏 + iframe 属于浏览器原生能力，不需要框架。唯一硬约束是<b>必须经 HTTP 访问</b>（摄像头权限），
     由现有 <code>http.server 8125</code> 满足。
   </p>
@@ -453,7 +452,7 @@
   <table>
     <thead><tr><th>能力</th><th>结论</th><th>前提</th></tr></thead>
     <tbody>
-      <tr><td>侧栏工作台 + 12 页整合</td><td><span class="badge b-low">可行</span></td><td>经 8125 HTTP 访问</td></tr>
+      <tr><td>侧栏工作台 + 11 页整合</td><td><span class="badge b-low">可行</span></td><td>经 8125 HTTP 访问</td></tr>
       <tr><td>摄像头单实例互斥</td><td><span class="badge b-low">可行</span></td><td>切换时销毁 iframe</td></tr>
       <tr><td>DMG 下载入口</td><td><span class="badge b-low">可行</span></td><td>需先产出 DMG 产物</td></tr>
       <tr><td>DMG 内置完整后端</td><td><span class="badge b-mid">不推荐</span></td><td>体积/版本/权限成本高</td></tr>
@@ -487,7 +486,6 @@
         <div class="box"><b>gesture-test</b><span>手势精度</span></div>
         <div class="box"><b>draw</b><span>隔空画板</span></div>
         <div class="box"><b>eye-page-turner</b><span>翻页 / demo</span></div>
-        <div class="box"><b>controller-demo</b><span>对照 / hero</span></div>
         <div class="box"><b>targets</b><span>受控靶场</span></div>
       </div>
     </div>
@@ -603,7 +601,7 @@ M8(安全) 横切：约束 M1 / M3 / M5 / M7</code></pre>
 
   <h4>② 为什么用 iframe 而不是把页面改造成组件？</h4>
   <p>
-    12 个模块由不同作者、不同技术（WebGazer / MediaPipe CDN / 纯 DOM）实现，且依赖各自的相对资源路径。
+    11 个模块由不同作者、不同技术（WebGazer / MediaPipe CDN / 纯 DOM）实现，且依赖各自的相对资源路径。
     改成组件等于重写并重测全部模块；iframe 保持它们原样、独立演进，工作台只负责装载与生命周期。
     同时 iframe 的卸载语义天然解决摄像头占用问题。
   </p>
@@ -907,7 +905,7 @@ shasum -a 256 "dist/隔空控制器-v1.0.0-arm64.dmg" | tee "dist/隔空控制�
   <div class="callout ok" style="margin-top:24px">
     <div class="t">下一步建议</div>
     先就 <b>1.6 的 Q1–Q5</b> 拍板，然后直接进入 <b>S0 + S1</b>：先把工作台跑起来（1 周内可见），
-    再单独攻 DMG（S5）。这样即使打包受阻，工作台与 12 个模块的整合也能先交付价值。
+    再单独攻 DMG（S5）。这样即使打包受阻，工作台与 11 个模块的整合也能先交付价值。
   </div>
 </section>
 

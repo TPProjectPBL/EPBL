@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sightline · 视线热力图工作台</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34'%3E%3Crect width='34' height='34' rx='8' fill='%230a0b0f'/%3E%3Cpath d='M2 17s5.4-9 15-9 15 9 15 9-5.4 9-15 9S2 17 2 17Z' stroke='%2374f0ce' stroke-width='1.6' fill='none'/%3E%3Ccircle cx='17' cy='17' r='4.6' stroke='%2374f0ce' stroke-width='1.6' fill='none'/%3E%3Ccircle cx='17' cy='17' r='1.5' fill='%2374f0ce'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="style.css?v=20261105m" />
+<!-- WebGazer 2.1.2（沿用仓库内 patch 版：模型指向本地 vendor/webgazer/facemesh_model） -->
+<script src="vendor/webgazer/webgazer.js"></script>
+<!-- MediaPipe FaceMesh：仅用于标定前的头部就位检测，标定结束后释放 -->
+<script src="vendor/mediapipe/face_mesh/face_mesh.js?v=20261105b"></script>
+</head>
+<body>
+
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 34 34" fill="none">
+          <path d="M2 17s5.4-9 15-9 15 9 15 9-5.4 9-15 9S2 17 2 17Z" stroke="currentColor" stroke-width="1.6"/>
+          <circle cx="17" cy="17" r="4.6" stroke="currentColor" stroke-width="1.6"/>
+          <circle cx="17" cy="17" r="1.5" fill="currentColor"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <strong>SIGHTLINE</strong>
+        <span>视线热力图工作台</span>
+      </div>
+    </div>
+
+    <div class="topbar-status">
+      <div class="pill" id="pillEngine"><i class="dot"></i><span>追踪未启动</span></div>
+      <div class="pill" id="pillFps"><i class="dot"></i><span>-- FPS</span></div>
+      <div class="pill rec" id="pillRec"><i class="dot"></i><span>待记录</span></div>
+    </div>
+
+    <div class="topbar-actions">
+      <button class="btn ghost" id="btnDemo" title="不使用摄像头，用鼠标在内容区移动来模拟视线">演示模式</button>
+      <button class="btn ghost" id="btnCalib" disabled>9 点标定</button>
+      <button class="btn primary" id="btnStart">启动视线追踪</button>
+      <button class="btn record" id="btnRecord" disabled>开始记录</button>
+      <button class="btn ghost icon" id="btnHelp" aria-label="使用说明">?</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="stage-col">
+      <div class="stage-head">
+        <div class="stage-title">
+          <span class="eyebrow">STIMULUS</span>
+          <h1 id="contentTitle">注意力的形状</h1>
+        </div>
+        <div class="stage-legend" id="legend">
+          <span class="lg lg-low"></span>低
+          <span class="lg lg-mid"></span>中
+          <span class="lg lg-high"></span>高
+          <span class="legend-sep"></span>
+          <span class="lg lg-none"></span>无
+        </div>
+      </div>
+
+      <div class="stage-wrap" id="stageWrap">
+        <div class="stage" id="stage">
+          <div class="content" id="content"></div>
+          <canvas class="overlay heat" id="heatCanvas" width="640" height="400"></canvas>
+          <canvas class="overlay track" id="trackCanvas" width="1280" height="800"></canvas>
+          <div class="live-badge" id="liveBadge"><i></i><span>记录中</span><b id="liveTime">00:00</b></div>
+          <div class="stage-empty" id="stageEmpty">
+            <div class="se-eye">
+              <span></span>
+            </div>
+            <p>内容已就位，等待视线数据</p>
+            <small>启动追踪并完成标定后，注视点会在这里实时累积成热力图</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="stage-foot">
+        <span id="stageHint">提示：先完成 9 点标定，再自然浏览内容。注视点仅保存在本机浏览器内。</span>
+        <button class="link" id="btnRecenter">重置舞台尺寸</button>
+      </div>
+    </section>
+
+    <aside class="side">
+      <section class="card">
+        <div class="card-head">
+          <h2>实时数据</h2>
+          <span class="tag" id="engineTag">未连接</span>
+        </div>
+        <div class="stats">
+          <div class="stat">
+            <b id="statPoints">0</b>
+            <span>注视样本</span>
+          </div>
+          <div class="stat">
+            <b id="statDuration">0.0<small>s</small></b>
+            <span>采样跨度</span>
+          </div>
+          <div class="stat">
+            <b id="statAoi">--</b>
+            <span>主要关注区</span>
+          </div>
+        </div>
+        <div class="meter">
+          <div class="meter-label"><span>有效样本率</span><b id="statHit">--</b></div>
+          <div class="meter-track"><i id="hitBar" style="width:0%"></i></div>
+        </div>
+      </section>
+
+      <section class="card" id="qualityCard">
+        <div class="card-head"><h2>标定质量</h2><span class="tag" id="calibQualityTag">未标定</span></div>
+        <div class="quality-main">
+          <b id="calibScore">--</b>
+          <div><strong id="calibGrade">等待标定</strong><span id="calibSummary">完成 9 点标定后自动做 5 点校验</span></div>
+        </div>
+        <div class="quality-grid">
+          <div><span>平均误差</span><b id="calibAvgErr">--</b></div>
+          <div><span>最大误差</span><b id="calibMaxErr">--</b></div>
+          <div><span>有效帧</span><b id="calibValidFrames">--</b></div>
+        </div>
+        <div class="quality-points" id="calibPointList"></div>
+        <div class="export-row">
+          <button class="btn ghost" id="btnValidate" disabled>校验准确度</button>
+        </div>
+        <p class="micro" id="calibQualityHint">校验会测量 5 个留出点的预测落点与目标点的真实差异。</p>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>视图</h2><span class="tag">VIEW</span></div>
+        <div class="segmented" id="viewSwitch">
+          <button data-view="heat" class="on">热力图</button>
+          <button data-view="track">轨迹</button>
+          <button data-view="points">点阵</button>
+          <button data-view="off">内容</button>
+        </div>
+        <div class="param">
+          <div class="param-head"><label for="radius">热力半径</label><output id="radiusOut">72 px</output></div>
+          <input type="range" id="radius" min="30" max="150" step="2" value="72" />
+        </div>
+        <div class="param">
+          <div class="param-head"><label for="intensity">热力强度</label><output id="intensityOut">1.0×</output></div>
+          <input type="range" id="intensity" min="0.3" max="2.2" step="0.05" value="1" />
+        </div>
+        <p class="micro" id="heatHint">热力 = 注视驻留核密度。同一位置停留越久，颜色越暖。</p>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>刺激内容</h2><span class="tag">AOI</span></div>
+        <div class="content-switch" id="contentSwitch">
+          <button data-content="article" class="on">
+            <b>01</b><span>深度阅读</span><small>文章排版</small>
+          </button>
+          <button data-content="landing">
+            <b>02</b><span>产品落地页</span><small>营销页面</small>
+          </button>
+          <button data-content="dashboard">
+            <b>03</b><span>数据仪表盘</span><small>信息面板</small>
+          </button>
+        </div>
+        <p class="micro">切换内容会切换到该内容独立的一批记录，互不混合。</p>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>导出</h2><span class="tag">LOCAL</span></div>
+        <div class="export-row">
+          <button class="btn ghost" id="btnCsv">原始数据 CSV</button>
+          <button class="btn ghost" id="btnPng">报告 PNG</button>
+        </div>
+        <div class="export-row">
+          <button class="btn danger" id="btnClear">清空当前记录</button>
+        </div>
+        <p class="micro">数据不上传。CSV 含时间戳、舞台坐标、归一化坐标与命中关注区。</p>
+      </section>
+
+      <section class="card grow">
+        <div class="card-head"><h2>关注区排行</h2><span class="tag" id="aoiTotal">0 点</span></div>
+        <div class="aoi-list" id="aoiList">
+          <p class="empty-line">开始记录后，这里会按注视样本占比排序。</p>
+        </div>
+      </section>
+    </aside>
+  </main>
+</div>
+
+<!-- 视线光标 -->
+<div class="gaze-cursor" id="gazeCursor" aria-hidden="true"><i></i></div>
+
+<!-- 头部就位引导 -->
+<div class="guide" id="guideOverlay" aria-hidden="true">
+  <button class="guide-close" id="btnGuideClose" aria-label="取消头部检查">×</button>
+  <div class="guide-head">
+    <span class="eyebrow">POSITIONING</span>
+    <h2>先把头部固定好</h2>
+    <p>坐正、正对屏幕，让整张脸稳定出现在画面中间。全部检查通过后，再开始 9 点标定。</p>
+  </div>
+  <div class="guide-body">
+    <div class="guide-cam" id="guideCam">
+      <video id="guideVideo" autoplay muted playsinline></video>
+      <div class="guide-box" id="guideBox">
+        <span class="guide-box-label">寻找人脸…</span>
+      </div>
+      <div class="guide-loading" id="guideLoading"><i></i><span>正在加载人脸模型…</span></div>
+      <div class="guide-cam-tag">PREVIEW · 仅本机处理</div>
+    </div>
+    <div class="guide-panel">
+      <div class="guide-checks" id="guideChecks">
+        <div class="guide-check" data-check="face"><i></i><div><b>检测到人脸</b><small>请把整张脸放进画面</small></div><em>—</em></div>
+        <div class="guide-check" data-check="distance"><i></i><div><b>距离合适</b><small>太远就靠近一点</small></div><em>—</em></div>
+        <div class="guide-check" data-check="center"><i></i><div><b>位置居中</b><small>不要偏离画面中心</small></div><em>—</em></div>
+        <div class="guide-check" data-check="pose"><i></i><div><b>头部平视</b><small>不要明显仰头、低头或歪头</small></div><em>—</em></div>
+        <div class="guide-check" data-check="steady"><i></i><div><b>保持不动</b><small>稳定约 1 秒后即可开始</small></div><em>—</em></div>
+      </div>
+      <p class="guide-hint" id="guideHint">请正对屏幕，保持自然坐姿。</p>
+      <div class="guide-actions">
+        <button class="btn primary" id="btnGuideStart" disabled>开始 9 点标定</button>
+        <button class="link" id="btnGuideSkip">跳过检查，直接标定</button>
+      </div>
+      <p class="guide-note">摄像头画面只在本机处理，不会上传。建议距离屏幕 55–70cm；镜片反光或镜框遮挡瞳孔时，摘掉眼镜通常会更准。</p>
+    </div>
+  </div>
+</div>
+
+<!-- 9 点标定 -->
+<div class="calib" id="calibOverlay" aria-hidden="true">
+  <div class="calib-bar">
+    <div class="calib-bar-title">
+      <span class="eyebrow">CALIBRATION · 9 POINTS</span>
+      <strong>注视靶点，保持头部不动</strong>
+    </div>
+    <div class="calib-progress">
+      <b id="calibCount">0</b><span id="calibTotal">/ 9</span>
+      <button class="link" id="btnSkipCalib">跳过标定</button>
+    </div>
+  </div>
+  <div class="calib-stage" id="calibStage">
+    <div class="calib-area" id="calibArea"><span>文章阅读区 · 标定与记录范围一致</span></div>
+  </div>
+  <div class="calib-hud">
+    <i id="calibPulse"></i>
+    <span id="calibStatus">准备开始…</span>
+  </div>
+  <div class="calib-note" id="calibNote">每个点注视约 1 秒，系统自动采样 · 标定数据仅用于本机视线回归</div>
+</div>
+
+<!-- 使用说明 -->
+<div class="modal" id="helpOverlay" aria-hidden="true">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div>
+        <span class="eyebrow">HOW TO</span>
+        <h2>六步得到一张可信的视线热力图</h2>
+      </div>
+      <button class="btn ghost icon" id="btnCloseHelp" aria-label="关闭">×</button>
+    </div>
+    <ol class="steps">
+      <li><b>启动视线追踪</b><span>点击右上角「启动视线追踪」，允许浏览器访问摄像头。建议通过 localhost 打开，Chrome / Edge 效果最佳。</span></li>
+      <li><b>先通过头部就位检查</b><span>调整坐姿和距离，让整张脸稳定出现在画面中。检测会提示「靠近一点」「向左移动」「保持不动」等，全部通过后再进入标定。戴眼镜时镜片反光和镜框可能干扰瞳孔定位，摘掉眼镜通常更准。</span></li>
+      <li><b>完成 9 点标定</b><span>标定点只覆盖文章阅读区，与记录范围一致。注视每个靶点约 1 秒，系统自动连续采样。标定开始会记录头位基准，右下角小窗实时显示倾斜 / 转头 / 俯仰角；头位偏离、眨眼或检测不到人脸时会跳过该帧。</span></li>
+      <li><b>看 5 点校验报告</b><span>9 点完成后会自动做 5 个留出点校验，报告每个点的预测落点误差、平均误差、最大误差和标定质量。等级为「一般」或「较差」时建议重标；也可以随时点击右侧「校验准确度」补做。</span></li>
+      <li><b>开始记录并浏览</b><span>点击「开始记录」，像平时一样阅读或查看页面。右下角会保留头部小窗，提示是否居中、距离是否合适。系统只统计落在内容舞台内的样本。</span></li>
+      <li><b>切换视图与导出</b><span>在右侧切换热力图 / 轨迹 / 点阵，调节半径与强度，最后导出 CSV 原始数据或带 AOI 统计的报告图片。</span></li>
+    </ol>
+    <div class="modal-note">
+      <b>没有摄像头？</b>点击「演示模式」，用鼠标在内容区移动即可模拟视线，完整走通记录、热力图与导出流程。演示数据与真实追踪数据使用同一套坐标与算法。
+    </div>
+    <div class="modal-foot">
+      <span>快捷键：<kbd>R</kbd> 开始/暂停 · <kbd>H</kbd> 热力图 · <kbd>T</kbd> 轨迹 · <kbd>P</kbd> 点阵</span>
+      <button class="btn primary" id="btnHelpDone">知道了</button>
+    </div>
+  </div>
+</div>
+
+<!-- 标定质量报告 -->
+<div class="modal" id="reportOverlay" aria-hidden="true">
+  <div class="modal-card report-card">
+    <div class="modal-head">
+      <div>
+        <span class="eyebrow">CALIBRATION REPORT</span>
+        <h2>标定效果</h2>
+      </div>
+      <button class="btn ghost icon" id="btnReportClose" aria-label="关闭">×</button>
+    </div>
+    <div class="report-hero">
+      <b id="reportScore">--</b>
+      <div>
+        <strong id="reportGrade">等待校验</strong>
+        <p id="reportSummary">用 5 个留出点测量真实落点误差。</p>
+      </div>
+    </div>
+    <div class="report-metrics">
+      <div><span>平均误差</span><b id="reportAvg">--</b><small>舞台坐标</small></div>
+      <div><span>最大误差</span><b id="reportMax">--</b><small>最差点</small></div>
+      <div><span>落点稳定性</span><b id="reportStability">--</b><small>样本离散度</small></div>
+      <div><span>有效校验帧</span><b id="reportFrames">--</b><small>仅头位对齐</small></div>
+    </div>
+    <div class="report-points" id="reportPoints"></div>
+    <div class="report-note" id="reportNote">误差按 1280×800 舞台坐标计算；超过 130px 建议重标。</div>
+    <div class="modal-foot">
+      <button class="link" id="btnReportRecal">重新标定</button>
+      <button class="btn primary" id="btnReportDone">知道了</button>
+    </div>
+  </div>
+</div>
+
+<!-- 头部小窗：标定与记录期间持续显示 -->
+<div class="mini-cam" id="miniCam" aria-hidden="true">
+  <div class="mini-cam-media">
+    <video id="miniVideo" autoplay muted playsinline></video>
+    <canvas id="miniCanvas"></canvas>
+  </div>
+  <div class="mini-cam-badge" id="miniBadge"><i></i><span>等待画面</span></div>
+  <div class="mini-cam-tilt" id="miniTilt"><b>倾斜 --</b><span>转头 -- · 俯仰 --</span></div>
+  <div class="mini-cam-tag">HEAD</div>
+  <button class="mini-cam-close" id="miniClose" type="button" aria-label="隐藏头部小窗">×</button>
+</div>
+<button class="mini-open" id="miniOpen" type="button">头部小窗</button>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="app.js?v=20261105m"></script>
+</body>
+</html>
