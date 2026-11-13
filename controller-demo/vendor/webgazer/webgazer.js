@@ -50866,7 +50866,10 @@ const tf = __webpack_require__(0);
 const keypoints_1 = __webpack_require__(297);
 const pipeline_1 = __webpack_require__(298);
 const uv_coords_1 = __webpack_require__(300);
-const FACEMESH_GRAPHMODEL_PATH = 'vendor/webgazer/facemesh_model/model.json';
+// [EPBL patch] 原值为页面相对路径 'vendor/webgazer/facemesh_model/model.json'，
+// 只有页面本身位于 controller-demo/ 下才命中；改为站点绝对路径，
+// 让 dual-test / control-frontend / controller-demo 共用同一份本地模型。
+const FACEMESH_GRAPHMODEL_PATH = '/controller-demo/vendor/webgazer/facemesh_model/model.json';
 const MESH_MODEL_INPUT_WIDTH = 192;
 const MESH_MODEL_INPUT_HEIGHT = 192;
 async function load({ maxContinuousChecks = 5, detectionConfidence = 0.9, maxFaces = 10, iouThreshold = 0.3, scoreThreshold = 0.75 } = {}) {
