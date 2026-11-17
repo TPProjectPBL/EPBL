@@ -1,7 +1,7 @@
 # 隔空控制器（Air Controller）· 交接文档
 
 > 写给**完全没有上下文的新会话**。先读完这一份再动代码，能省掉至少两小时的重踩。
-> 最后更新：2026-11-05 ｜ HEAD：`fb55ac0`（origin/main 0/0；本次文档改动尚未提交）
+> 最后更新：2026-11-17 ｜ HEAD：`4aac8fc`（origin/main 0/0；本次文档改动尚未提交）
 > 团队仓库：`origin = TPProjectPBL/EPBL` ｜ 本机克隆**只配了 origin**（旧文档里的个人 fork `jarvis` 已移除）
 > 分工（按提交历史）：AlexiaWHsu = 眼动 / dual-test / 控制后端 ｜ Evelyn = 文档 / fruit-slice ｜ **Thriving-r = 隔空画板 `draw/`**
 
@@ -88,18 +88,18 @@
 **gesture-test 是当前唯一被验证"识别精度很高"的手势实现，它是双模页的参考标准。**
 它的取流方式：页面自己 `getUserMedia({video:{width:{ideal:1280},height:{ideal:720},facingMode:"user"}})` → 自有 `<video>` → `recognizer.recognizeForVideo(video, now)`，`numHands:1`，三个置信度 `0.5`，循环节流 34ms，GPU 失败回退 CPU。
 
-### 隔空画板：`draw/`（Thriving-r 负责）✅ 功能完整，真机手感待复测
+### 隔空画板：`draw/`（Thriving-r 负责）✅ 功能完整，真机手感与取流基线待复测
 
 眼动 / 手势驱动的隔空画板，现仅保留手势优先版（原 `draw/index.html` 眼动版已删除，其渲染与工具层已合并进 `index-3-hand.html`）：
 
 | 文件 | 形态 | 落笔方式 | 适用 |
 |---|---|---|---|
-| `draw/index-3-hand.html` | 手势优先版（含原 v3.0 眼动标定 + 视线九宫格 + 全套工具层） | 拇指+食指**捏合**落笔（<0.45 落 / >0.60 抬），握拳也可落笔；笔尖 = **食指指尖（landmark 8）** 经 One Euro 平滑 | 主路径 |
+| `draw/index-3-hand.html` | 手势优先版（含原 v3.0 眼动标定 + 视线九宫格 + 全套工具层） | 拇指+食指**捏合**落笔（<0.45 落 / >0.60 抬），握拳也可落笔；**默认笔尖 = 视线九宫格**，按 `T` 可切 **食指指尖（landmark 8）**（One Euro 平滑） | 主路径 |
 
 它支持：
 
 - **画布交互**：6 色调色板（`1`–`6`，注视色块停留 0.8s 选中并自动收起，默认收起防误触）；画笔 / 橡皮（20px，`destination-out` 真擦除，**不是**用底色涂）；撤回 / 重做（最多保留最近 50 笔）；画布黑 / 白切换（擦痕随主题正确显示）；清空 / 另存 PNG；笔尖来源切换（视线 / 指尖）；左手张开拖动**平移画布内容**（世界坐标 + `panOffset`，平移期间笔尖锁定不落笔）；复位视图。
-- **双条件防误触**：清空 / 保存这类高代价操作必须「注视目标 + 握拳/捏合」，并带 450ms 二次视觉确认（`armMs`）。
+- **双条件防误触**：清空 / 保存这类高代价操作（真实手势路径）必须「注视目标 + 握拳/捏合」，并带 450ms 二次视觉确认（`armMs`）；键盘 `C` / `S` 走 `bypass`，只延时 450ms，不需要双条件（开发旁路）。
 - **降级**：无摄像头时可全鼠标 + 键盘操作（移动＝注视、按住＝落笔、`空格`+拖动＝左手平移）。
 - **HUD**：模式 / 视线九宫格区 / 笔尖来源 / 平移偏移 / 笔画·撤回·恢复计数 / FPS。
 - **键盘**：`1`–`6` 选色、`E` 画笔/橡皮、`T` 笔尖来源、`B` 画布色、`R` 复位、`P` 调色板、`C` 清空、`S` 保存、`G` 模拟丢视线、`V` Victory、`H` 交换左右手、`Ctrl+Z` 撤回、`Ctrl+Y` 重做。
@@ -111,12 +111,14 @@
 |---|---|---|
 | 👍 拇指朝上 | 切换画笔 / 橡皮 | 3 帧确认；一次连续手势只触发一次；900ms 冷却 |
 | ☝️ 食指朝上 | 撤回一笔（等价 Ctrl+Z） | 同上 |
-| ✊ 握拳 | 落笔（与捏合并存，`wantDown = Closed_Fist \|\| pinchOn`） | 捏合中不触发离散动作 |
-| 🖐 张开手掌 | 抬笔（唯一出口） | — |
+| ✊ 握拳 | 落笔（与捏合并存，`wantDown = Closed_Fist \|\| pinchOn`） | 捏合 / 落笔 / 平移 / 标定期间均不触发离散动作 |
+| 🖐 张开手掌 | 抬笔（语义姿态；松开捏合、换非握拳姿态、丢手也会抬笔） | — |
 
 - 关键参数（见 `draw/index-3-hand-测试记录.md`）：One Euro `minCutoff 1.0 / beta 0.02 / dCutoff 1.0`；捏合 0.45 / 0.60；落笔确认 `fistFrames >= 2`；检测节流 34ms；`numHands = 2`。
 - 抽出 `window.AirCanvasKit`（版本 `dual-test-port-2`）：`classifyHand` / `createGestureGate` / `isBlackFrame` / `summarizeGaze` / `summarizeJoint` / `buildTestReport`（schema `air-canvas-test/v1`）/ `downloadJSON`，调试桥 `AirCanvasBridge.kit`。移植分两批：第一批纯工具，第二批接 thumb/point 动作。
-- 验证状态：`draw/index-3-hand-测试记录.md` 记录了 headless Chrome + CDP 注入假 landmark 的 7 项功能验收（镜像、平滑、捏合起止、左右手不串、9 点标定回归、鼠标兜底、零新增依赖）——**只证明逻辑正确，不等于真实摄像头手感**。真机还欠四项：指尖方向是否反、慢线是否抖、快甩是否断点、捏合 0.45/0.60 是否灵敏/误触。
+- 验证状态：`draw/index-3-hand-测试记录.md` 记录了 headless Chrome + CDP 注入假 landmark 的 7 项合成验证：**6 项通过**（镜像、慢线平滑、捏合起止、左右手不串、9 点标定回归 / 鼠标与键盘兜底、零新增依赖），第 3 项「快线断点」**未单独压测**——**只证明逻辑正确，不等于真实摄像头手感**。
+- ⚠️ 取流基线偏差：画板当前用 `recognizeForVideo(getVideoElementCanvas())`（WebGazer 默认约 640×480 缓冲），与第 5.2 节「手势一律喂 1280×720 `<video>`、不要传 canvas」不一致。这是真机手势不稳的优先排查项，详见 4.6。
+- 真机手感还欠四项：指尖方向是否反、慢线是否抖、快甩是否断点、捏合 0.45/0.60 是否灵敏/误触；取流基线另见 4.6 第 5 项。
 - 依赖体积：`draw/vendor/webgazer/`（patched WebGazer 2.1.2 + 本地 facemesh 模型）、`draw/vendor/vision/`（MediaPipe Vision wasm）、`draw/models/gesture_recognizer.task`（约 8.4MB）。
   ⚠️ `.gitignore` 已加 `*.task` / `*.tflite`（老师要求大模型文件不入库）。`draw/models/gesture_recognizer.task` 是**历史已跟踪**文件，仍会随提交走；**新增**模型文件默认不入库，需 `git add -f` 或改成首次运行自动下载（参考 `outputs/fruit-slice/`）。
 - **契约**：`dual-test/` 与 `gesture-test/` 的模型和 wasm **都指向 `draw/`**（`../draw/models/gesture_recognizer.task`、`../draw/vendor/vision/`），**别删、别挪**这两个目录。
@@ -240,12 +242,13 @@
 
 ### 4.6 隔空画板真机复测（Thriving-r，不阻塞主链路）
 
-`draw/index-3-hand.html` 只做过合成 landmark 验证，真实摄像头还欠四项：
+`draw/index-3-hand.html` 只做过合成 landmark 验证，真实摄像头还欠五项：
 
-1. 食指指尖右移 → 屏幕笔尖是否右移；若反，先按 `H` 或加 `?fliphand=1`，**不要改镜像公式**。
+1. 切到指尖笔尖后（按 `T`），食指指尖右移 → 屏幕笔尖是否右移；若反，先按 `H` 或加 `?fliphand=1`，**不要改镜像公式**。视线笔尖模式只需确认九宫格方向不反。
 2. 慢速横 / 竖 / 圆是否还有可见抖动；滞后就先把 One Euro `beta` 从 0.02 调到 0.05。
 3. 快速甩线是否断点 / 折角；必要时在相邻采样点之间补点（≤8px）。
 4. 捏合阈值 0.45 / 0.60 是否灵敏、是否误触；实测后回写 `draw/index-3-hand-测试记录.md`。
+5. **取流基线**：当前画板把 WebGazer 的 `getVideoElementCanvas()`（默认约 640×480）喂给手势模型，而 gesture-test 的黄金基线是 1280×720 自有 `<video>`。若上面几项怎么调都不稳，优先按 5.2 第 7/8 条改造取流，再谈阈值与平滑。
 
 另外眼动版（已并入 `draw/index-3-hand.html`）的 9 点标定精度与视线九宫格手感，建议和 dual-test 一起真机复测。
 
@@ -354,8 +357,8 @@ openssl verify -CAfile ca.crt server.crt
 | `controller-demo/vendor/webgazer/` | 已 patch 的 WebGazer 2.1.2 + 本地 `facemesh_model/`（**必须提交**） |
 | `controller-demo/webgazer-gaze.html` | 眼动对照页，调 EMA / 磁吸参数用 |
 | `controller-demo/hero.html` | 协作者 hero 视觉页（`?mode=hero`），保留 |
-| **`draw/index-3-hand.html`** | **隔空画板（Thriving-r）**：含 v3.0 眼动标定 + 视线九宫格 + 食指指尖笔尖 + 捏合落笔 + 拇指切工具 / 食指撤回，`AirCanvasKit` 移植自 dual-test |
-| **`draw/index-3-hand-测试记录.md`** | 画板手势版的参数、7 项合成验证结果、回归红线与待真机复测清单 |
+| **`draw/index-3-hand.html`** | **隔空画板（Thriving-r）**：含 v3.0 眼动标定 + 默认视线九宫格笔尖（按 `T` 切食指指尖）+ 捏合 / 握拳落笔 + 拇指切工具 / 食指撤回，`AirCanvasKit` 移植自 dual-test |
+| **`draw/index-3-hand-测试记录.md`** | 画板手势版的参数、7 项合成验证（6 通过 / 快线断点未压测）、回归红线与待真机复测清单 |
 | **`draw/models/` + `draw/vendor/vision/`** | **共用资源**：`gesture_recognizer.task` + MediaPipe Vision wasm；gesture-test / dual-test 均以 `../draw/...` 引用，**别删别挪** |
 | `control-backend/` | 控制后端（FastAPI + Playwright），`launcher.command` 一键起停；含 `test_control.py` 真实 Chrome 回读验证 |
 | `control-frontend/` | 控制前端：眼动 + 手势采集，经 WebSocket 上报后端 |
@@ -380,7 +383,21 @@ openssl verify -CAfile ca.crt server.crt
 ### 最近提交链（倒序）
 
 ```
-fb55ac0 docs(fruit-slice): 模型文件不入库、首次运行自动下载            ← 当前 HEAD
+4aac8fc chore(release): 重建 v1.0.0 DMG，包含视线热力图模块           ← 当前 HEAD
+6b0dbd8 feat(workbench): 接入视线热力图模块，移除 hero 与旧控制器入口
+e391064 style(workbench): 统一蓝黑色系配色
+1005f6c feat(packaging): 控制小窗 py2app 打包与 DMG 流水线，启动器支持打包形态和首次自举
+7ace9c3 feat(workbench): 新增统一工作台（侧栏 + 12 模块 + 下载中心 + 摄像头单实例互斥）
+8b395e2 fix(vision): WebGazer facemesh 模型改用站点绝对路径，修复非 controller-demo 页面 404
+432bf46 docs(outputs): 新增工作台与分发系统设计报告（架构/模块/选型/风险/实施步骤）
+0268ec6 fix(control-backend): 静态服务仅绑定 127.0.0.1，避免工作台暴露到局域网
+ed267ee chore(repo): 删除旧画板 draw/index.html 与 gesture-fruit（功能已并入/保留 Python 版）
+ce68adc Merge remote-tracking branch 'origin/main'
+6605ebd feat(vision): 摄像头采集分辨率提升到 1080p（dual-test + control-frontend）
+0d87541 feat(control-backend): 启动器支持注入环境变量（AC_HOME 指定受控浏览器目标页）
+3dc65aa docs(demo): 补全 fruit-slice / gesture-fruit / air-runner 的问题与未验证项
+15ac93e docs: 更新交接文档（补充隔空画板进展与环境同步）
+fb55ac0 docs(fruit-slice): 说明模型文件不入库、首次运行自动下载
 de26556 docs: 新增协作规范 CONTRIBUTING 与 Issue/PR 模板
 c6aaec7 feat(fruit-slice): 新增 Python 版手势切水果 demo
 aecfae4 docs: 上传项目文档与阶段产出
@@ -422,7 +439,9 @@ b5069b9 dual-test: 手势改为与 gesture-test 完全一致的取流方式（�
 
 > 眼动与手势两条链路都已跑通：dual-test 的眼动 0 fps 已在 `d475f0c` 修复
 > （让 WebGazer 自己开 720p 流，`handImg = #webgazerVideoFeed`），仍待真机复测标定精度与联合点击。
-> 隔空画板 `draw/` 有两版：`index.html`（眼动 + 握拳落笔）与 `index-3-hand.html`
-> （食指指尖 + 捏合落笔，拇指切工具 / 食指撤回）。功能与合成验证已完成，
-> **真机手感（镜像方向、指尖抖动、快甩断点、捏合阈值）是当前最该补的一环**。
+> 隔空画板 `draw/` 只有一版：`index-3-hand.html`（默认视线九宫格笔尖，按 `T` 切食指指尖；
+> 捏合 / 握拳落笔，拇指切工具 / 食指撤回；原眼动版 `index.html` 已删除并并入此文件）。
+> 功能与合成验证已完成（6 项通过，快线断点未单独压测），
+> **真机手感（镜像方向、指尖抖动、快甩断点、捏合阈值）与取流基线
+> （canvas 640×480 → 1280×720 `<video>`）是当前最该补的一环**。
 > 改完 JS 先 `node --check`，再让用户 `Cmd+Shift+R` 强刷实测。
