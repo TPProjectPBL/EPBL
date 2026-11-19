@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>星际跑酷 · 眼动 + 手势</title>
+<title>河流跑酷 · 眼动 + 手势</title>
 <link rel="stylesheet" href="ui.css" />
 </head>
 <body>
@@ -12,7 +12,7 @@
 <div class="bg-glow"></div>
 
 <header class="chipbar">
-  <div class="brand">星际跑酷 <span>AIR RUNNER</span></div>
+  <div class="brand">河流跑酷 <span>RIVER RUNNER</span></div>
   <div class="chips">
     <span class="chip" id="chipMode">模式：--</span>
     <button class="chip chip-btn" id="chipCam" data-action="retry-camera" title="摄像头未就绪时可点此重试">摄像头：未启动</button>
@@ -40,7 +40,7 @@
 <section class="screen" data-screen="splash">
   <div class="hero">
     <div class="badge">眼动 + 手势 · 双模态</div>
-    <h1>星际跑酷<span>AIR RUNNER</span></h1>
+    <h1>河流跑酷<span>RIVER RUNNER</span></h1>
     <p class="tagline">眼睛变道，挥手起跳 —— 不用手柄，也不用触屏</p>
     <div class="actions">
       <button class="btn primary xl" data-dwell data-action="to-mode">开始游戏</button>
@@ -232,6 +232,12 @@
       </div>
     </div>
     <p class="sub" id="gazeCalibStatus">未标定 · 当前用「相对方向」代理注视（粗）</p>
+    <div class="row">
+      <span class="k">视线巡检（左→中→右）</span>
+      <div class="seg wrap">
+        <button class="btn small" data-action="gaze-test">打开巡检页</button>
+      </div>
+    </div>
     <div class="row" data-setting="sound">
       <span class="k">音效</span>
       <div class="seg">

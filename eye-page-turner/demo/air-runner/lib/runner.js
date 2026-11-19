@@ -44,6 +44,14 @@ export class RunnerGame {
     this.running = false;
     this.paused = false;
 
+    // 与首页背景同一张图：把它做成上下镜像的竖向无缝贴片，滚动时不出现接缝
+    this.waterReady = false;
+    this.waterTile = null;
+    this.water = new Image();
+    this.water.onload = () => this._buildWaterTile(this.water);
+    // 相对模块自身定位，不依赖页面 URL 层级
+    this.water.src = new URL('../assets/river-soft.jpg', import.meta.url).href;
+
     this.reset();
     this.resize();
   }
@@ -392,19 +400,12 @@ export class RunnerGame {
     ctx.fillStyle = bank;
     ctx.fillRect(0, horizon, W, H - horizon);
 
-    // 河道水面（近远宽度与 _project 的 scale 完全一致）
-    const water = ctx.createLinearGradient(0, horizon, 0, H);
-    water.addColorStop(0, 'rgba(24, 86, 78, 0.6)');
-    water.addColorStop(0.45, 'rgba(12, 64, 60, 0.91)');
-    water.addColorStop(1, 'rgba(5, 34, 33, 0.99)');
-    ctx.fillStyle = water;
-    ctx.beginPath();
-    ctx.moveTo(W / 2 - halfAt(1), horizon);
-    ctx.lineTo(W / 2 + halfAt(1), horizon);
-    ctx.lineTo(W / 2 + halfAt(0), H);
-    ctx.lineTo(W / 2 - halfAt(0), H);
-    ctx.closePath();
-    ctx.fill();
+    // 河道水面：贴首页那张河流图，用透视切片滚动做出流动感
+    this._waterPath(ctx, halfAt, horizon);
+    ctx.save();
+    ctx.clip();
+    this._paintWaterTexture(ctx, horizon, nearHalf, now);
+    ctx.restore();
 
     // 水面反光
     const sheen = ctx.createLinearGradient(0, horizon, 0, H);
@@ -412,6 +413,7 @@ export class RunnerGame {
     sheen.addColorStop(0.6, 'rgba(140, 232, 214, 0.06)');
     sheen.addColorStop(1, 'rgba(140, 232, 214, 0.15)');
     ctx.fillStyle = sheen;
+    this._waterPath(ctx, halfAt, horizon);
     ctx.fill();
 
     // 横向水波：随里程向近处滚动，用二次曲线做出轻微起伏
@@ -603,6 +605,96 @@ export class RunnerGame {
     fade.addColorStop(1, 'rgba(11, 31, 26, 0)');
     ctx.fillStyle = fade;
     ctx.fillRect(0, horizon, W, H * 0.11);
+  }
+
+  /** 河道水面的梯形路径（与 _project 的 scale、halfAt 完全同源） */
+  _waterPath(ctx, halfAt, horizon) {
+    const { W, H } = this;
+    ctx.beginPath();
+    ctx.moveTo(W / 2 - halfAt(1), horizon);
+    ctx.lineTo(W / 2 + halfAt(1), horizon);
+    ctx.lineTo(W / 2 + halfAt(0), H);
+    ctx.lineTo(W / 2 - halfAt(0), H);
+    ctx.closePath();
+  }
+
+  /** 把河流图做成上下镜像的竖向无缝贴片，循环滚动时不会出现接缝 */
+  _buildWaterTile(img) {
+    const w = 840;
+    const h = Math.round((w * img.naturalHeight) / img.naturalWidth) || 525;
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h * 2;
+    const g = c.getContext('2d');
+    g.drawImage(img, 0, 0, w, h);
+    g.save();
+    g.translate(0, h * 2);
+    g.scale(1, -1);
+    g.drawImage(img, 0, 0, w, h);
+    g.restore();
+    this.waterTile = c;
+    this.waterReady = true;
+  }
+
+  /**
+   * 透视贴图：按屏幕高度切成若干条水平切片，
+   * 越靠下切片越宽（河道近宽远窄），采样步长用 u^1.55 压缩远端，
+   * 于是纹理在自己向上滚动时，近处明显更快 —— 看起来就是水往镜头方向流。
+   */
+  _paintWaterTexture(ctx, horizon, nearHalf, now) {
+    const { W, H } = this;
+    const span = H - horizon;
+
+    if (!this.waterReady) {
+      const water = ctx.createLinearGradient(0, horizon, 0, H);
+      water.addColorStop(0, 'rgba(24, 86, 78, 0.6)');
+      water.addColorStop(0.45, 'rgba(12, 64, 60, 0.91)');
+      water.addColorStop(1, 'rgba(5, 34, 33, 0.99)');
+      ctx.fillStyle = water;
+      ctx.fillRect(0, horizon, W, span);
+      return;
+    }
+
+    const tile = this.waterTile;
+    const tw = tile.width;
+    const th = tile.height; // 上下镜像贴片，高度 = 2 张图
+    const half = th / 2;
+    const srcH = half * 0.12;
+    const cropW = tw * 0.7;            // 只取中间 70%，避免两侧岸线被拉成竖条
+    const cropX = (tw - cropW) / 2;
+    const N = 72;
+    const flow = (this.stats.distance * 0.40) % 2; // 里程驱动；镜像贴片让 2 的整数倍处无缝
+    const bob = Math.sin(now * 0.0011) * 0.02;     // 整体缓慢左右晃，水才有"活"感
+
+    for (let i = 0; i < N; i++) {
+      const u0 = i / N;
+      const u1 = (i + 1) / N;
+      const y0 = horizon + span * u0;
+      const y1 = horizon + span * u1;
+      const half0 = nearHalf * (0.1 + 0.9 * u0);
+      const half1 = nearHalf * (0.1 + 0.9 * u1);
+      const w = Math.max(half0, half1) * 2;
+      let sy = ((flow + Math.pow(u0, 1.7) * 2.0) % 2) * half;
+      sy = Math.max(0, Math.min(sy, th - srcH));
+      // 每一层横向轻微错位：打散竖向拉伸出来的条纹
+      const shift = (Math.sin(u0 * 11 + now * 0.0016) * 0.018 + bob) * cropW;
+      ctx.drawImage(
+        tile,
+        cropX + shift, sy, cropW, srcH,
+        W / 2 - w / 2, y0, w, y1 - y0 + 1.2,
+      );
+    }
+
+    // 夜色统一：压到与场景一致的青绿低亮度
+    ctx.fillStyle = 'rgba(7, 34, 31, 0.38)';
+    ctx.fillRect(0, horizon, W, span);
+    // 远端雾化：地平线附近柔化，避免贴图起始处出现硬边
+    const fade = ctx.createLinearGradient(0, horizon, 0, horizon + span * 0.34);
+    fade.addColorStop(0, 'rgba(9, 32, 28, 0.92)');
+    fade.addColorStop(0.55, 'rgba(9, 32, 28, 0.42)');
+    fade.addColorStop(1, 'rgba(9, 32, 28, 0)');
+    ctx.fillStyle = fade;
+    ctx.fillRect(0, horizon, W, span * 0.34);
   }
 
   _drawObstacles(ctx, now) {

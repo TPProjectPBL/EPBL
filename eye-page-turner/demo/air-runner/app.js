@@ -1,5 +1,5 @@
 /**
- * 星际跑酷 · 前置 UI 主控
+ * 河流跑酷 · 前置 UI 主控
  *
  * 职责拆分（本文件只做编排，算法都在 lib/ 里）：
  *   lib/router.js      屏幕路由
@@ -1216,7 +1216,8 @@ function frame(now) {
 
   if (raw) {
     const p = usingGaze && !sim.active && state.mode !== 'mouse' ? smoothPoint(raw, now) : { x: raw.x, y: raw.y, speed: 0 };
-    state.cursor = { x: p.x, y: p.y };
+    // conf 一并透传：gaze-zone 用它过滤眨眼/眯眼帧（平滑器不保证保留 conf）
+    state.cursor = { x: p.x, y: p.y, conf: raw.conf == null ? 1 : raw.conf };
     state.cursorSpeed = p.speed;
     const cur = $('#cursor');
     if (cur) {
@@ -1555,7 +1556,7 @@ function exportCard() {
 
   ctx.fillStyle = '#8ae6c9';
   ctx.font = '600 26px -apple-system, "PingFang SC", sans-serif';
-  ctx.fillText('星际跑酷 · AIR RUNNER', 64, 108);
+  ctx.fillText('河流跑酷 · RIVER RUNNER', 64, 108);
   ctx.fillStyle = '#a9c4b7';
   ctx.font = '20px -apple-system, "PingFang SC", sans-serif';
   ctx.fillText(`模式 ${state.settings.mode === 'dual' ? '双模态' : state.settings.mode} · 难度 ${state.settings.difficulty}`, 64, 148);
@@ -1703,6 +1704,8 @@ const ACTIONS = {
   'to-mode': () => router.go('mode'),
   'to-help': () => router.go('help'),
   'to-settings': () => router.go('settings'),
+  // 视线巡检页：独立窗口打开，不改主流程；用于量化左/中/右的命中率与延迟
+  'gaze-test': () => window.open('gaze-test.html', 'gaze-test'),
   'gaze-calib': () => startGazeCalib(),
   'gaze-calib-cancel': () => cancelGazeCalib(),
   'gaze-calib-redo': () => startGazeCalib(),

@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>视线巡检 · 左→中→右</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: #0a1512; color: #d7ece3;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 24px; border-bottom: 1px solid rgba(140, 226, 199, .14);
+  }
+  h1 { margin: 0; font-size: 15px; font-weight: 500; letter-spacing: .5px; }
+  h1 small { color: #6f8d81; font-weight: 400; margin-left: 8px; font-size: 12px; }
+  .chip {
+    font-size: 12px; padding: 4px 10px; border-radius: 20px;
+    border: 1px solid rgba(140, 226, 199, .25); color: #8fc4b0;
+  }
+  main { max-width: 1040px; margin: 0 auto; padding: 20px 24px 40px; }
+  .stage { display: grid; grid-template-columns: 380px 1fr; gap: 18px; align-items: stretch; }
+  @media (max-width: 860px) { .stage { grid-template-columns: 1fr; } }
+  .cam {
+    position: relative; border-radius: 12px; overflow: hidden;
+    border: 1px solid rgba(140, 226, 199, .18); background: #06100d; min-height: 260px;
+  }
+  .cam video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); display: block; }
+  #camState {
+    position: absolute; left: 10px; bottom: 10px; font-size: 12px;
+    padding: 3px 8px; border-radius: 8px; background: rgba(6, 16, 13, .75); color: #8fc4b0;
+  }
+  .prompt {
+    display: flex; flex-direction: column; justify-content: center; gap: 14px;
+    border-radius: 12px; border: 1px solid rgba(140, 226, 199, .18);
+    background: rgba(9, 26, 21, .7); padding: 20px;
+  }
+  .cells { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .cell {
+    text-align: center; padding: 16px 0; border-radius: 10px; font-size: 20px; letter-spacing: 4px;
+    border: 1px solid rgba(140, 226, 199, .16); color: #6f8d81; transition: .18s;
+  }
+  .cell.on {
+    color: #0a1512; background: linear-gradient(180deg, #8ce2c7, #46c98a);
+    border-color: transparent; font-weight: 500; transform: translateY(-2px);
+  }
+  #qText { font-size: 17px; text-align: center; }
+  #qText b { color: #8ce2c7; }
+  .bar { height: 6px; border-radius: 4px; background: rgba(140, 226, 199, .12); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #46c98a, #8ce2c7); }
+  #qHint { font-size: 12px; color: #6f8d81; text-align: center; }
+  .zonebar {
+    position: relative; height: 54px; margin: 22px 0 8px; border-radius: 10px;
+    background: rgba(9, 26, 21, .8); border: 1px solid rgba(140, 226, 199, .16); overflow: hidden;
+  }
+  .zonebar .band { position: absolute; top: 0; bottom: 0; }
+  .zonebar .band.left { left: 0; background: linear-gradient(90deg, rgba(70, 201, 138, .22), rgba(70, 201, 138, 0)); }
+  .zonebar .band.right { right: 0; background: linear-gradient(270deg, rgba(70, 201, 138, .22), rgba(70, 201, 138, 0)); }
+  .zonebar .band.on { background: rgba(70, 201, 138, .42) !important; }
+  .zonebar .tick {
+    position: absolute; top: 8px; bottom: 8px; width: 0;
+    border-left: 1px dashed rgba(140, 226, 199, .55);
+  }
+  .zonebar .dot {
+    position: absolute; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px;
+    border-radius: 50%; background: #8ce2c7; box-shadow: 0 0 10px rgba(140, 226, 199, .9);
+    transition: left .06s linear;
+  }
+  .zonelabel { position: absolute; bottom: 4px; font-size: 11px; color: #5f7f73; }
+  .zonelabel.l { left: 10px; } .zonelabel.c { left: 50%; transform: translateX(-50%); } .zonelabel.r { right: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 14px; }
+  th, td { padding: 9px 10px; text-align: center; border-bottom: 1px solid rgba(140, 226, 199, .1); }
+  th { color: #6f8d81; font-weight: 500; font-size: 12px; }
+  td.zone { text-align: left; color: #8ce2c7; }
+  .good { color: #6fdc9c; } .warn { color: #e8b45c; } .bad { color: #e0785c; }
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 20px; }
+  button {
+    font: inherit; font-size: 13px; padding: 8px 18px; border-radius: 10px; cursor: pointer;
+    background: rgba(140, 226, 199, .08); color: #bfe6d6;
+    border: 1px solid rgba(140, 226, 199, .3); transition: .15s;
+  }
+  button:hover:not(:disabled) { background: rgba(140, 226, 199, .18); }
+  button:disabled { opacity: .38; cursor: default; }
+  button.primary { background: linear-gradient(180deg, #46c98a, #2b8f74); color: #06120e; border-color: transparent; font-weight: 500; }
+  #overall { margin-left: auto; font-size: 13px; color: #8fc4b0; }
+  #overall b { color: #8ce2c7; font-size: 18px; }
+  .note { margin-top: 18px; font-size: 12px; color: #5f7f73; line-height: 1.7; }
+</style>
+</head>
+<body>
+<header>
+  <h1>视线巡检 <small>左 → 中 → 右 · 命中率 / 混淆 / 延迟</small></h1>
+  <span class="chip" id="modeChip">初始化…</span>
+</header>
+
+<main>
+  <div class="stage">
+    <div class="cam">
+      <video id="video" playsinline autoplay muted></video>
+      <span id="camState">摄像头未启动</span>
+    </div>
+    <div class="prompt">
+      <div class="cells">
+        <div class="cell" data-zone="left">左</div>
+        <div class="cell" data-zone="center">中</div>
+        <div class="cell" data-zone="right">右</div>
+      </div>
+      <div id="qText">点击下方「开始巡检」</div>
+      <div class="bar"><i id="qBar"></i></div>
+      <div id="qHint">每题先就位 0.9s，再采样 1.2s；看向对应区域并保持不动</div>
+    </div>
+  </div>
+
+  <div class="zonebar" id="zonebar">
+    <div class="band left" id="bandL"></div>
+    <div class="band right" id="bandR"></div>
+    <div class="tick" id="tickL"></div>
+    <div class="tick" id="tickR"></div>
+    <div class="dot" id="dot"></div>
+    <span class="zonelabel l">左</span>
+    <span class="zonelabel c">中</span>
+    <span class="zonelabel r">右</span>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="text-align:left">看向</th><th>命中率</th><th>帧数</th>
+        <th>判成 左/中/右</th><th>中位落点</th><th>响应延迟</th>
+      </tr>
+    </thead>
+    <tbody id="tbody">
+      <tr><td class="zone">左</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td class="zone">中</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td class="zone">右</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <div class="controls">
+    <button class="primary" id="btnStart">开始巡检</button>
+    <button id="btnStop" disabled>停止</button>
+    <button id="btnReset">重置</button>
+    <button id="btnExport">导出 JSON</button>
+    <span id="overall">总命中率 <b>—</b></span>
+  </div>
+
+  <p class="note" id="note">
+    判定边界与游戏一致（左 &lt; 34%、中 34–66%、右 &gt; 66%）。若某区命中率明显偏低，先看「中位落点」是否落在该区内；
+    若左右落点分布重叠，说明当前采集条件（光线/距离/坐姿）不足以支撑分区，先改善再谈边界调整。
+  </p>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+
+<script type="module">
+import { CameraModule, FaceMeshDetector, OneEuroPoint } from './lib/input.js';
+import { AbsoluteGazeSource, GazeCalibModel } from './lib/gaze-calib.js';
+import { GAZE_SPLIT } from './lib/gaze-zone.js';
+import { ZoneSweepTest, ZONE_IDS } from './lib/gaze-test.js';
+
+const $ = (s) => document.querySelector(s);
+const video = $('#video');
+const dot = $('#dot');
+const bandL = $('#bandL');
+const bandR = $('#bandR');
+
+const ZONE_NAME = { left: '左', center: '中', right: '右' };
+
+// 判定边界与游戏同源
+const splitPct = GAZE_SPLIT * 100;
+$('#tickL').style.left = splitPct + '%';
+$('#tickR').style.left = (100 - splitPct) + '%';
+bandL.style.width = splitPct + '%';
+bandR.style.width = splitPct + '%';
+
+const gaze = new AbsoluteGazeSource({ gain: 2.0 });
+const smooth = new OneEuroPoint({ minCutoff: 1.2, beta: 0.02 });
+
+// 若做过 9 点标定，沿用同一份模型，巡检结果才和游戏一致
+let modeText = '未标定 · 方向代理';
+try {
+  const saved = JSON.parse(localStorage.getItem('air-runner.gazeModel') || 'null');
+  const m = saved ? GazeCalibModel.fromJSON(saved) : null;
+  if (m && m.ok) { gaze.setModel(m); modeText = '已标定 · 绝对坐标'; }
+} catch (e) { /* ignore */ }
+$('#modeChip').textContent = modeText;
+
+let faceResults = null;
+const detector = new FaceMeshDetector({ onResults: (r) => { faceResults = r; } }).init();
+
+let busy = false;
+const camera = new CameraModule(video, {
+  width: 640, height: 480,
+  onFrame: async () => {
+    if (busy || video.readyState < 2) return;
+    busy = true;
+    try { await detector.detect(video); } catch (e) { /* 单帧异常忽略 */ }
+    finally { busy = false; }
+  },
+});
+
+camera.start().then(() => {
+  $('#camState').textContent = '摄像头运行中';
+}).catch(() => {
+  $('#camState').textContent = '摄像头启动失败（需 https 或 localhost）';
+});
+
+const test = new ZoneSweepTest({
+  split: GAZE_SPLIT,
+  rounds: 3,
+  onEvent: (type, payload) => {
+    if (type === 'done') {
+      $('#qText').textContent = '巡检完成，可导出 JSON';
+      $('#btnStart').disabled = false;
+      $('#btnStop').disabled = true;
+      setCells(null);
+      render();
+    }
+  },
+});
+
+function setCells(target) {
+  document.querySelectorAll('.cell').forEach((c) => {
+    c.classList.toggle('on', c.dataset.zone === target);
+  });
+  bandL.classList.toggle('on', target === 'left');
+  bandR.classList.toggle('on', target === 'right');
+}
+
+function fmtPct(v) { return v == null ? '—' : (v * 100).toFixed(1) + '%'; }
+function grade(v) { return v >= 0.9 ? 'good' : v >= 0.7 ? 'warn' : 'bad'; }
+
+function render() {
+  const s = test.snapshot();
+  if (s.phase === 'settle' || s.phase === 'sample') {
+    const t = s.target;
+    $('#qText').innerHTML = s.phase === 'settle'
+      ? `请看向 <b>${ZONE_NAME[t]}</b>`
+      : `保持看向 <b>${ZONE_NAME[t]}</b> · 采集中`;
+    setCells(t);
+  }
+  $('#qBar').style.width = (test.phaseProgress() * 100).toFixed(1) + '%';
+
+  const rows = $('#tbody').querySelectorAll('tr');
+  s.rows.forEach((r, i) => {
+    const tr = rows[i];
+    const conf = r.confusion;
+    tr.children[1].innerHTML = r.frames ? `<span class="${grade(r.acc)}">${fmtPct(r.acc)}</span>` : '—';
+    tr.children[2].textContent = r.frames || '—';
+    tr.children[3].textContent = r.frames ? `${conf.left}/${conf.center}/${conf.right}` : '—';
+    tr.children[4].textContent = r.medianX == null ? '—' : (r.medianX * 100).toFixed(0) + '%';
+    tr.children[5].textContent = r.latency == null ? '—' : Math.round(r.latency) + ' ms';
+  });
+
+  $('#overall').innerHTML = s.frames
+    ? `总命中率 <b class="${grade(s.overall)}">${fmtPct(s.overall)}</b>`
+    : '总命中率 <b>—</b>';
+
+  if (s.phase === 'done') {
+    const sug = test.suggestSplit();
+    if (sug) {
+      $('#note').textContent = sug.overlap
+        ? `左右落点分布重叠（左 95% 分位 ${(sug.leftP95 * 100).toFixed(0)}%，右 5% 分位 ${(sug.rightP05 * 100).toFixed(0)}%）：当前分区不可靠，先改善光照/距离/坐姿，别急着调边界。`
+        : `实测建议边界约 ${(sug.suggest * 100).toFixed(0)}%（当前 ${(sug.current * 100).toFixed(0)}%）：左中位落点 ${(sug.leftMedian * 100).toFixed(0)}%，右中位落点 ${(sug.rightMedian * 100).toFixed(0)}%。如要采用，改 lib/gaze-zone.js 的 GAZE_SPLIT。`;
+    }
+  }
+}
+
+function loop(now) {
+  requestAnimationFrame(loop);
+  const raw = gaze.getPoint(faceResults);
+  let cur = null;
+  if (raw) {
+    const p = smooth.filter({ x: raw.x, y: raw.y }, now);
+    cur = { x: p.x, y: p.y, conf: raw.conf };
+    dot.style.left = (p.x * 100).toFixed(2) + '%';
+    dot.style.opacity = '1';
+  } else {
+    dot.style.opacity = '.2';
+  }
+  if (test.running) {
+    test.tick(cur, now);
+    render();
+  }
+}
+requestAnimationFrame(loop);
+
+$('#btnStart').addEventListener('click', () => {
+  smooth.reset();
+  test.start(performance.now());
+  $('#btnStart').disabled = true;
+  $('#btnStop').disabled = false;
+  $('#note').textContent = '巡检进行中：按屏幕提示把视线移到对应区域，尽量只动眼睛、别动头。';
+  render();
+});
+$('#btnStop').addEventListener('click', () => {
+  test.stop();
+  $('#btnStart').disabled = false;
+  $('#btnStop').disabled = true;
+  setCells(null);
+  $('#qText').textContent = '已停止';
+});
+$('#btnReset').addEventListener('click', () => {
+  test.stop();
+  test.resetStats();
+  $('#btnStart').disabled = false;
+  $('#btnStop').disabled = true;
+  setCells(null);
+  $('#qText').textContent = '点击下方「开始巡检」';
+  $('#qBar').style.width = '0';
+  render();
+});
+$('#btnExport').addEventListener('click', () => {
+  const data = {
+    at: new Date().toISOString(),
+    split: GAZE_SPLIT,
+    mode: modeText,
+    snapshot: test.snapshot(),
+    suggest: test.suggestSplit(),
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `gaze-test-${Date.now()}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+</script>
+</body>
+</html>
