@@ -393,10 +393,10 @@ export class RunnerGame {
       ctx.fillStyle = color;
       ctx.fill();
     };
-    ridge(horizon + 1, 0.115, 4.1, drift * 0.45, '#153038');
-    ridge(horizon + 1, 0.092, 5.6, drift * 0.6 + 2.4, '#122b28');
-    ridge(horizon + 1, 0.068, 6.4, drift * 0.78 + 2.2, '#0f2420');
-    ridge(horizon + 1, 0.044, 3.2, drift * 0.9 + 1.7, '#0b1b17');
+    ridge(horizon + 1, 0.115, 4.1, drift * 0.45, 'rgba(5, 17, 16, 0.5)');
+    ridge(horizon + 1, 0.092, 5.6, drift * 0.6 + 2.4, 'rgba(4, 15, 14, 0.62)');
+    ridge(horizon + 1, 0.068, 6.4, drift * 0.78 + 2.2, 'rgba(3, 12, 11, 0.74)');
+    ridge(horizon + 1, 0.044, 3.2, drift * 0.9 + 1.7, 'rgba(2, 8, 7, 0.88)');
 
     // 谷底雾带：白天的水汽更亮
     const mist = ctx.createLinearGradient(0, horizon - H * 0.05, 0, horizon + H * 0.06);
@@ -462,7 +462,7 @@ export class RunnerGame {
       for (let k = 0; k < 7; k++) {
         const t = 0.16 + (k / 7) * 0.78;
         const s = scaleAt(t);
-        ctx.fillStyle = `rgba(30, 72, 46, ${0.26 + 0.24 * s})`;
+        ctx.fillStyle = `rgba(24, 58, 38, ${0.13 + 0.13 * s})`;
         ctx.beginPath();
         ctx.ellipse(
           W / 2 + side * (halfAt(t) + W * (0.02 + (((k * 31) % 7) / 7) * 0.08) * s),
@@ -879,17 +879,6 @@ export class RunnerGame {
     fade.addColorStop(1, 'rgba(9, 32, 28, 0)');
     ctx.fillStyle = fade;
     ctx.fillRect(0, fadeTop, W, fadeH);
-
-    // 峡谷薄雾：只浮在地平线附近的河谷带里，远处沉进雾、近处不受影响
-    const mistTop = horizon - H * 0.065;
-    const mistH = H * 0.21;
-    const canyonMist = ctx.createLinearGradient(0, mistTop, 0, mistTop + mistH);
-    canyonMist.addColorStop(0, 'rgba(122, 168, 146, 0.05)');
-    canyonMist.addColorStop(0.3, 'rgba(122, 168, 146, 0.19)');
-    canyonMist.addColorStop(0.7, 'rgba(118, 162, 142, 0.1)');
-    canyonMist.addColorStop(1, 'rgba(118, 162, 142, 0)');
-    ctx.fillStyle = canyonMist;
-    ctx.fillRect(0, mistTop, W, mistH);
   }
 
   /** 河道水面的梯形路径（与 _project 的 scale、halfAt 完全同源） */
@@ -1040,9 +1029,9 @@ export class RunnerGame {
         // 横在河面的倒木：跳过去
         const lh = h * 0.34;
         const wood = ctx.createLinearGradient(0, p.y - lh, 0, p.y);
-        wood.addColorStop(0, '#6d4b30');
-        wood.addColorStop(0.55, '#4c3322');
-        wood.addColorStop(1, '#2c1d14');
+        wood.addColorStop(0, '#57402b');
+        wood.addColorStop(0.55, '#3b2b1d');
+        wood.addColorStop(1, '#211710');
         ctx.fillStyle = wood;
         this._roundRect(ctx, p.x - w / 2, p.y - lh, w, lh, lh * 0.42);
         ctx.fill();
