@@ -1103,8 +1103,8 @@ export class RunnerGame {
       y = baseY + H * 0.02;
     }
 
-    const w = W * 0.075;
-    const h = H * 0.05 * squash;
+    const w = W * 0.092;
+    const h = H * 0.045 * squash;
 
     // 船尾水痕
     const trail = ctx.createLinearGradient(x, y - h * 2.4, x, y);
@@ -1119,67 +1119,150 @@ export class RunnerGame {
     ctx.closePath();
     ctx.fill();
 
-    // 木舟：梭形船身，从后上方看，船头朝前
+    // 乌篷木船：船头朝上，中段拱篷，篷下透暖光
     const hullPath = () => {
       ctx.beginPath();
-      ctx.moveTo(x, y - h * 3.0);
-      ctx.bezierCurveTo(x + w * 0.3, y - h * 2.05, x + w * 0.43, y - h * 0.85, x + w * 0.33, y + h * 0.1);
-      ctx.quadraticCurveTo(x + w * 0.22, y + h * 0.34, x, y + h * 0.34);
-      ctx.quadraticCurveTo(x - w * 0.22, y + h * 0.34, x - w * 0.33, y + h * 0.1);
-      ctx.bezierCurveTo(x - w * 0.43, y - h * 0.85, x - w * 0.3, y - h * 2.05, x, y - h * 3.0);
+      ctx.moveTo(x - w * 0.23, y - h * 3.56);
+      ctx.quadraticCurveTo(x, y - h * 3.76, x + w * 0.23, y - h * 3.56);
+      ctx.bezierCurveTo(x + w * 0.3, y - h * 2.8, x + w * 0.38, y - h * 1.4, x + w * 0.34, y + h * 0.18);
+      ctx.quadraticCurveTo(x + w * 0.28, y + h * 0.5, x, y + h * 0.5);
+      ctx.quadraticCurveTo(x - w * 0.28, y + h * 0.5, x - w * 0.34, y + h * 0.18);
+      ctx.bezierCurveTo(x - w * 0.38, y - h * 1.4, x - w * 0.3, y - h * 2.8, x - w * 0.23, y - h * 3.56);
       ctx.closePath();
     };
-    const hull = ctx.createLinearGradient(x, y - h * 3.0, x, y + h * 0.34);
-    hull.addColorStop(0, '#d3a468');
-    hull.addColorStop(0.4, '#a06c3c');
-    hull.addColorStop(1, '#422814');
+
+    // 篷下的暖光落到水面上
+    const spill = ctx.createRadialGradient(x, y - h * 1.1, h * 0.4, x, y - h * 1.1, h * 3.4);
+    spill.addColorStop(0, 'rgba(255, 178, 98, 0.16)');
+    spill.addColorStop(1, 'rgba(255, 178, 98, 0)');
+    ctx.fillStyle = spill;
+    ctx.fillRect(x - h * 3.4, y - h * 4.5, h * 6.8, h * 6.8);
+
+    const hull = ctx.createLinearGradient(x, y - h * 3.92, x, y + h * 0.5);
+    hull.addColorStop(0, '#b3814e');
+    hull.addColorStop(0.42, '#8d5c32');
+    hull.addColorStop(1, '#38210f');
     hullPath();
     ctx.fillStyle = hull;
     ctx.fill();
 
-    // 木纹：顺着船身纵向走，裁在船体里
+    // 甲板：篷外露出来的那截船板
     ctx.save();
     hullPath();
     ctx.clip();
-    ctx.strokeStyle = 'rgba(52, 30, 15, 0.3)';
-    ctx.lineCap = 'round';
-    for (let i = -1; i <= 1; i++) {
-      ctx.lineWidth = Math.max(1, h * 0.05);
+    ctx.strokeStyle = 'rgba(58, 34, 17, 0.15)';
+    ctx.lineWidth = Math.max(0.8, 1);
+    for (let yy = -3.7; yy < 0.5; yy += 0.36) {
       ctx.beginPath();
-      ctx.moveTo(x + i * w * 0.22, y - h * 2.7 + Math.abs(i) * h * 0.36);
-      ctx.quadraticCurveTo(x + i * w * 0.38, y - h * 0.6, x + i * w * 0.18, y + h * 0.24);
+      ctx.moveTo(x - w * 0.5, y + h * yy);
+      ctx.lineTo(x + w * 0.5, y + h * yy);
       ctx.stroke();
     }
+    // 内侧船舷：一圈贴边暗影，船才有厚度
+    ctx.strokeStyle = 'rgba(28, 15, 7, 0.42)';
+    ctx.lineWidth = Math.max(2, w * 0.055);
+    hullPath();
+    ctx.stroke();
     // 船头受光
-    ctx.strokeStyle = 'rgba(236, 198, 142, 0.42)';
-    ctx.lineWidth = Math.max(1, h * 0.055);
+    ctx.strokeStyle = 'rgba(240, 202, 148, 0.42)';
+    ctx.lineWidth = Math.max(1, h * 0.05);
     ctx.beginPath();
-    ctx.moveTo(x, y - h * 2.92);
-    ctx.quadraticCurveTo(x - w * 0.12, y - h * 2.2, x - w * 0.24, y - h * 1.2);
+    ctx.moveTo(x - w * 0.18, y - h * 3.5);
+    ctx.quadraticCurveTo(x - w * 0.13, y - h * 3.05, x - w * 0.21, y - h * 2.4);
     ctx.stroke();
     ctx.restore();
 
-    // 船舱开口：深色，占据船身中段
-    ctx.fillStyle = 'rgba(26, 13, 6, 0.74)';
-    ctx.beginPath();
-    ctx.ellipse(x, y - h * 0.95, w * 0.2, h * 0.72, 0, 0, Math.PI * 2);
+    // 拱篷：只占船宽中间一段，两侧留出船舷才看得出是条船
+    const cnTop = y - h * 2.5;
+    const cnBot = y + h * 0.06;
+    const cnW = w * 0.21;
+    const canopy = () => {
+      ctx.beginPath();
+      ctx.moveTo(x - cnW, cnBot);
+      ctx.bezierCurveTo(x - cnW * 1.06, cnTop + h * 0.62, x - cnW * 0.58, cnTop, x, cnTop);
+      ctx.bezierCurveTo(x + cnW * 0.58, cnTop, x + cnW * 1.06, cnTop + h * 0.62, x + cnW, cnBot);
+      ctx.closePath();
+    };
+    canopy();
+    ctx.fillStyle = '#2b2015';
     ctx.fill();
-    // 舱底板，比舱壁略亮
-    ctx.fillStyle = 'rgba(62, 36, 19, 0.5)';
+    ctx.save();
+    canopy();
+    ctx.clip();
+    // 篷架横档
+    ctx.strokeStyle = 'rgba(138, 108, 72, 0.32)';
+    ctx.lineWidth = Math.max(1, h * 0.06);
+    for (let i = 0; i < 6; i++) {
+      const yy = cnTop + h * (0.34 + i * 0.4);
+      ctx.beginPath();
+      ctx.moveTo(x - cnW * 1.2, yy);
+      ctx.quadraticCurveTo(x, yy + h * 0.12, x + cnW * 1.2, yy);
+      ctx.stroke();
+    }
+    // 篷顶受光
+    ctx.strokeStyle = 'rgba(180, 150, 106, 0.4)';
+    ctx.lineWidth = Math.max(1, h * 0.09);
     ctx.beginPath();
-    ctx.ellipse(x, y - h * 0.88, w * 0.145, h * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    // 舱沿高光
-    ctx.strokeStyle = 'rgba(226, 186, 132, 0.35)';
-    ctx.lineWidth = Math.max(1, h * 0.035);
+    ctx.moveTo(x - cnW * 0.78, cnTop + h * 0.62);
+    ctx.quadraticCurveTo(x, cnTop + h * 0.05, x + cnW * 0.78, cnTop + h * 0.62);
+    ctx.stroke();
+    ctx.restore();
+
+    // 舱窗暖光：篷两侧整条亮起来，夜里一眼能认出是船
+    const winW = Math.max(5, w * 0.086);
+    const winH = Math.max(5, h * 0.34);
+    for (let i = 0; i < 2; i++) {
+      const wy = cnTop + h * (0.74 + i * 0.74);
+      for (const sx of [-1, 1]) {
+        const wx = x + sx * cnW * 0.72;
+        const halo = ctx.createRadialGradient(wx, wy + winH * 0.5, 0, wx, wy + winH * 0.5, winW * 2.2);
+        halo.addColorStop(0, 'rgba(255, 188, 110, 0.42)');
+        halo.addColorStop(1, 'rgba(255, 188, 110, 0)');
+        ctx.fillStyle = halo;
+        ctx.fillRect(wx - winW * 2.2, wy - winW * 1.6, winW * 4.4, winH + winW * 3.2);
+        // 窗纸底
+        ctx.fillStyle = 'rgba(255, 190, 116, 0.9)';
+        ctx.fillRect(wx - winW / 2, wy, winW, winH);
+        // 窗棂
+        ctx.strokeStyle = 'rgba(74, 42, 20, 0.75)';
+        ctx.lineWidth = Math.max(1, winW * 0.12);
+        ctx.beginPath();
+        ctx.moveTo(wx, wy);
+        ctx.lineTo(wx, wy + winH);
+        ctx.stroke();
+      }
+    }
+
+    // 船头栏杆与篙
+    ctx.strokeStyle = 'rgba(214, 176, 126, 0.6)';
+    ctx.lineWidth = Math.max(1, h * 0.045);
     ctx.beginPath();
-    ctx.ellipse(x, y - h * 0.95, w * 0.2, h * 0.72, 0, 0, Math.PI * 2);
+    ctx.moveTo(x - w * 0.14, y - h * 2.95);
+    ctx.lineTo(x - w * 0.1, y - h * 3.5);
+    ctx.moveTo(x + w * 0.14, y - h * 2.95);
+    ctx.lineTo(x + w * 0.1, y - h * 3.5);
+    ctx.moveTo(x - w * 0.13, y - h * 3.22);
+    ctx.lineTo(x + w * 0.13, y - h * 3.22);
+    ctx.stroke();
+
+    // 船尾橹
+    ctx.strokeStyle = 'rgba(136, 100, 60, 0.85)';
+    ctx.lineWidth = Math.max(1, h * 0.05);
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.26, y + h * 0.28);
+    ctx.lineTo(x + w * 0.62, y + h * 1.02);
     ctx.stroke();
 
     // 船体轮廓
     hullPath();
-    ctx.strokeStyle = 'rgba(232, 196, 148, 0.45)';
+    ctx.strokeStyle = 'rgba(228, 190, 136, 0.45)';
     ctx.lineWidth = Math.max(1, 1.6);
+    ctx.stroke();
+
+    // 篷沿轮廓
+    canopy();
+    ctx.strokeStyle = 'rgba(158, 128, 90, 0.45)';
+    ctx.lineWidth = Math.max(1, 1.2);
     ctx.stroke();
 
     // 尾部水花（跳跃时收起）
@@ -1187,7 +1270,7 @@ export class RunnerGame {
       ctx.fillStyle = 'rgba(214, 250, 240, 0.3)';
       for (const sx of [-1, 1]) {
         ctx.beginPath();
-        ctx.ellipse(x + sx * w * 0.44, y + h * 0.3, w * 0.17, h * 0.1, 0, 0, Math.PI * 2);
+        ctx.ellipse(x + sx * w * 0.38, y + h * 0.48, w * 0.15, h * 0.09, 0, 0, Math.PI * 2);
         ctx.fill();
       }
     }
