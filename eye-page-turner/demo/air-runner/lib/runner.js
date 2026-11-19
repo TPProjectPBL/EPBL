@@ -484,7 +484,7 @@ export class RunnerGame {
         for (let i = 0; i < 22; i++) {
           const t0 = i / 22;
           const t1 = (i + 1) / 22;
-          ctx.lineWidth = W * (0.008 + 0.04 * scaleAt(t0)) * (1 + pass * 1.7);
+          ctx.lineWidth = W * (0.005 + 0.02 * scaleAt(t0)) * (1 + pass * 1.25);
           ctx.beginPath();
           ctx.moveTo(W / 2 + side * halfAt(t0), yAt(t0));
           ctx.lineTo(W / 2 + side * halfAt(t1), yAt(t1));
@@ -565,11 +565,11 @@ export class RunnerGame {
           ctx.fill();
         }
       } else {
-        const crownY = y - dir * h * 0.6;
+        const crownY = y - dir * h * 0.62;
         ctx.beginPath();
-        ctx.ellipse(x, crownY, tw * 0.9, tw * 0.72, 0, 0, Math.PI * 2);
-        ctx.ellipse(x - tw * 0.5, crownY + dir * h * 0.06, tw * 0.55, tw * 0.46, 0, 0, Math.PI * 2);
-        ctx.ellipse(x + tw * 0.52, crownY + dir * h * 0.04, tw * 0.6, tw * 0.5, 0, 0, Math.PI * 2);
+        ctx.ellipse(x, crownY, tw * 0.42, tw * 0.72, 0, 0, Math.PI * 2);
+        ctx.ellipse(x - tw * 0.34, crownY + dir * h * 0.05, tw * 0.3, tw * 0.52, 0, 0, Math.PI * 2);
+        ctx.ellipse(x + tw * 0.36, crownY + dir * h * 0.03, tw * 0.32, tw * 0.54, 0, 0, Math.PI * 2);
         ctx.fill();
       }
       if (!mirror) {
@@ -588,8 +588,8 @@ export class RunnerGame {
     ctx.clip();
     const edgeShade = ctx.createLinearGradient(0, 0, W, 0);
     edgeShade.addColorStop(0, 'rgba(5, 20, 16, 0.18)');
-    edgeShade.addColorStop(0.26, 'rgba(5, 20, 16, 0)');
-    edgeShade.addColorStop(0.74, 'rgba(5, 20, 16, 0)');
+    edgeShade.addColorStop(0.17, 'rgba(5, 20, 16, 0)');
+    edgeShade.addColorStop(0.83, 'rgba(5, 20, 16, 0)');
     edgeShade.addColorStop(1, 'rgba(5, 20, 16, 0.18)');
     ctx.fillStyle = edgeShade;
     ctx.fillRect(0, horizon, W, H - horizon);
@@ -607,7 +607,7 @@ export class RunnerGame {
       for (let pass = 0; pass < 3; pass++) {
         ctx.strokeStyle = `rgba(4, 16, 11, ${0.3 - pass * 0.09})`;
         for (let i = 0; i < pts.length - 1; i++) {
-          ctx.lineWidth = W * (0.016 + 0.055 * pts[i][2]) * (1 + pass * 1.7);
+          ctx.lineWidth = W * (0.009 + 0.026 * pts[i][2]) * (1 + pass * 1.1);
           ctx.beginPath();
           ctx.moveTo(pts[i][0], pts[i][1]);
           ctx.lineTo(pts[i + 1][0], pts[i + 1][1]);
@@ -644,7 +644,7 @@ export class RunnerGame {
         if (t < 0.05 || t > 0.97) continue;
         const s = scaleAt(t);
         const jitter = ((k * 41) % 9) / 9 - 0.4;
-        const r = W * (0.018 + (((k * 13) % 5) / 5) * 0.026) * s;
+        const r = W * (0.010 + (((k * 13) % 5) / 5) * 0.015) * s;
         const cx = W / 2 + side * (halfAt(t) + W * 0.022 * jitter * s);
         const cy = yAt(t) - r * 0.15;
         ctx.fillStyle = `rgba(${11 + (k % 3) * 4}, ${31 + (k % 4) * 7}, ${20 + (k % 3) * 5}, 0.94)`;
@@ -655,12 +655,12 @@ export class RunnerGame {
         ctx.fill();
       }
       // 岸石：一半踩在坡上、一半浸在水里，靠苔藓色把硬边切成锯齿
-      for (let k = 0; k < 14; k++) {
+      for (let k = 0; k < 9; k++) {
         const t = 1 - ((k * 0.618 + 0.06) % 1);
         if (t < 0.06 || t > 0.96) continue;
         const tj = Math.min(0.96, Math.max(0.06, t + (((k * 31) % 7) / 7 - 0.5) * 0.09));
         const s = scaleAt(tj);
-        const r = W * (0.008 + (((k * 19) % 5) / 5) * 0.024) * s;
+        const r = W * (0.006 + (((k * 19) % 5) / 5) * 0.016) * s;
         const cx = W / 2 + side * (halfAt(tj) + W * 0.01 * (((k * 29) % 5) / 5 - 0.5) * s);
         const cy = yAt(tj);
         ctx.fillStyle = `rgba(${25 + (k % 3) * 6}, ${39 + (k % 4) * 7}, ${32 + (k % 3) * 5}, 0.92)`;
@@ -668,7 +668,7 @@ export class RunnerGame {
         ctx.ellipse(cx, cy - r * 0.22, r * 1.15, r * 0.62, 0, 0, Math.PI * 2);
         ctx.fill();
         // 石头上的苔藓
-        ctx.fillStyle = `rgba(${27 + (k % 3) * 5}, ${54 + (k % 4) * 7}, ${35 + (k % 3) * 4}, 0.7)`;
+        ctx.fillStyle = `rgba(${22 + (k % 3) * 4}, ${44 + (k % 4) * 5}, ${29 + (k % 3) * 4}, 0.55)`;
         ctx.beginPath();
         ctx.ellipse(cx, cy - r * 0.46, r * 0.86, r * 0.34, 0, 0, Math.PI * 2);
         ctx.fill();
@@ -971,7 +971,7 @@ export class RunnerGame {
     }
 
     // 把贴图拉向参考图的玉青色，再补一层极淡的白提亮
-    ctx.fillStyle = 'rgba(7, 34, 31, 0.38)';
+    ctx.fillStyle = 'rgba(7, 34, 31, 0.52)';
     ctx.fillRect(0, horizon, W, span);
     // 远端雾化：地平线附近柔化，避免贴图起始处出现硬边
     const fade = ctx.createLinearGradient(0, horizon, 0, horizon + span * 0.34);
@@ -1012,8 +1012,8 @@ export class RunnerGame {
         ctx.lineTo(p.x + bw * 0.5, p.y);
         ctx.closePath();
         const rock = ctx.createLinearGradient(p.x, p.y - bh, p.x, p.y);
-        rock.addColorStop(0, '#5e6d66');
-        rock.addColorStop(0.55, '#46534d');
+        rock.addColorStop(0, '#48544f');
+        rock.addColorStop(0.55, '#37423d');
         rock.addColorStop(1, '#232d2a');
         ctx.fillStyle = rock;
         ctx.fill();
@@ -1025,14 +1025,14 @@ export class RunnerGame {
         ctx.lineTo(p.x + bw * 0.5, p.y + 0.5);
         ctx.stroke();
         // 顶部受光棱
-        ctx.strokeStyle = 'rgba(198, 226, 214, 0.45)';
+        ctx.strokeStyle = 'rgba(178, 210, 196, 0.24)';
         ctx.lineWidth = Math.max(1, 2 * p.scale);
         ctx.beginPath();
         ctx.moveTo(p.x - bw * 0.18, p.y - bh * 0.94);
         ctx.lineTo(p.x + bw * 0.16, p.y - bh * 1.0);
         ctx.stroke();
         // 苔藓
-        ctx.fillStyle = 'rgba(94, 160, 106, 0.5)';
+        ctx.fillStyle = 'rgba(58, 104, 68, 0.55)';
         ctx.beginPath();
         ctx.ellipse(p.x - bw * 0.1, p.y - bh * 0.86, bw * 0.2, bh * 0.09, -0.3, 0, Math.PI * 2);
         ctx.fill();
