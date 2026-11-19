@@ -52,6 +52,10 @@ export class RunnerGame {
     // 相对模块自身定位，不依赖页面 URL 层级
     this.water.src = new URL('../assets/river-soft.jpg', import.meta.url).href;
 
+    // 玩家船头：从实拍照抠出、压暗成夜色的精灵图
+    this.bow = new Image();
+    this.bow.src = new URL('../assets/bow-night.png', import.meta.url).href;
+
     this.reset();
     this.resize();
   }
@@ -1088,6 +1092,68 @@ export class RunnerGame {
   }
 
   _drawPlayer(ctx, now) {
+    // 第一人称船头：用照片抠出的船头贴在画面底部，透视就是参考图本身的视角。
+    // 图未就绪（或加载失败）时退回原来的俯视小船。
+    const bowReady = this.bow && this.bow.complete && this.bow.naturalWidth > 0;
+    if (!bowReady) return this._drawPlayerTopDown(ctx, now);
+
+    const { W, H } = this;
+    const off = this.laneVisual - (this.laneCount - 1) / 2;
+
+    let lift = 0;
+    let dip = 0;
+    let scale = 1;
+    let squash = 1;
+    if (this.jumping(now)) {
+      const k = 1 - (this.jumpUntil - now) / this.jumpMs;
+      lift = Math.sin(Math.PI * k) * H * 0.11;
+      scale = 1 + lift / (H * 2.8);
+    } else if (this.sliding(now)) {
+      dip = H * 0.03;
+      squash = 0.8;
+    }
+
+    const x = W / 2 + off * W * 0.17;
+    const bw = W * 0.5 * scale;
+    const bh = bw / (this.bow.naturalWidth / this.bow.naturalHeight);
+    const bottom = H + dip - lift;
+
+    // 船头劈开水面：两侧各一道细浪，跳起来时跟着走
+    ctx.fillStyle = 'rgba(206, 246, 236, 0.18)';
+    for (const sd of [-1, 1]) {
+      ctx.beginPath();
+      ctx.ellipse(x + sd * bw * 0.31, bottom - bh * 0.14, bw * 0.1, bh * 0.028, sd * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const blink = now < this.invulnUntil && Math.floor(now / 90) % 2 === 0;
+    ctx.save();
+    ctx.globalAlpha = blink ? 0.42 : 1;
+    ctx.translate(x, bottom);
+    ctx.scale(1, squash);
+    ctx.drawImage(this.bow, -bw / 2, -bh, bw, bh);
+    ctx.restore();
+
+    // 船头与水面的接触阴影：把贴图底边压进水里，跳起时也不露硬边
+    const wet = ctx.createRadialGradient(x, bottom - bh * 0.03, 0, x, bottom - bh * 0.03, bw * 0.46);
+    wet.addColorStop(0, 'rgba(4, 22, 24, 0.6)');
+    wet.addColorStop(0.65, 'rgba(4, 22, 24, 0.28)');
+    wet.addColorStop(1, 'rgba(4, 22, 24, 0)');
+    ctx.fillStyle = wet;
+    ctx.beginPath();
+    ctx.ellipse(x, bottom - bh * 0.02, bw * 0.46, bh * 0.09, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (this.shielded(now)) {
+      ctx.strokeStyle = 'rgba(160, 255, 235, 0.85)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(x, bottom - bh * 0.44, bw * 0.36, bh * 0.4, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  _drawPlayerTopDown(ctx, now) {
     const { W, H } = this;
     const off = this.laneVisual - (this.laneCount - 1) / 2;
     const baseY = H * 0.9;
@@ -1236,44 +1302,58 @@ export class RunnerGame {
     ctx.fillRect(x - w * 0.36, by - L * 0.095, w * 0.72, Math.max(1, L * 0.01));
     ctx.restore();
 
-    // 船头甲板：舱口之前那一段封闭木板。必须在 hull 裁剪里画，
-    // 若在 inner() 裁剪里画，船头（舱口以外）会被裁掉，甲板就消失了
-    ctx.save();
-    hull();
-    ctx.clip();
-    const deck = ctx.createLinearGradient(x, ty, x, ty + L * 0.185);
-    deck.addColorStop(0, '#D9B384');
-    deck.addColorStop(0.55, '#C2965F');
-    deck.addColorStop(1, '#A87C49');
-    ctx.fillStyle = deck;
-    ctx.fillRect(x - w * 0.44, ty, w * 0.88, L * 0.185);
-    // 板缝顺船身方向铺，越靠近船尖越往中线收
-    ctx.strokeStyle = 'rgba(96, 64, 34, 0.55)';
-    ctx.lineWidth = Math.max(1, w * 0.012);
-    ctx.beginPath();
-    for (let i = -2; i <= 1; i++) {
-      const bx = x + i * w * 0.11;
-      const pull = i * w * 0.03;
-      ctx.moveTo(bx - pull, ty + L * 0.015);
-      ctx.quadraticCurveTo(bx - pull * 0.4, ty + L * 0.1, bx, ty + L * 0.185);
-    }
-    ctx.stroke();
-    // 左上方来的柔光
-    const deckLight = ctx.createLinearGradient(x - w * 0.4, ty, x + w * 0.4, ty + L * 0.12);
-    deckLight.addColorStop(0, 'rgba(255, 240, 214, 0.22)');
-    deckLight.addColorStop(1, 'rgba(255, 240, 214, 0)');
-    ctx.fillStyle = deckLight;
-    ctx.fillRect(x - w * 0.44, ty, w * 0.88, L * 0.12);
-    // 舱口前檐：一道横梁把亮色甲板和黑舱口分开
-    ctx.fillStyle = '#4a3120';
-    ctx.fillRect(x - w * 0.32, ty + L * 0.172, w * 0.64, L * 0.018);
-    ctx.fillStyle = 'rgba(150, 112, 70, 0.4)';
-    ctx.fillRect(x - w * 0.32, ty + L * 0.172, w * 0.64, Math.max(1, L * 0.005));
-    ctx.restore();
+    // 船头：照片抠图压暗后的精灵图，图没就绪时退回程序化绘制
+    const bowReady = this.bow && this.bow.complete && this.bow.naturalWidth > 0;
+    if (bowReady) {
+      const srcH = this.bow.naturalHeight * 0.62;
+      const bh = w * 0.6;
+      const bw = bh * (this.bow.naturalWidth / srcH);
+      ctx.save();
+      hull();
+      ctx.clip();
+      ctx.drawImage(this.bow, 0, 0, this.bow.naturalWidth, srcH,
+        x - bw / 2, ty - L * 0.004, bw, bh);
+      ctx.restore();
+    } else {
+      // 船头甲板：舱口之前那一段封闭木板。必须在 hull 裁剪里画，
+      // 若在 inner() 裁剪里画，船头（舱口以外）会被裁掉，甲板就消失了
+      ctx.save();
+      hull();
+      ctx.clip();
+      const deck = ctx.createLinearGradient(x, ty, x, ty + L * 0.185);
+      deck.addColorStop(0, '#D9B384');
+      deck.addColorStop(0.55, '#C2965F');
+      deck.addColorStop(1, '#A87C49');
+      ctx.fillStyle = deck;
+      ctx.fillRect(x - w * 0.44, ty, w * 0.88, L * 0.185);
+      // 板缝顺船身方向铺，越靠近船尖越往中线收
+      ctx.strokeStyle = 'rgba(96, 64, 34, 0.55)';
+      ctx.lineWidth = Math.max(1, w * 0.012);
+      ctx.beginPath();
+      for (let i = -2; i <= 1; i++) {
+        const bx = x + i * w * 0.11;
+        const pull = i * w * 0.03;
+        ctx.moveTo(bx - pull, ty + L * 0.015);
+        ctx.quadraticCurveTo(bx - pull * 0.4, ty + L * 0.1, bx, ty + L * 0.185);
+      }
+      ctx.stroke();
+      // 左上方来的柔光
+      const deckLight = ctx.createLinearGradient(x - w * 0.4, ty, x + w * 0.4, ty + L * 0.12);
+      deckLight.addColorStop(0, 'rgba(255, 240, 214, 0.22)');
+      deckLight.addColorStop(1, 'rgba(255, 240, 214, 0)');
+      ctx.fillStyle = deckLight;
+      ctx.fillRect(x - w * 0.44, ty, w * 0.88, L * 0.12);
+      // 舱口前檐：一道横梁把亮色甲板和黑舱口分开
+      ctx.fillStyle = '#4a3120';
+      ctx.fillRect(x - w * 0.32, ty + L * 0.172, w * 0.64, L * 0.018);
+      ctx.fillStyle = 'rgba(150, 112, 70, 0.4)';
+      ctx.fillRect(x - w * 0.32, ty + L * 0.172, w * 0.64, Math.max(1, L * 0.005));
+      ctx.restore();
 
-    // 船尖系缆环，再是躺在甲板上的花束
-    this._drawBowRing(ctx, x, ty + L * 0.028, w, L);
-    this._drawBouquet(ctx, x, ty + L * 0.105, w, L);
+      // 船尖系缆环，再是躺在甲板上的花束
+      this._drawBowRing(ctx, x, ty + L * 0.028, w, L);
+      this._drawBouquet(ctx, x, ty + L * 0.105, w, L);
+    }
 
     // 内壁暗线：有这道凹陷，船才不是一块板
     inner();
