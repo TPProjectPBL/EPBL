@@ -451,8 +451,9 @@ export class RunnerGame {
       }
       ctx.closePath();
       const slope = ctx.createLinearGradient(0, horizon, 0, H);
-      slope.addColorStop(0, 'rgba(24, 62, 41, 0.97)');
-      slope.addColorStop(0.45, 'rgba(14, 40, 27, 0.985)');
+      slope.addColorStop(0, 'rgba(9, 26, 18, 0.9)');
+      slope.addColorStop(0.14, 'rgba(18, 50, 33, 0.95)');
+      slope.addColorStop(0.5, 'rgba(13, 38, 25, 0.985)');
       slope.addColorStop(1, 'rgba(4, 14, 10, 1)');
       ctx.fillStyle = slope;
       ctx.fill();
@@ -473,6 +474,22 @@ export class RunnerGame {
           Math.PI * 2
         );
         ctx.fill();
+      }
+
+      // 坡脚压暗：坡面靠水的一侧沉进暗处，不再亮绿直接接水面
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      for (let pass = 0; pass < 2; pass++) {
+        ctx.strokeStyle = `rgba(3, 11, 8, ${0.44 - pass * 0.21})`;
+        for (let i = 0; i < 22; i++) {
+          const t0 = i / 22;
+          const t1 = (i + 1) / 22;
+          ctx.lineWidth = W * (0.008 + 0.04 * scaleAt(t0)) * (1 + pass * 1.7);
+          ctx.beginPath();
+          ctx.moveTo(W / 2 + side * halfAt(t0), yAt(t0));
+          ctx.lineTo(W / 2 + side * halfAt(t1), yAt(t1));
+          ctx.stroke();
+        }
       }
     }
 
@@ -495,8 +512,8 @@ export class RunnerGame {
           const s = scaleAt(t);
           const near = row === 0;
           const offW = near
-            ? 0.025 + (((k * 37) % 11) / 11) * 0.075
-            : 0.105 + (((k * 53) % 13) / 13) * 0.11;
+            ? 0.004 + (((k * 37) % 11) / 11) * 0.072
+            : 0.082 + (((k * 53) % 13) / 13) * 0.108;
           trees.push({
             side,
             t,
@@ -504,7 +521,7 @@ export class RunnerGame {
             row,
             x: W / 2 + side * (halfAt(t) + W * offW * s),
             y: yAt(t) - (near ? 0 : H * 0.012 * s),
-            h: H * (near ? 0.135 + (((k * 17) % 7) / 7) * 0.105 : 0.095 + (((k * 29) % 5) / 5) * 0.065) * s,
+            h: H * (near ? 0.21 + (((k * 17) % 7) / 7) * 0.17 : 0.145 + (((k * 29) % 5) / 5) * 0.115) * s,
             needle: (k + row) % 3 !== 0,
             tint: ((k * 23 + row * 7) % 5) / 5,
           });
@@ -518,7 +535,7 @@ export class RunnerGame {
       const { x, y, tint, needle } = tr;
       const h = tr.h * stretch;
       const dir = mirror ? -1 : 1;
-      const tw = h * 0.4;
+      const tw = h * 0.3;
       ctx.globalAlpha = alpha;
       if (!mirror) {
         ctx.fillStyle = 'rgba(3, 12, 8, 0.32)';
@@ -537,18 +554,18 @@ export class RunnerGame {
         ? 'rgba(16, 52, 38, 0.92)'
         : `rgba(${Math.round(9 + tint * 7)}, ${Math.round(30 + tint * 14)}, ${Math.round(19 + tint * 9)}, 0.98)`;
       if (needle) {
-        for (let i = 0; i < 3; i++) {
-          const w = tw * (1 - i * 0.26);
-          const by = y - dir * h * (0.3 + i * 0.2);
+        for (let i = 0; i < 4; i++) {
+          const w = tw * (1 - i * 0.21);
+          const by = y - dir * h * (0.3 + i * 0.165);
           ctx.beginPath();
-          ctx.moveTo(x, by - dir * h * 0.26);
+          ctx.moveTo(x, by - dir * h * 0.235);
           ctx.lineTo(x - w, by + dir * h * 0.07);
           ctx.lineTo(x + w, by + dir * h * 0.07);
           ctx.closePath();
           ctx.fill();
         }
       } else {
-        const crownY = y - dir * h * 0.62;
+        const crownY = y - dir * h * 0.6;
         ctx.beginPath();
         ctx.ellipse(x, crownY, tw * 0.9, tw * 0.72, 0, 0, Math.PI * 2);
         ctx.ellipse(x - tw * 0.5, crownY + dir * h * 0.06, tw * 0.55, tw * 0.46, 0, 0, Math.PI * 2);
@@ -576,7 +593,86 @@ export class RunnerGame {
     edgeShade.addColorStop(1, 'rgba(5, 20, 16, 0.18)');
     ctx.fillStyle = edgeShade;
     ctx.fillRect(0, horizon, W, H - horizon);
+
+    // 沿岸线的柔和暗带：顺着河岸曲线铺进水面，几层叠加做出渐隐，
+    // 岸脚就不会突然亮起来
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (const side of [-1, 1]) {
+      const pts = [];
+      for (let i = 0; i <= 30; i++) {
+        const t = i / 30;
+        pts.push([W / 2 + side * halfAt(t), yAt(t), scaleAt(t)]);
+      }
+      for (let pass = 0; pass < 3; pass++) {
+        ctx.strokeStyle = `rgba(4, 16, 11, ${0.3 - pass * 0.09})`;
+        for (let i = 0; i < pts.length - 1; i++) {
+          ctx.lineWidth = W * (0.016 + 0.055 * pts[i][2]) * (1 + pass * 1.7);
+          ctx.beginPath();
+          ctx.moveTo(pts[i][0], pts[i][1]);
+          ctx.lineTo(pts[i + 1][0], pts[i + 1][1]);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // 峡谷薄雾：远雾留到最后统一压一层，见 _drawRoad 末尾
     ctx.restore();
+
+    // 岸线本身再压一道暗：一半压坡面、一半压水面，把水陆交界的硬边化掉
+    for (const side of [-1, 1]) {
+      for (let pass = 0; pass < 2; pass++) {
+        ctx.strokeStyle = `rgba(4, 14, 10, ${0.3 - pass * 0.15})`;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        for (let i = 0; i < 40; i++) {
+          const t0 = i / 40;
+          const t1 = (i + 1) / 40;
+          ctx.lineWidth = W * (0.004 + 0.012 * scaleAt(t0)) * (1 + pass * 1.5);
+          ctx.beginPath();
+          ctx.moveTo(W / 2 + side * halfAt(t0), yAt(t0));
+          ctx.lineTo(W / 2 + side * halfAt(t1), yAt(t1));
+          ctx.stroke();
+        }
+      }
+    }
+
+    // ── 坡脚灌丛：贴着岸线长，跨到水面一侧，把水陆交界咬碎 ──
+    for (const side of [-1, 1]) {
+      for (let k = 0; k < 34; k++) {
+        const t = 1 - (k + 0.5) / 34;
+        if (t < 0.05 || t > 0.97) continue;
+        const s = scaleAt(t);
+        const jitter = ((k * 41) % 9) / 9 - 0.4;
+        const r = W * (0.018 + (((k * 13) % 5) / 5) * 0.026) * s;
+        const cx = W / 2 + side * (halfAt(t) + W * 0.022 * jitter * s);
+        const cy = yAt(t) - r * 0.15;
+        ctx.fillStyle = `rgba(${11 + (k % 3) * 4}, ${31 + (k % 4) * 7}, ${20 + (k % 3) * 5}, 0.94)`;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy - r * 0.42, r * 1.35, r * 0.8, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx - side * r * 0.85, cy - r * 0.16, r * 0.82, r * 0.52, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx + side * r * 0.9, cy - r * 0.2, r * 0.88, r * 0.55, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // 岸石：一半踩在坡上、一半浸在水里，靠苔藓色把硬边切成锯齿
+      for (let k = 0; k < 14; k++) {
+        const t = 1 - ((k * 0.71 + 0.06) % 1);
+        if (t < 0.06 || t > 0.96) continue;
+        const s = scaleAt(t);
+        const r = W * (0.012 + (((k * 19) % 5) / 5) * 0.016) * s;
+        const cx = W / 2 + side * (halfAt(t) + W * 0.004 * (((k * 29) % 5) / 5 - 0.5) * s);
+        const cy = yAt(t);
+        ctx.fillStyle = `rgba(${38 + (k % 3) * 7}, ${56 + (k % 4) * 8}, ${46 + (k % 3) * 6}, 0.9)`;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy - r * 0.22, r * 1.15, r * 0.62, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // 石头上的苔藓
+        ctx.fillStyle = `rgba(${34 + (k % 3) * 6}, ${70 + (k % 4) * 8}, ${44 + (k % 3) * 5}, 0.72)`;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy - r * 0.46, r * 0.86, r * 0.34, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
 
     for (const tr of trees) paintTree(tr, 1, false);
 
@@ -655,10 +751,10 @@ export class RunnerGame {
       }
 
       const g = ctx.createLinearGradient(0, horizon, 0, H);
-      g.addColorStop(0, 'rgba(196, 158, 110, 0.05)');
-      g.addColorStop(1, 'rgba(206, 170, 122, 0.34)');
+      g.addColorStop(0, 'rgba(150, 200, 180, 0.02)');
+      g.addColorStop(1, 'rgba(160, 210, 190, 0.07)');
       ctx.strokeStyle = g;
-      ctx.lineWidth = 2.4;
+      ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.moveTo(W / 2 + side * halfAt(1), horizon);
       ctx.lineTo(W / 2 + side * halfAt(0), H);
@@ -782,6 +878,17 @@ export class RunnerGame {
     fade.addColorStop(1, 'rgba(9, 32, 28, 0)');
     ctx.fillStyle = fade;
     ctx.fillRect(0, fadeTop, W, fadeH);
+
+    // 峡谷薄雾：只浮在地平线附近的河谷带里，远处沉进雾、近处不受影响
+    const mistTop = horizon - H * 0.065;
+    const mistH = H * 0.21;
+    const canyonMist = ctx.createLinearGradient(0, mistTop, 0, mistTop + mistH);
+    canyonMist.addColorStop(0, 'rgba(122, 168, 146, 0.05)');
+    canyonMist.addColorStop(0.3, 'rgba(122, 168, 146, 0.19)');
+    canyonMist.addColorStop(0.7, 'rgba(118, 162, 142, 0.1)');
+    canyonMist.addColorStop(1, 'rgba(118, 162, 142, 0)');
+    ctx.fillStyle = canyonMist;
+    ctx.fillRect(0, mistTop, W, mistH);
   }
 
   /** 河道水面的梯形路径（与 _project 的 scale、halfAt 完全同源） */
