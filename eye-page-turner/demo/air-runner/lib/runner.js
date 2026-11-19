@@ -306,14 +306,14 @@ export class RunnerGame {
 
     // 天空
     const sky = ctx.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, '#080d1c');
-    sky.addColorStop(0.45, '#101a38');
-    sky.addColorStop(1, '#16123a');
+    sky.addColorStop(0, '#06120f');
+    sky.addColorStop(0.45, '#0c211c');
+    sky.addColorStop(1, '#0f2f27');
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, W, H);
 
     // 星点
-    ctx.fillStyle = 'rgba(190, 215, 255, 0.55)';
+    ctx.fillStyle = 'rgba(214, 240, 228, 0.42)';
     for (const s of this.stars) {
       ctx.beginPath();
       ctx.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2);
@@ -343,8 +343,9 @@ export class RunnerGame {
 
     // 路面
     const road = ctx.createLinearGradient(0, horizon, 0, H);
-    road.addColorStop(0, 'rgba(35, 50, 95, 0.35)');
-    road.addColorStop(1, 'rgba(28, 42, 88, 0.95)');
+    road.addColorStop(0, 'rgba(20, 52, 45, 0.28)');
+    road.addColorStop(0.55, 'rgba(13, 40, 35, 0.72)');
+    road.addColorStop(1, 'rgba(8, 28, 25, 0.96)');
     ctx.fillStyle = road;
     const nearHalf = W * 0.42;
     const farHalf = W * 0.42 * 0.14;
@@ -356,11 +357,19 @@ export class RunnerGame {
     ctx.closePath();
     ctx.fill();
 
-    // 双侧霓虹护栏
+    // 水面反光：靠远端淡、近端略亮，给深色路面一点呼吸
+    const sheen = ctx.createLinearGradient(0, horizon, 0, H);
+    sheen.addColorStop(0, 'rgba(120, 226, 196, 0)');
+    sheen.addColorStop(0.7, 'rgba(120, 226, 196, 0.05)');
+    sheen.addColorStop(1, 'rgba(120, 226, 196, 0.10)');
+    ctx.fillStyle = sheen;
+    ctx.fill();
+
+    // 双侧护栏
     for (const side of [-1, 1]) {
       const g = ctx.createLinearGradient(0, horizon, 0, H);
-      g.addColorStop(0, 'rgba(80, 170, 255, 0.15)');
-      g.addColorStop(1, 'rgba(122, 59, 255, 0.95)');
+      g.addColorStop(0, 'rgba(120, 226, 196, 0.12)');
+      g.addColorStop(1, 'rgba(70, 201, 138, 0.85)');
       ctx.strokeStyle = g;
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -379,7 +388,7 @@ export class RunnerGame {
         if (t1 > 1) continue;
         const a = this._project(1 - t0, off);
         const b = this._project(1 - Math.min(1, t1), off);
-        ctx.strokeStyle = 'rgba(150, 185, 255, 0.35)';
+        ctx.strokeStyle = 'rgba(196, 238, 220, 0.30)';
         ctx.lineWidth = Math.max(1, 3 * b.scale);
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
@@ -401,21 +410,21 @@ export class RunnerGame {
       ctx.globalAlpha = alpha;
 
       if (ob.type === ObstacleType.BLOCK) {
-        ctx.fillStyle = '#3a4a7a';
+        ctx.fillStyle = '#4e6158';
         this._roundRect(ctx, p.x - w / 2, p.y - h, w, h, 4 * p.scale);
         ctx.fill();
-        ctx.strokeStyle = '#ff8fa3';
+        ctx.strokeStyle = '#ff9f8e';
         ctx.lineWidth = Math.max(1, 2.4 * p.scale);
         ctx.stroke();
       } else if (ob.type === ObstacleType.LOW) {
-        ctx.fillStyle = '#f0c674';
+        ctx.fillStyle = '#e8b96f';
         this._roundRect(ctx, p.x - w / 2, p.y - h * 0.32, w, h * 0.32, 3 * p.scale);
         ctx.fill();
       } else {
-        ctx.fillStyle = '#50aaff';
+        ctx.fillStyle = '#e3a76c';
         this._roundRect(ctx, p.x - w / 2, p.y - h * 1.15, w, h * 0.3, 3 * p.scale);
         ctx.fill();
-        ctx.strokeStyle = 'rgba(80, 170, 255, 0.55)';
+        ctx.strokeStyle = 'rgba(227, 167, 108, 0.55)';
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(p.x - w / 2, p.y - h * 0.85);
@@ -449,15 +458,15 @@ export class RunnerGame {
 
     // 拖影
     const trail = ctx.createLinearGradient(x, y - h * 3, x, y);
-    trail.addColorStop(0, 'rgba(122, 59, 255, 0)');
-    trail.addColorStop(1, 'rgba(122, 59, 255, 0.35)');
+    trail.addColorStop(0, 'rgba(70, 201, 138, 0)');
+    trail.addColorStop(1, 'rgba(70, 201, 138, 0.32)');
     ctx.fillStyle = trail;
     ctx.fillRect(x - w * 0.35, y - h * 3, w * 0.7, h * 3);
 
     // 本体
     const body = ctx.createLinearGradient(x - w / 2, y - h, x + w / 2, y);
-    body.addColorStop(0, '#2f6bff');
-    body.addColorStop(1, '#7a3bff');
+    body.addColorStop(0, '#8ff0cd');
+    body.addColorStop(1, '#2f9e80');
     ctx.fillStyle = body;
     this._roundRect(ctx, x - w / 2, y - h, w, h, 6);
     ctx.fill();

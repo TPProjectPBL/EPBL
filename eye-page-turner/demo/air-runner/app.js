@@ -1357,27 +1357,27 @@ function exportCard() {
   const W = cv.width;
   const H = cv.height;
   const g = ctx.createLinearGradient(0, 0, W, H);
-  g.addColorStop(0, '#0a1024');
-  g.addColorStop(0.55, '#101a3a');
-  g.addColorStop(1, '#1a1140');
+  g.addColorStop(0, '#081814');
+  g.addColorStop(0.55, '#0e2620');
+  g.addColorStop(1, '#123a30');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
 
-  ctx.strokeStyle = 'rgba(120,165,255,0.5)';
+  ctx.strokeStyle = 'rgba(160,216,190,0.5)';
   ctx.lineWidth = 3;
   ctx.strokeRect(24, 24, W - 48, H - 48);
 
-  ctx.fillStyle = '#6ee7ff';
+  ctx.fillStyle = '#8ae6c9';
   ctx.font = '600 26px -apple-system, "PingFang SC", sans-serif';
   ctx.fillText('星际跑酷 · AIR RUNNER', 64, 108);
-  ctx.fillStyle = '#9fb0d4';
+  ctx.fillStyle = '#a9c4b7';
   ctx.font = '20px -apple-system, "PingFang SC", sans-serif';
   ctx.fillText(`模式 ${state.settings.mode === 'dual' ? '双模态' : state.settings.mode} · 难度 ${state.settings.difficulty}`, 64, 148);
 
   ctx.fillStyle = '#ffffff';
   ctx.font = '800 128px -apple-system, "PingFang SC", sans-serif';
   ctx.fillText(String(stats.score), 64, 300);
-  ctx.fillStyle = '#9fb0d4';
+  ctx.fillStyle = '#a9c4b7';
   ctx.font = '24px -apple-system, "PingFang SC", sans-serif';
   ctx.fillText('本局得分', 64, 342);
 
@@ -1394,21 +1394,21 @@ function exportCard() {
     const y = 440 + Math.floor(i / 2) * 118;
     ctx.fillStyle = 'rgba(255,255,255,0.05)';
     ctx.fillRect(x, y, 296, 96);
-    ctx.strokeStyle = 'rgba(120,165,255,0.28)';
+    ctx.strokeStyle = 'rgba(160,216,190,0.28)';
     ctx.lineWidth = 1.5;
     ctx.strokeRect(x, y, 296, 96);
-    ctx.fillStyle = '#9fb0d4';
+    ctx.fillStyle = '#a9c4b7';
     ctx.font = '20px -apple-system, "PingFang SC", sans-serif';
     ctx.fillText(k, x + 22, y + 38);
-    ctx.fillStyle = '#eaf1ff';
+    ctx.fillStyle = '#eaf6ef';
     ctx.font = '700 34px -apple-system, "PingFang SC", sans-serif';
     ctx.fillText(v, x + 22, y + 78);
   });
 
-  ctx.fillStyle = '#ffc861';
+  ctx.fillStyle = '#e8c07a';
   ctx.font = '600 26px -apple-system, "PingFang SC", sans-serif';
   ctx.fillText(`最高分 ${state.best}`, 64, H - 96);
-  ctx.fillStyle = '#6c7ea6';
+  ctx.fillStyle = '#759588';
   ctx.font = '20px -apple-system, "PingFang SC", sans-serif';
   ctx.fillText(new Date().toLocaleString(), 64, H - 56);
 
@@ -1666,6 +1666,7 @@ function onMouseMove(e) {
 
 function onScreenEnter(name, payload, prev) {
   state.screen = name;
+  document.body.dataset.screen = name; // 供 CSS 按当前屏幕调整全局层（如游戏内缩小摄像头预览）
   const preview = $('#camPreview');
   if (preview) {
     const showCam = (name === 'calib' || name === 'game' || name === 'tutorial' || name === 'gazeCalib') && state.camReady;
