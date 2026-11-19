@@ -289,12 +289,18 @@
     </div>
   </div>
 
-  <div class="zone-strip" id="zoneStrip">
-    <div class="zone" data-zone="left"><span>左</span><i></i></div>
-    <div class="zone" data-zone="center"><span>中</span><i></i></div>
-    <div class="zone" data-zone="right"><span>右</span><i></i></div>
+  <!-- 注视识别带：宽度由 app.js 注入的 --gaze-split 决定，与 gaze-zone 的判定阈值同源 -->
+  <div class="gaze-overlay" id="gazeRange" aria-hidden="true">
+    <div class="gaze-range left"></div>
+    <div class="gaze-range right"></div>
   </div>
-  <div class="gesture-hint" id="gestureHint">✋ 向上挥 = 跳 · 👇 向下挥 = 滑铲 · ✊ 握拳 = 护盾</div>
+
+  <div class="zone-strip" id="zoneStrip">
+    <div class="zone arrow left" data-zone="left"><i></i></div>
+    <div class="zone mid" data-zone="center"><span>中</span><i></i></div>
+    <div class="zone arrow right" data-zone="right"><i></i></div>
+  </div>
+  <div class="gesture-hint" id="gestureHint">看向左右大箭头变道 · 挥手跳/滑 · 握拳护盾</div>
   <div class="flash-event" id="flashEvent"></div>
 </section>
 

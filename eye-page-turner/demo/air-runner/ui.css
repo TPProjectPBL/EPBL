@@ -430,21 +430,55 @@ body[data-screen="game"] .cam-preview.show {
   width: 150px; height: 113px; border-radius: 12px; opacity: 0.8;
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.42);
 }
+/* 注视识别范围：左右两条识别带。
+   宽度取自 --gaze-split —— app.js 用 gaze-zone.js 的 GAZE_SPLIT 注入，
+   所以 CSS 与判定逻辑不会各改一半（改阈值只需改 JS 一处）。 */
+.gaze-overlay { position: absolute; inset: 0; z-index: 19; pointer-events: none; }
+.gaze-range {
+  position: absolute; top: 0; bottom: 0;
+  width: var(--gaze-split, 34%);
+  pointer-events: none; opacity: 0; transition: opacity .25s, background .25s;
+  background: linear-gradient(90deg, rgba(70, 201, 138, 0.2), rgba(70, 201, 138, 0));
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 14%, #000 86%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 14%, #000 86%, transparent 100%);
+}
+.gaze-range.left { left: 0; }
+.gaze-range.right { right: 0; background: linear-gradient(270deg, rgba(70, 201, 138, 0.2), rgba(70, 201, 138, 0)); }
+/* 识别带内边界：虚线，正好落在判定阈值上 */
+.gaze-range.left::after, .gaze-range.right::after {
+  content: ''; position: absolute; top: 12%; bottom: 12%; width: 1px;
+  background: repeating-linear-gradient(180deg, rgba(140, 226, 199, 0.5) 0 6px, transparent 6px 12px);
+}
+.gaze-range.left::after { right: 0; }
+.gaze-range.right::after { left: 0; }
+
+body[data-screen="game"] .gaze-range { opacity: .45; }
+body[data-screen="countdown"] .gaze-range { opacity: .5; }
+.gaze-range.active {
+  opacity: 1;
+  background: linear-gradient(90deg, rgba(70, 201, 138, 0.42), rgba(70, 201, 138, 0.03));
+}
+.gaze-range.right.active { background: linear-gradient(270deg, rgba(70, 201, 138, 0.42), rgba(70, 201, 138, 0.03)); }
+
+/* 三区注视条：左右为大箭头，中间保留车道状态。
+   箭头贴屏幕左右两侧、垂直居中偏下；中区单独钉在底部中央，互不干扰。 */
 .zone-strip {
-  position: absolute; z-index: 20; left: 50%; transform: translateX(-50%); bottom: 92px;
-  display: flex; gap: 10px; pointer-events: none;
-  padding: 8px; border-radius: 20px;
-  background: rgba(6, 18, 15, 0.52); border: 1px solid rgba(160, 216, 190, 0.14);
-  backdrop-filter: blur(10px);
+  position: absolute; inset: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 10vh max(1.2vw, 14px) 0; pointer-events: none;
 }
 .zone {
-  position: relative; width: 108px; height: 42px; border-radius: 12px;
-  border: 1px solid var(--line); background: rgba(8, 24, 20, 0.72);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 13px; color: var(--txt-mute); transition: all .18s;
+  position: relative; display: flex; align-items: center; justify-content: center;
+  color: var(--txt-mute); transition: transform .18s, filter .18s;
 }
-.zone i {
-  position: absolute; inset: 0; border-radius: 12px; pointer-events: none;
+.zone.mid {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+  width: 92px; height: 32px; border-radius: 999px;
+  border: 1px solid var(--line); background: rgba(8, 24, 20, 0.72);
+  font-size: 14px; letter-spacing: 2px;
+}
+.zone.mid i {
+  position: absolute; inset: 0; border-radius: 999px; pointer-events: none;
   padding: 3px;
   background: conic-gradient(from -90deg, rgba(140, 226, 199, 0.95) calc(var(--dwell, 0) * 1turn), rgba(255, 255, 255, 0.04) 0);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -453,15 +487,49 @@ body[data-screen="game"] .cam-preview.show {
   mask-composite: exclude;
   opacity: 0; transition: opacity .15s;
 }
-.zone.look { border-color: var(--cyan); color: var(--txt); }
-.zone.look i { opacity: 1; }
-.zone.cur {
+.zone.mid.look { border-color: var(--cyan); color: var(--txt); }
+.zone.mid.look i { opacity: 1; }
+.zone.mid.cur {
   border-color: var(--cyan); color: var(--txt);
   background: linear-gradient(180deg, rgba(70, 201, 138, 0.26), rgba(43, 143, 116, 0.28));
   box-shadow: 0 0 0 1px rgba(140, 226, 199, 0.35) inset, 0 6px 18px rgba(0, 0, 0, 0.22);
 }
+
+/* 大箭头：形状即箭头，--dwell 从底部向上填充表示注视进度。
+   clip-path 会裁掉 border，所以轮廓靠多层 drop-shadow 描边。 */
+.zone.arrow {
+  flex: 0 0 auto;
+  width: clamp(200px, 24vw, 380px);
+  height: clamp(140px, 16vw, 260px);
+  border: none; background: transparent;
+  filter:
+    drop-shadow(0 0 1.5px rgba(198, 246, 226, 0.95))
+    drop-shadow(0 0 3px rgba(90, 180, 150, 0.55))
+    drop-shadow(0 12px 26px rgba(0, 0, 0, 0.42));
+}
+.zone.arrow.left { clip-path: polygon(0% 50%, 42% 3%, 42% 29%, 100% 29%, 100% 71%, 42% 71%, 42% 97%); }
+.zone.arrow.right { clip-path: polygon(100% 50%, 58% 3%, 58% 29%, 0% 29%, 0% 71%, 58% 71%, 58% 97%); }
+.zone.arrow::before { content: ''; position: absolute; inset: 0; background: rgba(8, 24, 20, 0.78); }
+.zone.arrow::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(0deg,
+    rgba(70, 201, 138, 0.74) 0%,
+    rgba(70, 201, 138, 0.74) calc(var(--dwell, 0) * 100%),
+    rgba(70, 201, 138, 0.06) calc(var(--dwell, 0) * 100%),
+    rgba(70, 201, 138, 0.06) 100%);
+}
+.zone.arrow > i { display: none; }
+.zone.arrow.look {
+  transform: scale(1.06);
+  filter:
+    drop-shadow(0 0 2px rgba(220, 255, 240, 1))
+    drop-shadow(0 0 16px rgba(140, 226, 199, 0.85))
+    drop-shadow(0 12px 26px rgba(0, 0, 0, 0.42));
+}
+.zone.arrow.look::before { background: rgba(16, 46, 37, 0.86); }
+.zone.arrow.cur::before { background: rgba(24, 74, 58, 0.92); }
 .gesture-hint {
-  position: absolute; z-index: 20; left: 0; right: 0; bottom: 28px; text-align: center;
+  position: absolute; z-index: 20; left: 0; right: 0; top: 96px; text-align: center;
   font-size: 12px; color: #8aa79a; letter-spacing: .4px;
 }
 /* 游戏进行中淡化顶部状态条，减少干扰（仍保留可读性） */
@@ -559,9 +627,10 @@ body[data-screen="game"] .chipbar { opacity: 0.52; transition: opacity .25s; }
   .hud { padding: 56px 16px 0; }
   .hud .score { font-size: 30px; }
   .hud-block { padding: 9px 13px 10px; border-radius: 13px; }
-  .zone-strip { bottom: 84px; padding: 6px; gap: 8px; }
-  .zone { width: 96px; height: 44px; font-size: 13px; }
-  .gesture-hint { font-size: 11px; bottom: 22px; }
+  .zone-strip { padding: 8vh 10px 0; gap: 8px; }
+  .zone.mid { width: 86px; height: 30px; font-size: 12px; bottom: 12px; }
+  .zone.arrow { width: clamp(132px, 26vw, 210px); height: clamp(94px, 19vw, 148px); }
+  .gesture-hint { font-size: 11px; top: 84px; }
   body[data-screen="game"] .cam-preview.show { width: 120px; height: 90px; right: 14px; bottom: 150px; }
   .gc-wrap { padding: 64px 14px 16px; }
   .gaze-field { width: 94vw; }
@@ -577,7 +646,8 @@ body[data-screen="game"] .chipbar { opacity: 0.52; transition: opacity .25s; }
   .hero .actions .btn { width: 100%; }
   .result-card { padding: 24px 16px 20px; }
   .big-score { font-size: 52px; }
-  .zone { width: 84px; height: 40px; }
+  .zone.mid { width: 80px; height: 28px; bottom: 10px; }
+  .zone.arrow { width: clamp(104px, 30vw, 160px); height: clamp(74px, 21vw, 112px); }
   body[data-screen="game"] .cam-preview.show {
     /* 保留渲染、只做视觉弱化：display:none 会让 video 停止出帧，眼动随之失效 */
     width: 84px; height: 63px; opacity: .55;
@@ -631,10 +701,10 @@ body[data-screen="game"] .chipbar { opacity: 0.52; transition: opacity .25s; }
 .quick li { font-size: 13.5px; padding: 18px 12px; }
 .quick li b { font-size: 28px; }
 
-/* 三区注视条（游戏内视线变道目标） */
-.zone-strip { gap: 14px; }
-.zone { width: 132px; height: 56px; font-size: 15px; border-radius: 14px; }
-.zone i { border-radius: 14px; }
+/* 三区注视条（游戏内视线变道目标）：箭头尺寸由 clamp 自适应，这里只放大间距与中区 */
+.zone-strip { gap: 16px; padding: 10vh 2vw 0; }
+.zone.arrow { width: clamp(220px, 22vw, 400px); height: clamp(154px, 15vw, 276px); }
+.zone.mid { width: 100px; height: 34px; font-size: 13.5px; }
 .gesture-hint { font-size: 13.5px; }
 
 /* 进度环随目标一起加粗，注视反馈更清楚 */

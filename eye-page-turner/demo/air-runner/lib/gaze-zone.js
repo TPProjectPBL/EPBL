@@ -10,6 +10,11 @@
  *   - 天然解决"所有注视都变成选择"的抖动问题 —— 只有跨区才产生动作。
  */
 
+/** 左右识别带的边界（0–GAZE_SPLIT / GAZE_SPLIT–1-GAZE_SPLIT / 1-GAZE_SPLIT–1）。
+ *  CSS 的识别带宽度由 app.js 用同一个值注入 --gaze-split，
+ *  所以"看得见的范围"和"真正判定的范围"只有一个来源，改这里就够。 */
+export const GAZE_SPLIT = 0.34;
+
 export class GazeZoneSelector {
   /**
    * @param {object} opts
@@ -19,9 +24,9 @@ export class GazeZoneSelector {
    */
   constructor({ zones, gazeMs = 350, cooldownMs = 220, onSelect, onProgress } = {}) {
     this.zones = zones || [
-      { id: 'left', x0: 0.0, x1: 0.34 },
-      { id: 'center', x0: 0.34, x1: 0.66 },
-      { id: 'right', x0: 0.66, x1: 1.0 },
+      { id: 'left', x0: 0.0, x1: GAZE_SPLIT },
+      { id: 'center', x0: GAZE_SPLIT, x1: 1 - GAZE_SPLIT },
+      { id: 'right', x0: 1 - GAZE_SPLIT, x1: 1.0 },
     ];
     this.gazeMs = gazeMs;
     this.cooldownMs = cooldownMs;

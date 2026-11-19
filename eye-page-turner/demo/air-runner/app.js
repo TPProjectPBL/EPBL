@@ -19,7 +19,7 @@
 
 import { ScreenRouter } from './lib/router.js';
 import { DwellController } from './lib/dwell.js';
-import { GazeZoneSelector } from './lib/gaze-zone.js';
+import { GazeZoneSelector, GAZE_SPLIT } from './lib/gaze-zone.js';
 import { WipeDetector, SwipeLaneDetector, classifyHand } from './lib/gesture.js';
 import { RunnerGame } from './lib/runner.js';
 import { AbsoluteGazeSource, GazeCalibModel, diagnoseText, isFaceUsable, medianSample, simLandmarksFor } from './lib/gaze-calib.js';
@@ -140,7 +140,14 @@ const SMOOTH_KIND = params.get('smooth') === 'oneeuro' ? 'oneeuro' : 'kalman';
 function smoothPoint(raw, now) {
   return SMOOTH_KIND === 'kalman' ? kalman.filter(raw, now) : smooth.filter(raw, now);
 }
+// 识别带宽度与判定阈值同源：CSS 读 --gaze-split，JS 读 GAZE_SPLIT
+document.documentElement.style.setProperty('--gaze-split', `${(GAZE_SPLIT * 100).toFixed(2)}%`);
 const gazeZone = new GazeZoneSelector({
+  zones: [
+    { id: 'left', x0: 0, x1: GAZE_SPLIT },
+    { id: 'center', x0: GAZE_SPLIT, x1: 1 - GAZE_SPLIT },
+    { id: 'right', x0: 1 - GAZE_SPLIT, x1: 1 },
+  ],
   gazeMs: GAZE_MS[state.settings.gaze] || 350,
   onSelect: (id) => onZoneSelect(id),
   onProgress: ({ id, progress }) => paintZones(id, progress),
@@ -683,6 +690,10 @@ function paintZones(activeId, progress) {
     z.classList.toggle('look', on);
     if (game) z.classList.toggle('cur', ZONE_LANE[z.dataset.zone] === game.targetLane);
   });
+  // 识别带同步高亮：视线落在哪一侧，哪一侧的半透明区域就亮起来
+  $$('#gazeRange .gaze-range').forEach((el) => {
+    el.classList.toggle('active', !!activeId && el.classList.contains(activeId));
+  });
 }
 
 function clearZones() {
@@ -690,6 +701,7 @@ function clearZones() {
     z.style.setProperty('--dwell', '0');
     z.classList.remove('look');
   });
+  $$('#gazeRange .gaze-range').forEach((el) => el.classList.remove('active'));
 }
 
 /* ------------------------------------------------------------------ 9 点精确注视标定 */
@@ -1242,7 +1254,9 @@ function frame(now) {
   } else if (router.current === 'game' && game) {
     // 视线落在顶部 HUD 区域时不分发变道，避免"看暂停钮也变道"
     gazeZone.setEnabled(true);
-    gazeZone.update(state.cursor && state.cursor.y >= 0.16 ? state.cursor : null, now);
+    const usable = state.cursor && state.cursor.y >= 0.16 ? state.cursor : null;
+    if (!usable) clearZones(); // 没有有效视线时把箭头/识别带的高亮收回
+    gazeZone.update(usable, now);
     updateHud(now);
   } else {
     gazeZone.setEnabled(false);
