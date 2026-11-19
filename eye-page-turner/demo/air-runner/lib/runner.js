@@ -400,12 +400,188 @@ export class RunnerGame {
     ctx.fillStyle = bank;
     ctx.fillRect(0, horizon, W, H - horizon);
 
+    // ── 两侧坡地：河岸抬升成山坡，靠画面外侧压暗 ──
+    for (const side of [-1, 1]) {
+      const inner = [];
+      for (let i = 0; i <= 22; i++) {
+        const t = i / 22;
+        inner.push([W / 2 + side * halfAt(t), yAt(t), scaleAt(t)]);
+      }
+      ctx.beginPath();
+      ctx.moveTo(inner[0][0], inner[0][1]);
+      for (const [x, y] of inner) ctx.lineTo(x, y);
+      // 由近及远退回外侧轮廓：先横向外扩，再往上抬，坡面才立得起来
+      for (let i = inner.length - 1; i >= 0; i--) {
+        const [x, y, s] = inner[i];
+        ctx.lineTo(x + side * W * (0.06 + 0.34 * s), y - H * (0.02 + 0.10 * s));
+      }
+      ctx.closePath();
+      const slope = ctx.createLinearGradient(W / 2, 0, W / 2 + side * W * 0.55, 0);
+      slope.addColorStop(0, 'rgba(26, 62, 45, 0.96)');
+      slope.addColorStop(0.32, 'rgba(16, 44, 33, 0.985)');
+      slope.addColorStop(1, 'rgba(6, 18, 14, 1)');
+      ctx.fillStyle = slope;
+      ctx.fill();
+
+      // 坡面草皮斑块：打破纯色块，读起来才像植被覆盖的山坡
+      for (let k = 0; k < 7; k++) {
+        const t = 0.16 + (k / 7) * 0.78;
+        const s = scaleAt(t);
+        ctx.fillStyle = `rgba(27, 60, 43, ${0.22 + 0.2 * s})`;
+        ctx.beginPath();
+        ctx.ellipse(
+          W / 2 + side * (halfAt(t) + W * (0.02 + (((k * 31) % 7) / 7) * 0.08) * s),
+          yAt(t) - H * 0.014 * s,
+          W * 0.032 * s,
+          W * 0.011 * s,
+          0,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+      }
+    }
+
     // 河道水面：贴首页那张河流图，用透视切片滚动做出流动感
     this._waterPath(ctx, halfAt, horizon);
     ctx.save();
     ctx.clip();
     this._paintWaterTexture(ctx, horizon, nearHalf, now);
     ctx.restore();
+
+    // ── 两岸树林：前后两排，近大远小，越远越暗 ──
+    const trees = [];
+    for (const side of [-1, 1]) {
+      for (let row = 0; row < 2; row++) {
+        const count = row === 0 ? 11 : 9;
+        const phase = (this.stats.distance * (row === 0 ? 1.4 : 0.9)) % 1;
+        for (let k = 0; k < count; k++) {
+          const t = 1 - (k + phase) / count;
+          if (t < 0.02 || t > 0.97) continue;
+          const s = scaleAt(t);
+          const near = row === 0;
+          const offW = near
+            ? 0.025 + (((k * 37) % 11) / 11) * 0.075
+            : 0.105 + (((k * 53) % 13) / 13) * 0.11;
+          trees.push({
+            side,
+            t,
+            s,
+            row,
+            x: W / 2 + side * (halfAt(t) + W * offW * s),
+            y: yAt(t) - (near ? 0 : H * 0.012 * s),
+            h: H * (near ? 0.135 + (((k * 17) % 7) / 7) * 0.105 : 0.095 + (((k * 29) % 5) / 5) * 0.065) * s,
+            needle: (k + row) % 3 !== 0,
+            tint: ((k * 23 + row * 7) % 5) / 5,
+          });
+        }
+      }
+    }
+    trees.sort((a, b) => a.t - b.t);
+
+    // 夜色下的树只剩剪影：压暗、去饱和，靠一层极淡的月光边缘勾出轮廓
+    const paintTree = (tr, alpha, mirror = false, stretch = 1) => {
+      const { x, y, tint, needle } = tr;
+      const h = tr.h * stretch;
+      const dir = mirror ? -1 : 1;
+      const tw = h * 0.4;
+      ctx.globalAlpha = alpha;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = mirror ? 'rgba(5, 18, 13, 0.95)' : 'rgba(14, 32, 24, 0.98)';
+      ctx.lineWidth = Math.max(1, h * 0.05);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x, y - dir * h * 0.5);
+      ctx.stroke();
+      ctx.fillStyle = mirror
+        ? 'rgba(5, 22, 17, 0.96)'
+        : `rgba(${Math.round(23 + tint * 15)}, ${Math.round(60 + tint * 24)}, ${Math.round(44 + tint * 17)}, 0.98)`;
+      if (needle) {
+        for (let i = 0; i < 3; i++) {
+          const w = tw * (1 - i * 0.26);
+          const by = y - dir * h * (0.3 + i * 0.2);
+          ctx.beginPath();
+          ctx.moveTo(x, by - dir * h * 0.26);
+          ctx.lineTo(x - w, by + dir * h * 0.07);
+          ctx.lineTo(x + w, by + dir * h * 0.07);
+          ctx.closePath();
+          ctx.fill();
+        }
+      } else {
+        const crownY = y - dir * h * 0.62;
+        ctx.beginPath();
+        ctx.ellipse(x, crownY, tw * 0.9, tw * 0.72, 0, 0, Math.PI * 2);
+        ctx.ellipse(x - tw * 0.5, crownY + dir * h * 0.06, tw * 0.55, tw * 0.46, 0, 0, Math.PI * 2);
+        ctx.ellipse(x + tw * 0.52, crownY + dir * h * 0.04, tw * 0.6, tw * 0.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (!mirror) {
+        ctx.strokeStyle = 'rgba(176, 236, 202, 0.2)';
+        ctx.lineWidth = Math.max(0.8, h * 0.018);
+        ctx.beginPath();
+        ctx.arc(x - tw * 0.18, y - h * 0.72, tw * 0.62, Math.PI * 1.02, Math.PI * 1.52);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    };
+
+    // ── 水下倒影：山影压暗岸边，再叠上树的镜像 ──
+    ctx.save();
+    this._waterPath(ctx, halfAt, horizon);
+    ctx.clip();
+
+    // 河心月光反光：分三层叠加，中心最亮、两侧柔和过渡
+    for (const [w, a] of [[0.62, 0.04], [0.48, 0.05], [0.34, 0.055]]) {
+      ctx.beginPath();
+      for (let i = 0; i <= 16; i++) ctx.lineTo(W / 2 - halfAt(i / 16) * w, yAt(i / 16));
+      for (let i = 16; i >= 0; i--) ctx.lineTo(W / 2 + halfAt(i / 16) * w, yAt(i / 16));
+      ctx.closePath();
+      const g = ctx.createLinearGradient(0, horizon, 0, H);
+      g.addColorStop(0, `rgba(150, 236, 214, ${a * 0.25})`);
+      g.addColorStop(0.55, `rgba(150, 236, 214, ${a * 1.6})`);
+      g.addColorStop(1, `rgba(150, 236, 214, ${a * 2.6})`);
+      ctx.fillStyle = g;
+      ctx.fill();
+    }
+
+    // 对岸树林的倒影带：内沿做成起伏的树线，否则只会读成一片阴影
+    for (const side of [-1, 1]) {
+      const N = 44;
+      ctx.beginPath();
+      for (let i = 0; i <= N; i++) {
+        const t = i / N;
+        ctx.lineTo(W / 2 + side * halfAt(t), yAt(t));
+      }
+      for (let i = N; i >= 0; i--) {
+        const t = i / N;
+        const s2 = scaleAt(t);
+        const jig = (Math.sin(t * 47) * 0.5 + Math.sin(t * 19 + 1.3) * 0.5) * W * 0.016 * s2;
+        ctx.lineTo(W / 2 + side * (halfAt(t) - W * 0.16 * s2 + jig), yAt(t));
+      }
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(7, 26, 20, 0.58)';
+      ctx.fill();
+    }
+
+    // 倒影：贴岸的竖条被水波切成错开的小段，才是水面的样子
+    for (const tr of trees) {
+      const s2 = tr.s;
+      const edge = W / 2 + tr.side * halfAt(tr.t);
+      const hgt = H * (0.085 + tr.h / H) * 0.95;
+      const wid = Math.max(2.2, H * 0.021 * s2);
+      const segs = 4;
+      const segH = hgt / segs;
+      const a0 = tr.row === 0 ? 0.5 : 0.34;
+      for (let i = 0; i < segs; i++) {
+        const a = a0 * (1 - i / (segs + 0.6));
+        const jitter = ((i % 2 ? 1 : -1) * wid * 0.16) + Math.sin(this.stats.distance * 3 + i * 1.7 + tr.t * 11) * wid * 0.12;
+        ctx.fillStyle = `rgba(4, 18, 13, ${a})`;
+        ctx.fillRect(edge - tr.side * wid * 0.5 + jitter, tr.y + i * segH, wid, Math.max(1.5, segH - 2.4));
+      }
+    }
+    ctx.restore();
+
+    for (const tr of trees) paintTree(tr, 1, false);
 
     // 水面反光
     const sheen = ctx.createLinearGradient(0, horizon, 0, H);
@@ -731,8 +907,8 @@ export class RunnerGame {
         ctx.lineTo(p.x + bw * 0.5, p.y);
         ctx.closePath();
         const rock = ctx.createLinearGradient(p.x, p.y - bh, p.x, p.y);
-        rock.addColorStop(0, '#7d8b83');
-        rock.addColorStop(0.55, '#5c6a63');
+        rock.addColorStop(0, '#5e6d66');
+        rock.addColorStop(0.55, '#46534d');
         rock.addColorStop(1, '#232d2a');
         ctx.fillStyle = rock;
         ctx.fill();
