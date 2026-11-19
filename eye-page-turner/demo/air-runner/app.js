@@ -100,12 +100,16 @@ const state = {
   handResults: null,
   camReady: false,
   cameraWanted: false,
+  camFailed: false, // 本次进入赛道期间摄像头起不来，保持鼠标兜底
   calib: { face: false, hand: false, dist: false, light: false },
   calibTimedOut: false,
   tutorial: { laneLeft: false, laneRight: false, jump: false, slide: false, shield: false },
   best: Number(localStorage.getItem(LS_BEST) || 0),
   lastStats: null,
   paused: false,
+  // menu = 前置阶段（splash/mode/calib/tutorial/settings/result），一律鼠标操作
+  // game = 已进入赛道，按 settings.mode 启用眼动 / 手势
+  inputStage: 'menu',
   gazeModel: null, // 9 点标定模型（null = 未标定，退回相对方向代理）
   __synthHand: null,
   fps: 0,
@@ -314,6 +318,7 @@ async function startCamera() {
     return true;
   } catch (err) {
     state.camReady = false;
+    state.camFailed = true;
     const text = ERR_TEXT[(err && err.code) || ''] || ERR_TEXT.ERR_UNKNOWN;
     chip('chipCam', '摄像头：不可用', 'bad');
     toast(text, 'bad');
@@ -333,6 +338,7 @@ function stopCamera() {
   camera = null;
   state.cameraWanted = false;
   state.camReady = false;
+  state.camFailed = false;
   state.faceResults = null;
   state.handResults = null;
   chip('chipCam', '摄像头：未启动');
@@ -445,14 +451,21 @@ function checkDistance() {
 }
 
 function paintCalib() {
+  const staged = state.inputStage === 'menu';
   const done = ['face', 'hand', 'dist', 'light'].filter((k) => state.calib[k]).length;
   const bar = $('#calibBar');
   if (bar) bar.style.width = `${(done / 4) * 100}%`;
   const btn = $('#btnCalibGo');
-  if (btn) btn.disabled = !((state.calib.face && state.calib.hand) || state.calibTimedOut);
+  // 菜单阶段还没开摄像头：直接放行，避免四项一直「检测中」变成新的卡点
+  if (btn) btn.disabled = staged ? false : !((state.calib.face && state.calib.hand) || state.calibTimedOut);
+  if (staged) {
+    ['chkFace', 'chkHand', 'chkDist', 'chkLight'].forEach((id) => setCheck(id, '', '开跑时检测'));
+  }
   const tip = $('#calibTip');
   if (tip) {
-    if (!state.calib.face) tip.textContent = '请正对镜头，把脸放在虚线椭圆里。';
+    if (staged) {
+      tip.textContent = '这一阶段用鼠标操作。摄像头会在开跑时启动，直接点「继续」或「跳过检测」即可。';
+    } else if (!state.calib.face) tip.textContent = '请正对镜头，把脸放在虚线椭圆里。';
     else if (!state.calib.hand) tip.textContent = '很好，现在把手举到画面可见范围内（挥一下手）。';
     else if (!state.calib.dist) tip.textContent = '距离有点不对，前后微调一点。';
     else if (!state.calib.light) tip.textContent = '光线偏暗或过曝，调一下灯或换个位置。';
@@ -464,9 +477,9 @@ function paintCalib() {
 
 function setMode(mode, { silent = false } = {}) {
   state.mode = mode;
-  state.settings.mode = mode;
-  saveSettings();
-  $$('.card[data-mode]').forEach((c) => c.classList.toggle('picked', c.dataset.mode === mode));
+  // 高亮跟随「游戏内目标模式」，而不是当前生效模式：菜单阶段生效模式恒为 mouse
+  const target = state.settings.mode || 'dual';
+  $$('.card[data-mode]').forEach((c) => c.classList.toggle('picked', c.dataset.mode === target));
   const needCam = mode === 'dual' || mode === 'gaze' || mode === 'hand';
   chip('chipMode', `模式：${{ dual: '双模态', gaze: '纯眼动', hand: '纯手势', mouse: '鼠标键盘' }[mode]}`);
   chip('chipInput', `输入：${{ dual: '眼神 + 手势', gaze: '眼神', hand: '手势', mouse: '鼠标' }[mode]}`);
@@ -478,8 +491,14 @@ function setMode(mode, { silent = false } = {}) {
   }
   document.body.classList.toggle('show-native-cursor', mode === 'mouse');
 
-  // 自动演示不需要摄像头：避免 sim 演示还弹一次权限框，也避免无摄像头时被降级成鼠标模式
-  if (needCam && !params.has('nocam') && !sim.active && !state.cameraWanted) {
+  // 只有真正进入赛道后才会启动摄像头；前置阶段一律鼠标
+  if (
+    needCam &&
+    state.inputStage === 'game' &&
+    !params.has('nocam') &&
+    !sim.active &&
+    !state.cameraWanted
+  ) {
     startCamera();
   }
   if (!silent) toast(`已选择「${{ dual: '双模态', gaze: '只用眼睛', hand: '只手不眨眼', mouse: '鼠标 / 键盘' }[mode]}」`, 'ok');
@@ -1141,7 +1160,9 @@ function frame(now) {
   if (st.changed && st.state === HandState.FIST) onFistEnter();
 
   // ---- 屏幕分发
-  if (router.current === 'tutorial') {
+  const inGameStage = state.inputStage === 'game';
+  const liveInput = inGameStage || sim.active; // sim 自动演示需要走同一套分发
+  if (router.current === 'tutorial' && liveInput) {
     gazeZone.setEnabled(true);
     gazeZone.update(state.cursor, now);
   } else if (router.current === 'game' && game) {
@@ -1154,13 +1175,20 @@ function frame(now) {
     clearZones();
   }
 
-  // ---- 视线停留点击（所有屏幕；隐藏屏幕的按钮已被可见性过滤掉）
-  // 标定屏例外：标定中不许任何停留点击触发，避免误按"取消/重做"
-  dwell.setEnabled(state.settings.dwellNav === 'on' && state.mode !== 'sim' && !calibrating);
+  // ---- 视线停留点击：只在游戏内、且当前不是鼠标模式时开启
+  // 前置阶段（首页/选模式/就位/教学/设置/结算）一律鼠标直接点击
+  dwell.setEnabled(
+    router.current === 'game' &&
+      inGameStage &&
+      state.settings.dwellNav === 'on' &&
+      !sim.active &&
+      state.mode !== 'mouse' &&
+      !calibrating
+  );
   dwell.update(state.cursor, now, state.cursorSpeed);
 
-  // ---- 就位检测
-  if (router.current === 'calib') {
+  // ---- 就位检测（仅开跑后、摄像头已启动时有意义）
+  if (router.current === 'calib' && liveInput) {
     if (!calibStartedAt) calibStartedAt = now;
     if (now - lastDistCheck > 300) {
       lastDistCheck = now;
@@ -1210,15 +1238,41 @@ function updateHud(now) {
 /* ------------------------------------------------------------------ 关卡流程 */
 
 function pickMode(mode) {
-  setMode(mode);
+  // 只记录「游戏内目标模式」，前置阶段仍然是鼠标操作，摄像头到开跑时才启动
+  state.settings.mode = mode;
+  saveSettings();
+  state.inputStage = 'menu';
+  setMode('mouse', { silent: true });
+  const label = { dual: '双模态', gaze: '只用眼睛', hand: '只手不眨眼', mouse: '鼠标 / 键盘' }[mode];
+  toast(`已选「${label}」：现在用鼠标，进入赛道后生效`, 'ok');
   router.go('calib');
   calibStartedAt = 0;
-  const el = $('#camPreview');
-  if (el) el.classList.add('show', 'large');
 }
 
-function forceCalibPass() {
-  state.calib = { face: true, hand: true, dist: true, light: true };
+/**
+ * 进入赛道前调用：把生效模式切到玩家在 mode 页选的目标模式，
+ * 需要摄像头时此刻才启动（倒计时期间完成授权与模型加载）。
+ */
+function activateGameInput() {
+  state.inputStage = 'game';
+  const desired = sim.active ? 'dual' : state.settings.mode || 'dual';
+  // 摄像头这次已经起不来就别反复拉权限，直接鼠标兜底
+  const target = state.camFailed && desired !== 'mouse' ? 'mouse' : desired;
+  const willStartCam =
+    target !== 'mouse' && !params.has('nocam') && !sim.active && !state.cameraWanted;
+  setMode(target, { silent: true });
+  if (willStartCam) toast('正在启动摄像头，倒计时结束前会就绪', 'ok');
+}
+
+/** 回到菜单：切回纯鼠标并关闭摄像头 */
+function exitToMenu() {
+  state.inputStage = 'menu';
+  setMode('mouse', { silent: true });
+  stopCamera();
+  paintCalib();
+}
+
+function forceCalibPass() {  state.calib = { face: true, hand: true, dist: true, light: true };
   setCheck('chkFace', 'on', '已检测到');
   setCheck('chkHand', 'on', '已检测到');
   setCheck('chkDist', 'on', '合适');
@@ -1227,6 +1281,7 @@ function forceCalibPass() {
 }
 
 async function runCountdown() {
+  activateGameInput(); // 此刻才启用眼动 / 手势并请求摄像头，倒数期间就绪
   const num = $('#countNum');
   const tip = $('#countTip');
   if (tip) tip.textContent = state.mode === 'dual' ? '握拳开护盾 · 眼睛看向要去的车道' : '眼睛看向要去的车道';
@@ -1245,6 +1300,7 @@ async function runCountdown() {
 }
 
 function beginRun() {
+  activateGameInput();
   const canvas = $('#gameCanvas');
   if (!canvas) return;
   if (!game) {
@@ -1340,6 +1396,7 @@ function onGameEnd(stats) {
   set('resBest', stats.score >= state.best ? `新纪录！最高分 ${state.best}` : `最高分：${state.best}`);
   game.stop();
   router.replace('result');
+  exitToMenu(); // 结算页属于前置阶段：回到纯鼠标，并关闭摄像头
   beep(420, 200);
 }
 
@@ -1463,11 +1520,14 @@ function simGaze(x, ms) {
 
 function simWipe(dir) {
   sim.anim = { kind: 'wipe', dir, x: 0.55, start: performance.now(), dur: 900 };
+  // 演示不依赖检测器是否达标：动画照放，动作显式派发，保证教学四项稳定打勾
+  setTimeout(() => dispatchWipe(dir, performance.now()), 180);
   return wait(1000);
 }
 
 function simFist() {
   sim.anim = { kind: 'fist', start: performance.now(), dur: 1100 };
+  setTimeout(() => onFistEnter(), 400);
   return wait(1200);
 }
 
@@ -1537,6 +1597,7 @@ const ACTIONS = {
       game.reset();
     }
     hidePause();
+    exitToMenu();
     router.replace('splash');
   },
   back: () => router.back(),
@@ -1558,6 +1619,11 @@ const ACTIONS = {
     paintTutorial();
     router.go('countdown');
     runCountdown();
+  },
+  // 教学页用鼠标 / 键盘完成，不依赖眼动
+  'tutorial-step': (el) => {
+    const map = { left: 'laneLeft', right: 'laneRight', jump: 'jump', slide: 'slide', shield: 'shield' };
+    markStep(map[el.dataset.do]);
   },
   pause: () => pauseGame(),
   resume: () => resumeGame(),
@@ -1715,7 +1781,10 @@ export function boot() {
     if (document.hidden && router.current === 'game' && !state.paused) pauseGame();
   });
 
-  setMode(forcedMode && forcedMode !== 'sim' ? forcedMode : state.settings.mode || 'dual', { silent: true });
+  // URL 只覆盖「游戏内目标模式」；前置阶段一律鼠标，摄像头到开跑时才启动
+  if (forcedMode && forcedMode !== 'sim') state.settings.mode = forcedMode;
+  state.inputStage = 'menu';
+  setMode('mouse', { silent: true });
 
   // 载入已保存的 9 点标定模型
   state.gazeModel = loadGazeModel();

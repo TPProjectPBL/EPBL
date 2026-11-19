@@ -123,42 +123,49 @@
 <!-- ============ 4. 教学 ============ -->
 <section class="screen" data-screen="tutorial">
   <div class="screen-head">
-    <h2>三步上手 <small>完成下面四项即可发车，约 10 秒</small></h2>
-    <p id="tutorialHint">跟着做一遍，四项都打勾就进赛道。</p>
+    <h2>三步上手 <small>点按钮或按键盘，约 10 秒</small></h2>
+    <p id="tutorialHint">这一阶段用鼠标 / 键盘完成，四项都打勾就可以开跑。</p>
   </div>
   <div class="steps">
     <div class="step" data-step="lane">
       <div class="step-icon">👀</div>
-      <h3>看向左边，再看右边</h3>
-      <p>视线落到画面左 / 右区域，停一下就会变道</p>
+      <h3>先学会变道</h3>
+      <p>开跑后视线落到左 / 右区域就会变道；现在先用按钮或 ← → 熟悉</p>
+      <div class="step-act">
+        <button class="btn mini" data-action="tutorial-step" data-do="left">← 左</button>
+        <button class="btn mini" data-action="tutorial-step" data-do="right">右 →</button>
+      </div>
       <div class="step-live"><span class="dot"></span><em id="liveLane">等待视线…</em></div>
       <div class="done">✓ 已完成</div>
     </div>
     <div class="step" data-step="jump">
       <div class="step-icon">✋</div>
-      <h3>手掌向上挥一下</h3>
-      <p>手从下往上挥过，角色起跳越过低栏</p>
+      <h3>跳过倒木</h3>
+      <p>开跑后手掌向上挥；现在按 ↑ / 空格，或点下面按钮</p>
+      <div class="step-act"><button class="btn mini" data-action="tutorial-step" data-do="jump">跳一下</button></div>
       <div class="step-live"><span class="dot"></span><em id="liveJump">等待挥手…</em></div>
       <div class="done">✓ 已完成</div>
     </div>
     <div class="step" data-step="slide">
       <div class="step-icon">👇</div>
-      <h3>手掌向下挥一下</h3>
-      <p>手从上往下挥过，角色滑铲穿过横杆</p>
+      <h3>滑过树枝</h3>
+      <p>开跑后手掌向下挥；现在按 ↓，或点下面按钮</p>
+      <div class="step-act"><button class="btn mini" data-action="tutorial-step" data-do="slide">滑铲</button></div>
       <div class="step-live"><span class="dot"></span><em id="liveSlide">等待挥手…</em></div>
       <div class="done">✓ 已完成</div>
     </div>
     <div class="step" data-step="shield">
       <div class="step-icon">✊</div>
-      <h3>握拳保持一下</h3>
-      <p>握拳展开护盾，能硬吃一次撞击</p>
+      <h3>展开护盾</h3>
+      <p>开跑后握拳保持一下；现在按 F，或点下面按钮</p>
+      <div class="step-act"><button class="btn mini" data-action="tutorial-step" data-do="shield">护盾</button></div>
       <div class="step-live"><span class="dot"></span><em id="liveShield">等待握拳…</em></div>
       <div class="done">✓ 已完成</div>
     </div>
   </div>
   <div class="actions center">
-    <button class="btn primary" id="btnTutorialGo" data-dwell data-action="tutorial-done" disabled>进入赛道</button>
-    <button class="btn" data-dwell data-action="tutorial-skip">跳过教学</button>
+    <button class="btn primary" id="btnTutorialGo" data-action="tutorial-done" disabled>进入赛道</button>
+    <button class="btn" data-action="tutorial-skip">跳过教学</button>
   </div>
 </section>
 
