@@ -15,7 +15,7 @@
   <div class="brand">星际跑酷 <span>AIR RUNNER</span></div>
   <div class="chips">
     <span class="chip" id="chipMode">模式：--</span>
-    <span class="chip" id="chipCam">摄像头：未启动</span>
+    <button class="chip chip-btn" id="chipCam" data-action="retry-camera" title="摄像头未就绪时可点此重试">摄像头：未启动</button>
     <span class="chip" id="chipInput">输入：--</span>
     <span class="chip" id="chipFps">FPS：--</span>
   </div>
@@ -366,6 +366,7 @@
     <p class="sub" id="pauseSub">放松一下，想继续就继续</p>
     <div class="actions center">
       <button class="btn primary" data-dwell data-action="resume">继续</button>
+      <button class="btn" data-dwell data-action="retry-camera">重试摄像头</button>
       <button class="btn" data-dwell data-action="play-again">重新开始</button>
       <button class="btn" data-dwell data-action="to-settings">设置</button>
       <button class="btn ghost" data-dwell data-action="to-splash">返回主菜单</button>

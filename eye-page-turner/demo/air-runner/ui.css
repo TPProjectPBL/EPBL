@@ -81,6 +81,9 @@ body.show-native-cursor .cursor { display: none; }
   border: 1px solid var(--line); background: rgba(10, 26, 22, 0.7); white-space: nowrap;
 }
 .chip.ok { color: var(--ok); border-color: rgba(99, 230, 168, 0.4); }
+.chip-btn { font-family: inherit; cursor: pointer; transition: border-color .2s, color .2s; }
+.chip-btn:hover { color: var(--txt); border-color: var(--line-strong); }
+.chip-btn.bad:hover { color: var(--bad); border-color: var(--bad); }
 .chip.warn { color: var(--warn); border-color: rgba(255, 200, 97, 0.4); }
 .chip.bad { color: var(--bad); border-color: rgba(255, 115, 144, 0.4); }
 
@@ -91,9 +94,11 @@ body.show-native-cursor .cursor { display: none; }
   width: 260px; height: 195px; border-radius: 14px; overflow: hidden;
   border: 1px solid var(--line-strong); background: #050f0c;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
-  opacity: 0; visibility: hidden; transition: opacity .3s, visibility .3s, width .3s, height .3s;
+  /* 用 opacity 而不是 visibility/display 隐藏：video 一旦不可渲染，
+     浏览器就不给 MediaPipe 送帧，视线会整局失效 */
+  opacity: 0; pointer-events: none; transition: opacity .3s, width .3s, height .3s;
 }
-.cam-preview.show { opacity: 1; visibility: visible; }
+.cam-preview.show { opacity: 1; pointer-events: auto; }
 .cam-preview.large { width: 38vw; height: 28.5vw; max-width: 520px; max-height: 390px; left: 5vw; top: 50%; transform: translateY(-50%); }
 .cam-preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); display: block; }
 .cam-overlay { position: absolute; inset: 0; }
@@ -573,7 +578,10 @@ body[data-screen="game"] .chipbar { opacity: 0.52; transition: opacity .25s; }
   .result-card { padding: 24px 16px 20px; }
   .big-score { font-size: 52px; }
   .zone { width: 84px; height: 40px; }
-  body[data-screen="game"] .cam-preview.show { display: none !important; }
+  body[data-screen="game"] .cam-preview.show {
+    /* 保留渲染、只做视觉弱化：display:none 会让 video 停止出帧，眼动随之失效 */
+    width: 84px; height: 63px; opacity: .55;
+  }
 }
 
 /* 低高度（720p 投影 / 小笔电）：压缩纵向间距，首屏不滚动 */

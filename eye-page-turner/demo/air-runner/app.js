@@ -100,6 +100,7 @@ const state = {
   handResults: null,
   camReady: false,
   cameraWanted: false,
+  trackReady: false, // 摄像头启动后是否已经真正推过帧（首帧推理完成）
   camFailed: false, // 本次进入赛道期间摄像头起不来，保持鼠标兜底
   calib: { face: false, hand: false, dist: false, light: false },
   calibTimedOut: false,
@@ -264,22 +265,33 @@ function currentFace() {
   return f && f.multiFaceLandmarks && f.multiFaceLandmarks.length ? f.multiFaceLandmarks[0] : null;
 }
 
-async function startCamera() {
-  if (state.cameraWanted) return true;
-  state.cameraWanted = true;
-  chip('chipCam', '摄像头：启动中…', 'warn');
+/** 摄像头状态芯片：运行中时带上「脸 / 手」是否检测到的实时标记，
+ *  这样"摄像头亮着但识别不到脸"能一眼看出来，而不是只能干猜。 */
+let camChipMemo = '';
+function paintCamChip() {
+  if (!state.camReady) return;
+  const faceOk = !!currentFace();
+  const handOk = !!currentHand();
+  const text = `摄像头：运行中${faceOk ? ' · 脸✓' : ' · 未检测到脸'}${handOk ? ' · 手✓' : ''}`;
+  if (text === camChipMemo) return;
+  camChipMemo = text;
+  chip('chipCam', text, faceOk ? 'ok' : 'warn');
+}
 
-  const video = $('#video');
-  try {
+/** 创建检测器（只做实例化，不碰摄像头）。重试时复用同一份实例，避免反复加载模型。 */
+function ensureDetectors() {
+  if (!face) {
     face = new FaceMeshDetector({
       onResults: (r) => {
         state.faceResults = r;
+        state.trackReady = true;
         updateCalib('face', !!currentFace());
         drawBox('boxFace', currentFace());
-        chip('chipCam', `摄像头：运行中${currentHand() ? ' · 手✓' : ''}`, 'ok');
+        paintCamChip();
       },
     }).init();
-
+  }
+  if (!hands) {
     hands = new HandDetector({
       maxNumHands: 1,
       onResults: (r) => {
@@ -287,8 +299,27 @@ async function startCamera() {
         const lm = currentHand();
         updateCalib('hand', !!lm);
         drawBox('boxHand', lm);
+        paintCamChip();
       },
     }).init();
+  }
+}
+
+/**
+ * 启动摄像头。失败时必须放开 cameraWanted，否则后续 retryCamera 会被直接挡掉。
+ * 成功只代表 getUserMedia 通了；模型是否真的出帧由 state.trackReady 表示。
+ */
+async function startCamera() {
+  if (state.cameraWanted) return state.camReady;
+  state.cameraWanted = true;
+  state.camFailed = false;
+  state.trackReady = false;
+  camChipMemo = '';
+  chip('chipCam', '摄像头：启动中…', 'warn');
+
+  const video = $('#video');
+  try {
+    ensureDetectors();
 
     let busy = false;
     let tick = 0;
@@ -313,18 +344,59 @@ async function startCamera() {
 
     await camera.start();
     state.camReady = true;
-    chip('chipCam', '摄像头：运行中', 'ok');
+    state.camFailed = false;
+    camChipMemo = '';
+    paintCamChip();
+    if (!camChipMemo) chip('chipCam', '摄像头：运行中 · 未检测到脸', 'warn');
+    paintCamPreview();
     $('#camLabel') && ($('#camLabel').textContent = '摄像头预览');
+    // 摄像头通了但模型一直不出帧（网络/WASM 问题）时，给出明确诊断而不是静默失效
+    setTimeout(() => {
+      if (state.cameraWanted && state.camReady && !state.trackReady) {
+        chip('chipCam', '摄像头：运行中 · 模型未出帧（检查网络或刷新）', 'bad');
+      }
+    }, 6000);
     return true;
   } catch (err) {
     state.camReady = false;
     state.camFailed = true;
+    // 关键：失败必须把 cameraWanted 放回去，否则整局（乃至整次会话）都再也不会重试
+    state.cameraWanted = false;
     const text = ERR_TEXT[(err && err.code) || ''] || ERR_TEXT.ERR_UNKNOWN;
-    chip('chipCam', '摄像头：不可用', 'bad');
-    toast(text, 'bad');
+    chip('chipCam', '摄像头：不可用（可点此重试）', 'bad');
+    toast(`${text} · 点右上角「摄像头」可重试`, 'bad');
     setMode('mouse', { silent: true });
     return false;
   }
+}
+
+/** 手动重试摄像头（暂停菜单 / 右上角芯片都能触发） */
+async function retryCamera() {
+  if (state.inputStage !== 'game') {
+    toast('进入赛道后才会启动摄像头', 'bad');
+    return false;
+  }
+  const desired = sim.active ? 'dual' : state.settings.mode || 'dual';
+  if (params.has('nocam')) {
+    toast('当前用 ?nocam=1 禁用了摄像头，去掉该参数再试', 'bad');
+    return false;
+  }
+  if (desired === 'mouse') {
+    toast('当前是「鼠标 / 键盘」模式，不需要摄像头', 'bad');
+    return false;
+  }
+  if (state.cameraWanted && !state.camReady && !state.camFailed) {
+    toast('摄像头正在启动中，请稍候');
+    return false;
+  }
+  if (state.camReady) toast('摄像头已在运行，正在重新连接…');
+  stopCamera(); // 清掉 camFailed / cameraWanted / 旧实例
+  const ok = await startCamera();
+  if (ok) {
+    if (state.inputStage === 'game') setMode(desired, { silent: true });
+    toast('摄像头已就绪，视线控制恢复', 'ok');
+  }
+  return ok;
 }
 
 function stopCamera() {
@@ -341,6 +413,8 @@ function stopCamera() {
   state.camFailed = false;
   state.faceResults = null;
   state.handResults = null;
+  state.trackReady = false;
+  camChipMemo = '';
   chip('chipCam', '摄像头：未启动');
 }
 
@@ -1280,11 +1354,52 @@ function forceCalibPass() {  state.calib = { face: true, hand: true, dist: true,
   paintCalib();
 }
 
+/**
+ * 等摄像头就绪（成功 / 失败 / 超时都算结束）。
+ * 没有这一步的话，模型或权限慢一点就会出现「游戏已经开始了，视线却毫无反应」。
+ */
+function waitForCameraReady(ms = 5000) {
+  return new Promise((resolve) => {
+    const t0 = performance.now();
+    const tick = () => {
+      // 只等 getUserMedia 不够：MediaPipe 首帧推理还要一会儿，
+      // 必须等真的推过一帧，否则开跑头几秒视线仍然没反应
+      if (state.camReady && state.trackReady) return resolve(true);
+      if (state.camFailed) return resolve(false);
+      if (performance.now() - t0 > ms) return resolve(false);
+      setTimeout(tick, 80);
+    };
+    tick();
+  });
+}
+
 async function runCountdown() {
   activateGameInput(); // 此刻才启用眼动 / 手势并请求摄像头，倒数期间就绪
   const num = $('#countNum');
   const tip = $('#countTip');
-  if (tip) tip.textContent = state.mode === 'dual' ? '握拳开护盾 · 眼睛看向要去的车道' : '眼睛看向要去的车道';
+
+  if (state.cameraWanted) {
+    if (num) num.textContent = '…';
+    if (tip) tip.textContent = '正在启动摄像头，稍等一下…';
+    const ok = await waitForCameraReady(5000);
+    if (router.current !== 'countdown') return; // 用户中途退出
+    if (tip && state.camFailed) {
+      tip.textContent = '摄像头未就绪：本局用鼠标键盘，点右上角「摄像头」可重试';
+    } else if (tip && !ok) {
+      tip.textContent = '模型还在加载，前几秒视线可能没反应（芯片会显示是否识别到脸）';
+    }
+  }
+  // 鼠标模式（不启动摄像头）或摄像头已出帧：按当前模式给操作提示
+  if (tip && !state.camFailed && (!state.cameraWanted || state.trackReady)) {
+    tip.textContent =
+      state.mode === 'mouse'
+        ? '← → 变道 · ↑ 跳 · ↓ 滑铲 · F 护盾'
+        : state.mode === 'hand'
+          ? '挥手变道 · 上挥跳 · 下挥滑铲'
+          : state.mode === 'dual'
+            ? '握拳开护盾 · 眼睛看向要去的车道'
+            : '眼睛看向要去的车道';
+  }
   for (const n of ['3', '2', '1', 'GO']) {
     if (num) {
       num.textContent = n;
@@ -1600,6 +1715,7 @@ const ACTIONS = {
     exitToMenu();
     router.replace('splash');
   },
+  'retry-camera': () => retryCamera(),
   back: () => router.back(),
   'pick-mode': (el) => pickMode(el.dataset.mode),
   'calib-done': () => router.go('tutorial'),
@@ -1730,15 +1846,22 @@ function onMouseMove(e) {
   state.cursorSpeed = 0;
 }
 
+/**
+ * 摄像头预览的显隐。摄像头可能比屏幕切换更晚就绪（开跑才启动），
+ * 所以启动成功后必须再算一次，否则预览框一直不 show。
+ */
+function paintCamPreview(name = router && router.current) {
+  const preview = $('#camPreview');
+  if (!preview) return;
+  const showCam = (name === 'calib' || name === 'game' || name === 'tutorial' || name === 'gazeCalib') && state.camReady;
+  preview.classList.toggle('show', showCam);
+  preview.classList.toggle('large', name === 'calib');
+}
+
 function onScreenEnter(name, payload, prev) {
   state.screen = name;
   document.body.dataset.screen = name; // 供 CSS 按当前屏幕调整全局层（如游戏内缩小摄像头预览）
-  const preview = $('#camPreview');
-  if (preview) {
-    const showCam = (name === 'calib' || name === 'game' || name === 'tutorial' || name === 'gazeCalib') && state.camReady;
-    preview.classList.toggle('show', showCam);
-    preview.classList.toggle('large', name === 'calib');
-  }
+  paintCamPreview(name);
   if (name === 'settings') syncSettingsUi();
   if (name === 'gazeCalib') paintGazeCalib(0);
   if (name === 'result') clearZones();
