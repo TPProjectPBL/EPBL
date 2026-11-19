@@ -218,7 +218,7 @@ export class RunnerGame {
 
     // 速度随里程提升；难度系数放大
     const diffK = this.difficulty === 'hard' ? 1.35 : this.difficulty === 'easy' ? 0.78 : 1;
-    this.speed = (0.52 + Math.min(0.55, this.stats.distance / 900)) * diffK;
+    this.speed = (0.5 + Math.min(0.42, this.stats.distance / 1100)) * diffK;
     this.stats.distance += this.speed * dt;
     this.stats.meters = Math.floor(this.stats.distance * 26);
 
@@ -230,8 +230,8 @@ export class RunnerGame {
     // 生成障碍：基础间隔拉长，并设下限，避免连续贴脸
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0) {
-      const gapBase = 1.32 - Math.min(0.42, this.stats.distance / 1500);
-      this.spawnTimer = clamp(gapBase / diffK, 0.66, 1.7) * rand(0.92, 1.16);
+      const gapBase = 1.55 - Math.min(0.5, this.stats.distance / 1600);
+      this.spawnTimer = clamp(gapBase / diffK, 0.85, 1.9) * rand(0.95, 1.15);
       this._spawn();
     }
 
@@ -505,6 +505,40 @@ export class RunnerGame {
       ctx.fill();
     }
 
+    // 水面涟漪：缓慢扩散的椭圆光弧
+    for (let k = 0; k < 4; k++) {
+      const t = 1 - ((k * 0.26 + this.stats.distance * 0.55) % 1);
+      if (t < 0.14 || t > 0.94) continue;
+      const s = scaleAt(t);
+      const y = yAt(t);
+      const half = halfAt(t);
+      const cx = W / 2 + Math.sin(k * 2.1 + this.stats.distance * 0.4) * half * 0.22;
+      const a0 = Math.PI + k * 0.5;
+      ctx.strokeStyle = `rgba(176, 240, 220, ${0.02 + 0.035 * s})`;
+      ctx.lineWidth = Math.max(0.8, 2.6 * s);
+      ctx.beginPath();
+      ctx.ellipse(cx, y, half * (0.42 + (k % 3) * 0.1), Math.max(1.2, H * 0.008 * s), 0, a0, a0 + Math.PI * 0.72);
+      ctx.stroke();
+    }
+
+    // 漂浮落叶：随水流向近处漂，带自转
+    for (let k = 0; k < 12; k++) {
+      const t = 1 - ((k * 0.37 + this.stats.distance * 1.3) % 1);
+      if (t < 0.06 || t > 0.94) continue;
+      const s = scaleAt(t);
+      const y = yAt(t);
+      const half = halfAt(t);
+      const x = W / 2 + ((((k * 53) % 100) / 100 - 0.5) * half * 1.3);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(k * 1.7 + this.stats.distance * 0.6);
+      ctx.fillStyle = `rgba(198, 170, 100, ${0.12 + 0.32 * s})`;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, Math.max(1, 5 * s), Math.max(0.6, 2.2 * s), 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
     // 河岸草丛：贴边生长，随里程滚动
     const bankPhase = (this.stats.distance * 3.4) % 1;
     for (const side of [-1, 1]) {
@@ -527,6 +561,39 @@ export class RunnerGame {
           ctx.quadraticCurveTo(bx + lean * 0.4, y - gh * 0.6, bx + lean, y - gh);
           ctx.stroke();
         }
+        // 芦苇穗
+        ctx.fillStyle = `rgba(152, 186, 122, ${0.1 + 0.3 * s})`;
+        ctx.beginPath();
+        ctx.ellipse(
+          baseX + Math.sin(k * 1.7) * cw,
+          y - gh * 0.98,
+          Math.max(0.7, 1.8 * s),
+          Math.max(1.1, 3.6 * s),
+          0.28,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+      }
+    }
+
+    // 岸边石块：贴岸分布，压实河岸
+    for (const side of [-1, 1]) {
+      for (let k = 0; k < 9; k++) {
+        const t = 1 - ((k * 0.83 + this.stats.distance * 2.6) % 1);
+        if (t < 0.06 || t > 0.95) continue;
+        const s = scaleAt(t);
+        const y = yAt(t);
+        const edge = W / 2 + side * halfAt(t);
+        const cx = edge + side * W * (0.018 + ((k * 7) % 5) * 0.006) * s;
+        ctx.fillStyle = `rgba(96, 110, 102, ${0.18 + 0.38 * s})`;
+        ctx.beginPath();
+        ctx.ellipse(cx, y, W * 0.016 * s, W * 0.006 * s, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = `rgba(94, 150, 106, ${0.1 + 0.24 * s})`;
+        ctx.beginPath();
+        ctx.ellipse(cx, y - W * 0.002 * s, W * 0.01 * s, W * 0.003 * s, 0, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
 
