@@ -1094,193 +1094,245 @@ export class RunnerGame {
     const x = W / 2 + off * W * 0.3;
 
     let y = baseY;
-    let squash = 1;
+    let lift = 0;
+    const sliding = this.sliding(now);
     if (this.jumping(now)) {
       const k = 1 - (this.jumpUntil - now) / this.jumpMs; // 0→1
-      y = baseY - Math.sin(Math.PI * k) * H * 0.17;
-    } else if (this.sliding(now)) {
-      squash = 0.45;
-      y = baseY + H * 0.02;
+      lift = Math.sin(Math.PI * k) * H * 0.17;
+      y = baseY - lift;
+    } else if (sliding) {
+      y = baseY + H * 0.015;
     }
 
-    const w = W * 0.092;
-    const h = H * 0.045 * squash;
+    // 俯视整条小船：船头朝上，中后段近乎平行，船尾方角，舱口敞开
+    const w = W * 0.065 * (sliding ? 1.12 : 1) * (1 + lift / (H * 5));
+    const L = w * (sliding ? 2.5 : 3.4);
+    const cy = y - L * 0.3;
+    const ty = cy - L * 0.52; // 船头
+    const by = cy + L * 0.48; // 船尾
 
-    // 船尾水痕
-    const trail = ctx.createLinearGradient(x, y - h * 2.4, x, y);
-    trail.addColorStop(0, 'rgba(182, 246, 231, 0)');
-    trail.addColorStop(1, 'rgba(182, 246, 231, 0.2)');
-    ctx.fillStyle = trail;
+    const hull = () => {
+      ctx.beginPath();
+      ctx.moveTo(x, ty);
+      ctx.bezierCurveTo(x + w * 0.09, ty + L * 0.1, x + w * 0.33, ty + L * 0.17, x + w * 0.45, ty + L * 0.29);
+      ctx.bezierCurveTo(x + w * 0.5, ty + L * 0.4, x + w * 0.5, cy + L * 0.1, x + w * 0.48, by - L * 0.05);
+      ctx.quadraticCurveTo(x + w * 0.46, by, x + w * 0.34, by);
+      ctx.lineTo(x - w * 0.34, by);
+      ctx.quadraticCurveTo(x - w * 0.46, by, x - w * 0.48, by - L * 0.05);
+      ctx.bezierCurveTo(x - w * 0.5, cy + L * 0.1, x - w * 0.5, ty + L * 0.4, x - w * 0.45, ty + L * 0.29);
+      ctx.bezierCurveTo(x - w * 0.33, ty + L * 0.17, x - w * 0.09, ty + L * 0.1, x, ty);
+      ctx.closePath();
+    };
+
+    // 舱口：舷边以内那一圈，船中后段基本等宽
+    const inner = () => {
+      ctx.beginPath();
+      ctx.moveTo(x, ty + L * 0.175);
+      ctx.bezierCurveTo(x + w * 0.07, ty + L * 0.222, x + w * 0.255, ty + L * 0.282, x + w * 0.335, ty + L * 0.378);
+      ctx.bezierCurveTo(x + w * 0.378, ty + L * 0.47, x + w * 0.378, cy + L * 0.1, x + w * 0.355, by - L * 0.1);
+      ctx.quadraticCurveTo(x + w * 0.34, by - L * 0.055, x + w * 0.245, by - L * 0.055);
+      ctx.lineTo(x - w * 0.245, by - L * 0.055);
+      ctx.quadraticCurveTo(x - w * 0.34, by - L * 0.055, x - w * 0.355, by - L * 0.1);
+      ctx.bezierCurveTo(x - w * 0.378, cy + L * 0.1, x - w * 0.378, ty + L * 0.47, x - w * 0.335, ty + L * 0.378);
+      ctx.bezierCurveTo(x - w * 0.255, ty + L * 0.282, x - w * 0.07, ty + L * 0.222, x, ty + L * 0.175);
+      ctx.closePath();
+    };
+
+    // 尾流：船尾往后拖出的两道白痕
+    const wake = ctx.createLinearGradient(x, by, x, by + L * 0.52);
+    wake.addColorStop(0, 'rgba(198, 246, 236, 0.18)');
+    wake.addColorStop(1, 'rgba(198, 246, 236, 0)');
+    ctx.fillStyle = wake;
     ctx.beginPath();
-    ctx.moveTo(x - w * 0.2, y - h * 2.4);
-    ctx.lineTo(x + w * 0.2, y - h * 2.4);
-    ctx.lineTo(x + w * 0.42, y);
-    ctx.lineTo(x - w * 0.42, y);
+    ctx.moveTo(x - w * 0.28, by - L * 0.03);
+    ctx.lineTo(x + w * 0.28, by - L * 0.03);
+    ctx.lineTo(x + w * 0.86, by + L * 0.52);
+    ctx.lineTo(x - w * 0.86, by + L * 0.52);
     ctx.closePath();
     ctx.fill();
 
-    // 乌篷木船：船头朝上，中段拱篷，篷下透暖光
-    const hullPath = () => {
-      ctx.beginPath();
-      ctx.moveTo(x - w * 0.23, y - h * 3.56);
-      ctx.quadraticCurveTo(x, y - h * 3.76, x + w * 0.23, y - h * 3.56);
-      ctx.bezierCurveTo(x + w * 0.3, y - h * 2.8, x + w * 0.38, y - h * 1.4, x + w * 0.34, y + h * 0.18);
-      ctx.quadraticCurveTo(x + w * 0.28, y + h * 0.5, x, y + h * 0.5);
-      ctx.quadraticCurveTo(x - w * 0.28, y + h * 0.5, x - w * 0.34, y + h * 0.18);
-      ctx.bezierCurveTo(x - w * 0.38, y - h * 1.4, x - w * 0.3, y - h * 2.8, x - w * 0.23, y - h * 3.56);
-      ctx.closePath();
-    };
-
-    // 篷下的暖光落到水面上
-    const spill = ctx.createRadialGradient(x, y - h * 1.1, h * 0.4, x, y - h * 1.1, h * 3.4);
-    spill.addColorStop(0, 'rgba(255, 178, 98, 0.16)');
-    spill.addColorStop(1, 'rgba(255, 178, 98, 0)');
-    ctx.fillStyle = spill;
-    ctx.fillRect(x - h * 3.4, y - h * 4.5, h * 6.8, h * 6.8);
-
-    const hull = ctx.createLinearGradient(x, y - h * 3.92, x, y + h * 0.5);
-    hull.addColorStop(0, '#b3814e');
-    hull.addColorStop(0.42, '#8d5c32');
-    hull.addColorStop(1, '#38210f');
-    hullPath();
-    ctx.fillStyle = hull;
+    // 船头那一小撮被切开的水花，贴着木头才不显假
+    ctx.fillStyle = 'rgba(210, 246, 236, 0.16)';
+    ctx.beginPath();
+    ctx.ellipse(x, ty + L * 0.012, w * 0.1, L * 0.022, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // 甲板：篷外露出来的那截船板
+    // 水面投影：船底压在水上那一圈暗
     ctx.save();
-    hullPath();
-    ctx.clip();
-    ctx.strokeStyle = 'rgba(58, 34, 17, 0.15)';
-    ctx.lineWidth = Math.max(0.8, 1);
-    for (let yy = -3.7; yy < 0.5; yy += 0.36) {
-      ctx.beginPath();
-      ctx.moveTo(x - w * 0.5, y + h * yy);
-      ctx.lineTo(x + w * 0.5, y + h * yy);
-      ctx.stroke();
-    }
-    // 内侧船舷：一圈贴边暗影，船才有厚度
-    ctx.strokeStyle = 'rgba(28, 15, 7, 0.42)';
-    ctx.lineWidth = Math.max(2, w * 0.055);
-    hullPath();
-    ctx.stroke();
-    // 船头受光
-    ctx.strokeStyle = 'rgba(240, 202, 148, 0.42)';
-    ctx.lineWidth = Math.max(1, h * 0.05);
-    ctx.beginPath();
-    ctx.moveTo(x - w * 0.18, y - h * 3.5);
-    ctx.quadraticCurveTo(x - w * 0.13, y - h * 3.05, x - w * 0.21, y - h * 2.4);
-    ctx.stroke();
-    ctx.restore();
-
-    // 拱篷：只占船宽中间一段，两侧留出船舷才看得出是条船
-    const cnTop = y - h * 2.5;
-    const cnBot = y + h * 0.06;
-    const cnW = w * 0.21;
-    const canopy = () => {
-      ctx.beginPath();
-      ctx.moveTo(x - cnW, cnBot);
-      ctx.bezierCurveTo(x - cnW * 1.06, cnTop + h * 0.62, x - cnW * 0.58, cnTop, x, cnTop);
-      ctx.bezierCurveTo(x + cnW * 0.58, cnTop, x + cnW * 1.06, cnTop + h * 0.62, x + cnW, cnBot);
-      ctx.closePath();
-    };
-    canopy();
-    ctx.fillStyle = '#2b2015';
+    ctx.translate(x, cy + L * 0.014);
+    ctx.scale(1.06, 1.03);
+    ctx.translate(-x, -cy);
+    hull();
+    ctx.fillStyle = 'rgba(2, 12, 10, 0.46)';
     ctx.fill();
-    ctx.save();
-    canopy();
-    ctx.clip();
-    // 篷架横档
-    ctx.strokeStyle = 'rgba(138, 108, 72, 0.32)';
-    ctx.lineWidth = Math.max(1, h * 0.06);
-    for (let i = 0; i < 6; i++) {
-      const yy = cnTop + h * (0.34 + i * 0.4);
-      ctx.beginPath();
-      ctx.moveTo(x - cnW * 1.2, yy);
-      ctx.quadraticCurveTo(x, yy + h * 0.12, x + cnW * 1.2, yy);
-      ctx.stroke();
-    }
-    // 篷顶受光
-    ctx.strokeStyle = 'rgba(180, 150, 106, 0.4)';
-    ctx.lineWidth = Math.max(1, h * 0.09);
-    ctx.beginPath();
-    ctx.moveTo(x - cnW * 0.78, cnTop + h * 0.62);
-    ctx.quadraticCurveTo(x, cnTop + h * 0.05, x + cnW * 0.78, cnTop + h * 0.62);
-    ctx.stroke();
     ctx.restore();
 
-    // 舱窗暖光：篷两侧整条亮起来，夜里一眼能认出是船
-    const winW = Math.max(5, w * 0.086);
-    const winH = Math.max(5, h * 0.34);
-    for (let i = 0; i < 2; i++) {
-      const wy = cnTop + h * (0.74 + i * 0.74);
-      for (const sx of [-1, 1]) {
-        const wx = x + sx * cnW * 0.72;
-        const halo = ctx.createRadialGradient(wx, wy + winH * 0.5, 0, wx, wy + winH * 0.5, winW * 2.2);
-        halo.addColorStop(0, 'rgba(255, 188, 110, 0.42)');
-        halo.addColorStop(1, 'rgba(255, 188, 110, 0)');
-        ctx.fillStyle = halo;
-        ctx.fillRect(wx - winW * 2.2, wy - winW * 1.6, winW * 4.4, winH + winW * 3.2);
-        // 窗纸底
-        ctx.fillStyle = 'rgba(255, 190, 116, 0.9)';
-        ctx.fillRect(wx - winW / 2, wy, winW, winH);
-        // 窗棂
-        ctx.strokeStyle = 'rgba(74, 42, 20, 0.75)';
-        ctx.lineWidth = Math.max(1, winW * 0.12);
-        ctx.beginPath();
-        ctx.moveTo(wx, wy);
-        ctx.lineTo(wx, wy + winH);
-        ctx.stroke();
-      }
+    // 船体：俯视只看见舷边，左舷受光、右舷背光
+    const hullGrad = ctx.createLinearGradient(x - w * 0.5, cy, x + w * 0.5, cy);
+    hullGrad.addColorStop(0, '#5f4126');
+    hullGrad.addColorStop(0.32, '#4e341d');
+    hullGrad.addColorStop(0.7, '#33230f');
+    hullGrad.addColorStop(1, '#1e1408');
+    hull();
+    ctx.fillStyle = hullGrad;
+    ctx.fill();
+
+    // 船头一段压暗，避免整条船一个调子
+    ctx.save();
+    hull();
+    ctx.clip();
+    const nose = ctx.createLinearGradient(x, ty, x, ty + L * 0.34);
+    nose.addColorStop(0, 'rgba(6, 4, 2, 0.42)');
+    nose.addColorStop(1, 'rgba(6, 4, 2, 0)');
+    ctx.fillStyle = nose;
+    ctx.fillRect(x - w, ty, w * 2, L * 0.4);
+    ctx.restore();
+
+    // 舱内：越往里越黑，只看得出一点底板
+    inner();
+    const cavity = ctx.createLinearGradient(x, ty, x, by);
+    cavity.addColorStop(0, '#211710');
+    cavity.addColorStop(0.45, '#150e07');
+    cavity.addColorStop(1, '#241809');
+    ctx.fillStyle = cavity;
+    ctx.fill();
+
+    ctx.save();
+    inner();
+    ctx.clip();
+    // 舱底纵向板缝
+    ctx.strokeStyle = 'rgba(138, 100, 62, 0.42)';
+    ctx.lineWidth = 1;
+    for (let i = -2; i <= 2; i++) {
+      const bx = x + i * w * 0.148;
+      ctx.beginPath();
+      ctx.moveTo(bx, ty + L * 0.19);
+      ctx.lineTo(bx, by - L * 0.05);
+      ctx.stroke();
+    }
+    // 舱底一点暖反光：夜里能看出这是个敞开的空腔
+    const glow = ctx.createRadialGradient(x, cy + L * 0.09, 0, x, cy + L * 0.09, L * 0.34);
+    glow.addColorStop(0, 'rgba(255, 166, 90, 0.12)');
+    glow.addColorStop(1, 'rgba(255, 166, 90, 0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(x - w, ty, w * 2, L);
+
+    // 两道横座板：横跨舱口，是俯视最容易读出"船"的结构
+    const seatH = Math.max(4, L * 0.05);
+    const seatY = [cy + L * 0.025, cy + L * 0.2];
+    for (const sy of seatY) {
+      ctx.fillStyle = '#5b3f27';
+      ctx.fillRect(x - w * 0.5, sy, w, seatH);
+      ctx.fillStyle = 'rgba(168, 128, 82, 0.5)';
+      ctx.fillRect(x - w * 0.5, sy, w, Math.max(1, seatH * 0.26));
+      ctx.fillStyle = 'rgba(8, 5, 3, 0.55)';
+      ctx.fillRect(x - w * 0.5, sy + seatH - Math.max(1, seatH * 0.22), w, Math.max(1, seatH * 0.22));
     }
 
-    // 船头栏杆与篙
-    ctx.strokeStyle = 'rgba(214, 176, 126, 0.6)';
-    ctx.lineWidth = Math.max(1, h * 0.045);
+    // 船尾横板
+    ctx.fillStyle = '#48301c';
+    ctx.fillRect(x - w * 0.36, by - L * 0.095, w * 0.72, L * 0.042);
+    ctx.fillStyle = 'rgba(158, 118, 74, 0.45)';
+    ctx.fillRect(x - w * 0.36, by - L * 0.095, w * 0.72, Math.max(1, L * 0.01));
+    ctx.restore();
+
+    // 船头甲板：舱口之前那一段封闭木板。必须在 hull 裁剪里画，
+    // 若在 inner() 裁剪里画，船头（舱口以外）会被裁掉，甲板就消失了
+    ctx.save();
+    hull();
+    ctx.clip();
+    const deck = ctx.createLinearGradient(x, ty, x, ty + L * 0.185);
+    deck.addColorStop(0, '#D9B384');
+    deck.addColorStop(0.55, '#C2965F');
+    deck.addColorStop(1, '#A87C49');
+    ctx.fillStyle = deck;
+    ctx.fillRect(x - w * 0.44, ty, w * 0.88, L * 0.185);
+    // 板缝顺船身方向铺，越靠近船尖越往中线收
+    ctx.strokeStyle = 'rgba(96, 64, 34, 0.55)';
+    ctx.lineWidth = Math.max(1, w * 0.012);
     ctx.beginPath();
-    ctx.moveTo(x - w * 0.14, y - h * 2.95);
-    ctx.lineTo(x - w * 0.1, y - h * 3.5);
-    ctx.moveTo(x + w * 0.14, y - h * 2.95);
-    ctx.lineTo(x + w * 0.1, y - h * 3.5);
-    ctx.moveTo(x - w * 0.13, y - h * 3.22);
-    ctx.lineTo(x + w * 0.13, y - h * 3.22);
+    for (let i = -2; i <= 1; i++) {
+      const bx = x + i * w * 0.11;
+      const pull = i * w * 0.03;
+      ctx.moveTo(bx - pull, ty + L * 0.015);
+      ctx.quadraticCurveTo(bx - pull * 0.4, ty + L * 0.1, bx, ty + L * 0.185);
+    }
+    ctx.stroke();
+    // 左上方来的柔光
+    const deckLight = ctx.createLinearGradient(x - w * 0.4, ty, x + w * 0.4, ty + L * 0.12);
+    deckLight.addColorStop(0, 'rgba(255, 240, 214, 0.22)');
+    deckLight.addColorStop(1, 'rgba(255, 240, 214, 0)');
+    ctx.fillStyle = deckLight;
+    ctx.fillRect(x - w * 0.44, ty, w * 0.88, L * 0.12);
+    // 舱口前檐：一道横梁把亮色甲板和黑舱口分开
+    ctx.fillStyle = '#4a3120';
+    ctx.fillRect(x - w * 0.32, ty + L * 0.172, w * 0.64, L * 0.018);
+    ctx.fillStyle = 'rgba(150, 112, 70, 0.4)';
+    ctx.fillRect(x - w * 0.32, ty + L * 0.172, w * 0.64, Math.max(1, L * 0.005));
+    ctx.restore();
+
+    // 船尖系缆环，再是躺在甲板上的花束
+    this._drawBowRing(ctx, x, ty + L * 0.028, w, L);
+    this._drawBouquet(ctx, x, ty + L * 0.105, w, L);
+
+    // 内壁暗线：有这道凹陷，船才不是一块板
+    inner();
+    ctx.strokeStyle = 'rgba(5, 3, 1, 0.72)';
+    ctx.lineWidth = Math.max(1.5, w * 0.026);
     ctx.stroke();
 
-    // 船尾橹
-    ctx.strokeStyle = 'rgba(136, 100, 60, 0.85)';
-    ctx.lineWidth = Math.max(1, h * 0.05);
+    // 舷边顶面受光
+    hull();
+    ctx.strokeStyle = 'rgba(196, 158, 110, 0.45)';
+    ctx.lineWidth = Math.max(1, w * 0.014);
+    ctx.stroke();
+
+    // 左舷一段更亮的高光，把光源交代清楚
+    ctx.strokeStyle = 'rgba(244, 212, 164, 0.28)';
+    ctx.lineWidth = Math.max(1, w * 0.016);
     ctx.beginPath();
-    ctx.moveTo(x + w * 0.26, y + h * 0.28);
-    ctx.lineTo(x + w * 0.62, y + h * 1.02);
+    ctx.moveTo(x - w * 0.07, ty + L * 0.09);
+    ctx.bezierCurveTo(x - w * 0.24, ty + L * 0.17, x - w * 0.45, cy - L * 0.12, x - w * 0.47, cy + L * 0.06);
     ctx.stroke();
 
-    // 船体轮廓
-    hullPath();
-    ctx.strokeStyle = 'rgba(228, 190, 136, 0.45)';
-    ctx.lineWidth = Math.max(1, 1.6);
+    // 长篙斜架在舷上，这类小船最好认的一笔
+    const px1 = x - w * 0.78;
+    const py1 = ty + L * 0.02;
+    const px2 = x + w * 0.34;
+    const py2 = by + L * 0.05;
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(158, 122, 80, 0.55)';
+    ctx.lineWidth = Math.max(1.2, w * 0.018);
+    ctx.beginPath();
+    ctx.moveTo(px1, py1);
+    ctx.lineTo(px2, py2);
     ctx.stroke();
+    ctx.translate(px1, py1);
+    ctx.rotate(Math.atan2(py1 - py2, px1 - px2));
+    ctx.fillStyle = 'rgba(146, 112, 74, 0.58)';
+    ctx.beginPath();
+    ctx.ellipse(-w * 0.12, 0, w * 0.13, w * 0.042, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
 
-    // 篷沿轮廓
-    canopy();
-    ctx.strokeStyle = 'rgba(158, 128, 90, 0.45)';
-    ctx.lineWidth = Math.max(1, 1.2);
-    ctx.stroke();
-
-    // 尾部水花（跳跃时收起）
+    // 尾侧细小水花
     if (!this.jumping(now)) {
-      ctx.fillStyle = 'rgba(214, 250, 240, 0.3)';
+      ctx.fillStyle = 'rgba(214, 250, 240, 0.24)';
       for (const sx of [-1, 1]) {
         ctx.beginPath();
-        ctx.ellipse(x + sx * w * 0.38, y + h * 0.48, w * 0.15, h * 0.09, 0, 0, Math.PI * 2);
+        ctx.ellipse(x + sx * w * 0.44, by - L * 0.08, w * 0.1, L * 0.02, 0, 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
     // 护盾光效
     if (this.shielded(now)) {
+      const rr = Math.max(w * 0.84, L * 0.29);
       ctx.strokeStyle = 'rgba(160, 255, 235, 0.9)';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.arc(x, y - h * 0.55, w * 0.92, 0, Math.PI * 2);
+      ctx.ellipse(x, cy + L * 0.02, rr, rr * 1.1, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
 
@@ -1289,10 +1341,150 @@ export class RunnerGame {
       ctx.globalAlpha = 0.5;
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.ellipse(x, y - h * 0.5, w * 0.42, h * 1.1, 0, 0, Math.PI * 2);
+      ctx.ellipse(x, cy + L * 0.02, w * 0.34, L * 0.3, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
     }
+  }
+
+  /** 花束布局：固定种子 LCG，保证每帧一模一样 */
+  _buildBouquet() {
+    let seed = 0x5EED;
+    const rnd = () => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed / 0x7fffffff;
+    };
+    const flowers = [];
+    const spec = [
+      // 类型 / 数量 / 花瓣色 / 花心色 / 花瓣数 / 圈数
+      ['daisy', 5, '#FFFDF7', '#F0B93C', 8, 1],
+      ['cosmos', 4, '#F2A6C4', '#E0709C', 8, 1],
+      ['mum', 3, '#F5C63F', '#C98A1E', 12, 2],
+      ['orange', 3, '#EE8B3C', '#B45A1C', 12, 2],
+    ];
+    for (const [type, count, petal, core, petals, rings] of spec) {
+      for (let i = 0; i < count; i++) {
+        flowers.push({
+          type, petal, core, petals, rings,
+          dx: (rnd() - 0.5) * 0.52,           // 单位 w
+          dy: (rnd() - 0.5) * 0.055 - 0.004,  // 单位 L
+          r: 0.0275 + rnd() * 0.015,          // 半径，单位 w
+          rot: rnd() * Math.PI,
+          slim: type === 'cosmos' ? 0.24 : 0.32,
+        });
+      }
+    }
+    const leaves = [];
+    for (let i = 0; i < 7; i++) {
+      leaves.push({
+        dx: (rnd() - 0.5) * 0.46,
+        dy: 0.018 + rnd() * 0.042,
+        len: 0.055 + rnd() * 0.05,
+        rot: (rnd() - 0.5) * 1.5,
+        dark: rnd() > 0.5,
+      });
+    }
+    return { flowers, leaves };
+  }
+
+  /** 俯视花束：看见的是花瓣顶面，茎朝船尾散开 */
+  _drawBouquet(ctx, cx, cy, w, L) {
+    this._bowFlowers ||= this._buildBouquet();
+    const { flowers, leaves } = this._bowFlowers;
+    const px = (f) => cx + f.dx * w;
+    const py = (f) => cy + f.dy * L;
+
+    // 一层极淡的暖光晕，让花束从深色船身上浮出来
+    const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, w * 0.46);
+    halo.addColorStop(0, 'rgba(255, 240, 214, 0.1)');
+    halo.addColorStop(1, 'rgba(255, 240, 214, 0)');
+    ctx.fillStyle = halo;
+    ctx.fillRect(cx - w * 0.46, cy - w * 0.46, w * 0.92, w * 0.92);
+
+    // 最底层的绿叶剪影，朝船尾方向散开，给花束一点厚度
+    for (const lf of leaves) {
+      ctx.save();
+      ctx.translate(cx + lf.dx * w, cy + lf.dy * L);
+      ctx.rotate(lf.rot);
+      ctx.fillStyle = lf.dark ? '#55702C' : '#6E8B3D';
+      ctx.beginPath();
+      ctx.ellipse(0, lf.len * w * 0.4, w * 0.018, lf.len * w * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 花茎：从每个花头收到根部，一条路径画完
+    ctx.strokeStyle = 'rgba(85, 112, 44, 0.85)';
+    ctx.lineWidth = Math.max(1, w * 0.008);
+    ctx.beginPath();
+    for (const f of flowers) {
+      ctx.moveTo(px(f), py(f));
+      ctx.quadraticCurveTo(px(f) * 0.35 + cx * 0.65, (py(f) + cy + L * 0.04) * 0.5, cx, cy + L * 0.042);
+    }
+    ctx.stroke();
+
+    // 所有花头的投影合并成一条路径：光从左上来，投影落右下
+    ctx.fillStyle = 'rgba(40, 25, 12, 0.28)';
+    ctx.beginPath();
+    for (const f of flowers) {
+      ctx.ellipse(px(f) + w * 0.012, py(f) + w * 0.012, f.r * w * 1.05, f.r * w * 0.85, 0, 0, Math.PI * 2);
+    }
+    ctx.fill();
+
+    // 花瓣顶面：同色系的花瓣合并在一条路径里，一次 fill
+    for (const f of flowers) {
+      const r = f.r * w;
+      ctx.fillStyle = f.petal;
+      ctx.beginPath();
+      for (let ring = 0; ring < f.rings; ring++) {
+        const rr = ring === 0 ? r : r * 0.62;
+        const n = ring === 0 ? f.petals : Math.max(6, f.petals - 4);
+        for (let i = 0; i < n; i++) {
+          const a = f.rot + (i / n) * Math.PI * 2 + ring * 0.26;
+          ctx.ellipse(px(f) + Math.cos(a) * rr * 0.52, py(f) + Math.sin(a) * rr * 0.52,
+            rr * 0.6, rr * f.slim, a, 0, Math.PI * 2);
+        }
+      }
+      ctx.fill();
+      ctx.fillStyle = f.core;
+      ctx.beginPath();
+      ctx.ellipse(px(f), py(f), r * 0.32, r * 0.3, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 根部两道麻绳交叉
+    ctx.strokeStyle = '#C9A46A';
+    ctx.lineWidth = Math.max(1, w * 0.012);
+    ctx.beginPath();
+    ctx.moveTo(cx - w * 0.1, cy + L * 0.032);
+    ctx.quadraticCurveTo(cx, cy + L * 0.05, cx + w * 0.1, cy + L * 0.036);
+    ctx.moveTo(cx - w * 0.1, cy + L * 0.048);
+    ctx.quadraticCurveTo(cx, cy + L * 0.03, cx + w * 0.1, cy + L * 0.05);
+    ctx.stroke();
+  }
+
+  /** 船尖系缆环：俯视是被压扁的椭圆 */
+  _drawBowRing(ctx, x, y, w, L) {
+    const rx = w * 0.0375;
+    const ry = Math.max(1.2, L * 0.006);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.beginPath();
+    ctx.ellipse(x + w * 0.006, y + ry * 0.9, rx * 1.15, ry * 0.9, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(24, 22, 18, 0.85)';
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx * 0.72, ry * 0.72, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#9E9A90';
+    ctx.lineWidth = Math.max(1.2, w * 0.016);
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.lineWidth = Math.max(1, w * 0.008);
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, 0, Math.PI * 0.95, Math.PI * 1.6);
+    ctx.stroke();
   }
 
   _roundRect(ctx, x, y, w, h, r) {
