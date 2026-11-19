@@ -14,6 +14,10 @@
  * v3.0 变更：接入 WebGazer 注视（9 点标定 / 平滑 / 按钮磁吸）与 MediaPipe
  *            手势（握拳落笔 / 张开抬笔 / 左手平移），复用 WebGazer 单路摄像头。
  *            鼠标模拟保留为无摄像头环境的降级方案。
+ * v3.1 变更：新增入口页（1 操作指南 / 2 进入画板）；操作指南只放在入口页，
+ *            进入画板后整页收起，画板内不再出现指南面板。
+ * v3.2 变更：真机模式控制条从画布浮层移入工具栏，紧贴「保存」右侧，
+ *            其余按钮顺势左移；窄屏自动折到工具栏第二行，画布不再被遮挡。
  * ============================================================ */
 :root{
   --bg:#0a0e17;
@@ -78,9 +82,10 @@ body{
 .toolbar{
   /* Grid + minmax(0,1fr)：窄屏时左侧可收缩，保证「清空 / 保存」按钮永远完整可见 */
   display:grid;
-  grid-template-columns:minmax(0,1fr) auto;
+  /* 三列：调色板(可收缩但不窄于按钮内容) / 操作按钮 / 真机模式条(紧跟保存右侧) */
+  grid-template-columns:minmax(140px,1fr) auto auto;
   align-items:center;
-  gap:18px;
+  gap:16px;
   padding:14px 26px;
   border-bottom:1px solid var(--line);
   background:rgba(17,24,39,.72);
@@ -198,16 +203,30 @@ body{
   font:700 15px/1 ui-sans-serif,system-ui,sans-serif;
   letter-spacing:.18em;
   cursor:pointer;
-  transition:transform var(--ease),box-shadow var(--ease),border-color var(--ease),background var(--ease),opacity var(--ease);
+  /* Floating Dock：基准盒尺寸（100×64）保持不变，
+     只用 transform 做「指针靠近 → 本项放大上浮、左右邻项轻微联动」。
+     --dock-scale / --dock-lift 由脚本按指针距离实时写入。 */
+  --dock-scale:1;
+  --dock-lift:0px;
+  transform:translateY(var(--dock-lift)) scale(var(--dock-scale));
+  transform-origin:50% 100%;
+  will-change:transform;
+  transition:box-shadow var(--ease),border-color var(--ease),background var(--ease),opacity var(--ease);
 }
 .btn:hover{
-  transform:translateY(-1px);
   border-color:var(--accent);
   box-shadow:0 0 22px -6px var(--accent);
+  /* 抬高悬停项，避免放大后的气泡被相邻按钮盖住 */
+  z-index:70;
+}
+.btn:focus-visible{
+  outline:2px solid var(--accent);
+  outline-offset:2px;
 }
 .btn.is-gazed{
   border-color:var(--accent);
   box-shadow:0 0 0 1px var(--accent) inset,0 0 26px -6px var(--accent);
+  z-index:68;
 }
 .btn.is-armed{ animation:armedPulse .45s ease-in-out; }
 @keyframes armedPulse{
@@ -236,6 +255,44 @@ body{
   color:var(--muted);
 }
 
+/* ---------------- Floating Dock：跟随指针 / 注视的独立名称气泡 ---------------- */
+/* 放在 body 下而不是按钮内，避免被按钮的 scale 一起放大 */
+.dock-tip{
+  position:fixed;
+  left:0;
+  top:0;
+  z-index:80;
+  padding:6px 11px;
+  border-radius:9px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(13,18,30,.97);
+  color:var(--text);
+  font:600 12px/1 ui-monospace,Menlo,Consolas,monospace;
+  letter-spacing:.08em;
+  white-space:nowrap;
+  box-shadow:0 12px 32px -14px rgba(0,0,0,.92);
+  opacity:0;
+  pointer-events:none;
+  transform:translate(-50%,0) translateY(-7px) scale(.94);
+  transition:opacity .13s ease,transform .2s cubic-bezier(.34,1.56,.64,1);
+}
+.dock-tip::after{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:-4px;
+  width:8px;
+  height:8px;
+  transform:translateX(-50%) rotate(45deg);
+  background:rgba(13,18,30,.97);
+  border-left:1px solid rgba(255,255,255,.14);
+  border-top:1px solid rgba(255,255,255,.14);
+}
+.dock-tip.is-on{
+  opacity:1;
+  transform:translate(-50%,0) translateY(0) scale(1);
+}
+
 /* 修改2：调色板开关按钮（图标 + 当前颜色点） */
 .btn.switcher{
   display:inline-flex;
@@ -244,6 +301,7 @@ body{
   gap:9px;
   min-width:116px;
   padding:0 16px;
+  white-space:nowrap;
 }
 .btn.switcher .swatch-mini{
   flex:0 0 auto;
@@ -485,6 +543,191 @@ body{
 }
 .help .hint b{ color:var(--warn); font-weight:600; }
 
+/* ---------------- 首页（入口页，非画板） ----------------
+ * v3.1：打开页面先进入入口页，只有点了「进入画板」才显示画板；
+ *       操作指南只在入口页提供，画板里不再出现。
+ * 入口页显示时，用 body.is-landing 把整套画板 UI 收起。 */
+body.is-landing > .topbar,
+body.is-landing > .toolbar,
+body.is-landing > .stage,
+body.is-landing > .hud{ display:none; }
+
+.landing{
+  position:fixed;
+  inset:0;
+  z-index:500;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:44px 24px;
+  overflow:auto;
+  background:
+    radial-gradient(760px 520px at 50% 6%, rgba(76,201,240,.16), transparent 70%),
+    radial-gradient(680px 460px at 84% 94%, rgba(179,136,255,.12), transparent 72%),
+    var(--bg);
+}
+.landing[hidden]{ display:none; }
+/* 网格纹理：与画板背景同源的科技感底纹 */
+.landing::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background-image:
+    linear-gradient(rgba(31,43,69,.55) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(31,43,69,.55) 1px, transparent 1px);
+  background-size:48px 48px;
+  -webkit-mask-image:radial-gradient(ellipse at 50% 38%, #000 28%, transparent 78%);
+  mask-image:radial-gradient(ellipse at 50% 38%, #000 28%, transparent 78%);
+  pointer-events:none;
+}
+.landing-inner{
+  position:relative;
+  width:100%;
+  max-width:880px;
+  margin:auto;
+}
+.landing-brand{ text-align:center; margin-bottom:34px; }
+.landing-brand h1{
+  margin:0;
+  font-size:clamp(30px,5vw,46px);
+  font-weight:800;
+  letter-spacing:.2em;
+}
+.landing-brand h1 .accent{ color:var(--accent); text-shadow:0 0 34px rgba(76,201,240,.65); }
+.landing-sub{
+  margin:12px 0 0;
+  font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;
+  letter-spacing:.4em;
+  color:var(--muted);
+}
+.landing-lead{
+  margin:0 0 26px;
+  text-align:center;
+  font-size:14px;
+  line-height:1.85;
+  color:var(--muted);
+}
+.landing-cards{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:18px;
+}
+.landing-card{
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:8px;
+  padding:26px 24px 28px;
+  border-radius:20px;
+  border:1px solid var(--line);
+  background:rgba(17,24,39,.74);
+  color:var(--text);
+  text-align:left;
+  font-family:inherit;
+  cursor:pointer;
+  transition:transform var(--ease),border-color var(--ease),box-shadow var(--ease),background var(--ease);
+}
+.landing-card:hover,
+.landing-card:focus-visible{
+  transform:translateY(-3px);
+  border-color:var(--accent);
+  box-shadow:0 0 44px -14px var(--accent);
+  outline:none;
+}
+.landing-card .landing-num{
+  font:700 13px/1 ui-monospace,Menlo,Consolas,monospace;
+  letter-spacing:.06em;
+  color:var(--accent);
+}
+.landing-card .landing-title{
+  font-size:22px;
+  font-weight:800;
+  letter-spacing:.14em;
+}
+.landing-card .landing-desc{
+  font-size:12.5px;
+  line-height:1.7;
+  letter-spacing:.04em;
+  color:var(--muted);
+}
+.landing-card.is-primary{
+  border-color:rgba(76,201,240,.5);
+  background:linear-gradient(160deg,rgba(76,201,240,.18),rgba(17,24,39,.82) 62%);
+}
+.landing-card.is-primary:hover,
+.landing-card.is-primary:focus-visible{
+  box-shadow:0 0 56px -12px var(--accent);
+}
+.landing-foot{
+  margin:24px 0 0;
+  text-align:center;
+  font:600 11px/1.7 ui-monospace,Menlo,Consolas,monospace;
+  letter-spacing:.12em;
+  color:rgba(125,141,168,.78);
+}
+
+/* 入口页里的指南：沿用 .help 排版，但改成文档式静态面板 */
+.guide-panel{ display:grid; gap:18px; }
+.guide-panel[hidden]{ display:none; }
+.landing .help{
+  position:static;
+  width:100%;
+  padding:24px 26px;
+  border-radius:20px;
+  border:1px solid var(--line);
+  background:rgba(17,24,39,.74);
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+  pointer-events:auto;
+  font-size:13px;
+  line-height:1.75;
+}
+.landing .help h2{
+  margin:0 0 14px;
+  font-size:12px;
+  letter-spacing:.3em;
+}
+.landing .help ul{
+  grid-template-columns:minmax(0,1fr);
+  row-gap:10px;
+}
+.landing .help li{ align-items:flex-start; gap:14px; }
+.landing .help .k{ min-width:112px; font-size:12px; }
+.landing .help .hint{
+  margin-top:16px;
+  padding-top:14px;
+  font-size:12px;
+  line-height:1.8;
+}
+.landing-back{
+  justify-self:center;
+  min-width:150px;
+  height:48px;
+  padding:0 26px;
+  border-radius:12px;
+  border:1px solid var(--line);
+  background:rgba(10,14,23,.72);
+  color:var(--text);
+  font:700 14px/1 ui-sans-serif,system-ui,sans-serif;
+  letter-spacing:.18em;
+  cursor:pointer;
+  transition:border-color var(--ease),box-shadow var(--ease),color var(--ease);
+}
+.landing-back:hover,
+.landing-back:focus-visible{
+  border-color:var(--accent);
+  color:var(--accent);
+  box-shadow:0 0 28px -8px var(--accent);
+  outline:none;
+}
+@media (max-width:720px){
+  .landing{ padding:32px 18px; }
+  .landing-brand{ margin-bottom:24px; }
+  .landing-cards{ grid-template-columns:minmax(0,1fr); }
+  .landing .help ul{ grid-template-columns:minmax(0,1fr); }
+}
+
 /* ---------------- Toast ---------------- */
 .toast{
   position:fixed;
@@ -510,29 +753,35 @@ body{
   transform:translate(-50%,-50%) scale(1);
 }
 
-/* ---------------- 真机模式控制条（WebGazer + MediaPipe） ---------------- */
+/* ---------------- 真机模式控制条（WebGazer + MediaPipe） ----------------
+ * v3.2：从画布上方浮层改为工具栏内的一项，固定在「保存」右侧；
+ *       高度与工具栏按钮一致(64px)，画布不再被它遮挡。
+ *       摄像头预览改成向下弹出的浮层，只在运行时出现，且不吃指针事件。 */
 .real-panel{
-  position:absolute;
-  top:14px;
-  left:50%;
-  transform:translateX(-50%);
-  z-index:20;
+  position:relative;
+  z-index:1;
   display:flex;
   align-items:center;
-  gap:12px;
-  padding:10px 12px;
-  border-radius:16px;
+  gap:8px;
+  flex:0 0 auto;
+  height:64px;
+  padding:0 10px;
+  border-radius:14px;
   border:1px solid rgba(76,201,240,.26);
   background:rgba(13,18,30,.86);
-  box-shadow:0 18px 46px -18px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.03) inset;
-  backdrop-filter:blur(12px);
-  -webkit-backdrop-filter:blur(12px);
+  box-shadow:0 12px 30px -18px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.03) inset;
   font:400 11px/1.5 ui-monospace,Menlo,Consolas,monospace;
   color:var(--muted);
   cursor:default;
-  max-width:calc(100% - 28px);
+  max-width:100%;
 }
-.real-panel .real-copy{ min-width:0; flex:1 1 auto; }
+.real-panel .real-copy{
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  min-width:0;
+  flex:0 1 auto;
+}
 .real-panel .real-title{
   display:flex;
   align-items:center;
@@ -557,7 +806,7 @@ body{
 .real-panel .real-status{
   display:block;
   margin-top:3px;
-  max-width:260px;
+  max-width:150px;
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
@@ -567,24 +816,29 @@ body{
 .real-panel .real-status.err{ color:var(--danger); }
 .real-panel .real-status.on{ color:#06d6a0; }
 .real-panel .real-preview{
-  /* 必须压过 .stage canvas 的 absolute/100% 规则，否则预览会盖住整条面板 */
-  position:relative;
-  inset:auto;
+  /* 运行时才出现的摄像头预览：从工具栏向下弹出的浮层，
+     不吃指针事件，避免遮住画布时影响落笔 */
+  position:absolute;
+  top:calc(100% + 12px);
+  right:0;
+  left:auto;
   display:none;
-  width:104px;
-  height:78px;
-  border-radius:10px;
-  border:1px solid var(--line);
+  width:176px;
+  height:132px;
+  border-radius:12px;
+  border:1px solid rgba(76,201,240,.34);
   background:#050810;
+  box-shadow:0 22px 44px -16px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.04) inset;
   object-fit:cover;
-  flex:0 0 auto;
+  pointer-events:none;
+  z-index:2;
 }
 .real-panel.is-live .real-preview{ display:block; }
 .real-panel.is-live #btnRealStart:disabled{ opacity:.72; color:var(--accent); }
-.real-actions{ display:flex; flex-direction:column; gap:6px; flex:0 0 auto; }
+.real-actions{ display:flex; flex-direction:row; align-items:center; gap:8px; flex:0 0 auto; }
 .mini-btn{
-  height:30px;
-  padding:0 11px;
+  height:34px;
+  padding:0 10px;
   border-radius:9px;
   border:1px solid rgba(76,201,240,.38);
   background:rgba(76,201,240,.12);
@@ -724,9 +978,22 @@ body{
 }
 .calib-skip:hover{ color:var(--text); border-color:var(--accent); }
 
-@media (max-width:1200px){
-  /* 右侧帮助面板从 1200px 起向内收，真机控制条改为贴左，避免两者在窄屏重叠 */
-  .real-panel{ left:16px; transform:none; }
+@media (max-width:1500px){
+  /* 给「保存」右侧的真机模式条腾出位置：按钮基准宽度略收 4px，
+     使 1366 这类常见笔记本宽度仍能单行排布，不折行、不缩字号 */
+  .btn{ min-width:96px; }
+  .btn.wide{ min-width:112px; }
+}
+@media (max-width:1410px){
+  /* 再窄一档：按钮基准再收 8px，让 1366 宽度仍能放下「真机模式条」单行 */
+  .btn{ min-width:88px; }
+  .btn.wide{ min-width:108px; }
+}
+@media (max-width:1360px){
+  /* 窗口不够宽时，真机模式条折到工具栏第二行（仍在保存下方右侧），
+     这样 8 个操作按钮不会被挤压，也不需要缩小字号 */
+  .toolbar{ grid-template-columns:minmax(0,1fr) auto; }
+  .real-panel{ grid-column:1 / -1; justify-self:end; }
 }
 @media (max-width:1100px){
   /* 工具栏：调色板固定宽度，其余按钮等分剩余空间，禁止文字换行 */
@@ -739,8 +1006,8 @@ body{
   .btn .key{ right:7px; bottom:7px; font-size:9px; letter-spacing:0; }
 }
 @media (max-width:900px){
-  .real-panel .real-preview{ display:none !important; }
-  .real-panel .real-status{ max-width:190px; }
+  .real-panel{ width:100%; justify-content:space-between; }
+  .real-panel .real-status{ max-width:150px; }
 }
 @media (max-width:820px){
   .btn .key{ display:none; }
@@ -750,7 +1017,64 @@ body{
 }
 </style>
 </head>
-<body>
+<body class="is-landing">
+
+<!-- ============================================================
+     首页 · 入口页（不是画板）
+     1 操作指南 / 2 进入画板；进入画板后本页整体隐藏，指南也不会出现在画板里
+     ============================================================ -->
+<div class="landing" id="landing">
+  <div class="landing-inner">
+    <header class="landing-brand">
+      <h1>隔空画板<span class="accent">.</span></h1>
+      <p class="landing-sub">AIR CANVAS · GAZE + GESTURE</p>
+    </header>
+
+    <section id="homePanel" aria-label="入口选择">
+      <p class="landing-lead">用眼睛定位笔尖，用手势落笔。<br />第一次使用建议先花一分钟看一遍操作指南。</p>
+      <div class="landing-cards">
+        <button class="landing-card" id="btnOpenGuide" type="button">
+          <span class="landing-num">1</span>
+          <span class="landing-title">操作指南</span>
+          <span class="landing-desc">手势、注视与快捷键说明</span>
+        </button>
+        <button class="landing-card is-primary" id="btnEnterBoard" type="button">
+          <span class="landing-num">2</span>
+          <span class="landing-title">进入画板</span>
+          <span class="landing-desc">开始隔空作画</span>
+        </button>
+      </div>
+      <p class="landing-foot">进入画板后不再显示操作指南；刷新页面即可回到本页。</p>
+    </section>
+
+    <section class="guide-panel" id="guidePanel" aria-label="操作指南" hidden>
+      <aside class="help">
+        <h2>操作指南</h2>
+        <ul>
+          <li><span class="k">真机启动</span><span class="v">工具栏「保存」右侧「开启摄像头」→ 授权 → 建议先做 9 点标定</span></li>
+          <li><span class="k">注视移动</span><span class="v">笔尖按九宫格平滑跟随视线</span></li>
+          <li><span class="k">捏合</span><span class="v">落笔 · 笔尖移动即画线（橡皮模式下擦除）</span></li>
+          <li><span class="k">张开手掌</span><span class="v">抬笔 · 只移动笔尖不画线</span></li>
+          <li><span class="k">拇指朝上</span><span class="v">切换画笔 / 橡皮；按住不重复，需先张开手掌再下一次</span></li>
+          <li><span class="k">食指朝上</span><span class="v">撤回一笔（等价 Ctrl+Z）；按住不重复</span></li>
+          <li><span class="k">调色板+捏合</span><span class="v">展开颜色条（默认收起，防误触）</span></li>
+          <li><span class="k">注视色块 0.8s</span><span class="v">停留选中并自动收起</span></li>
+          <li><span class="k">注视+捏合</span><span class="v">撤回 / 下一步 / 复位 / 笔尖来源 / 画布色 / 工具 / 清空 / 保存（双条件）</span></li>
+          <li><span class="k">左手张开拖动</span><span class="v">平移画布内容（平移期间笔尖锁定，不落笔）</span></li>
+          <li><span class="k">Victory</span><span class="v">切换到下一个颜色（降级兜底）</span></li>
+        </ul>
+        <div class="hint">
+          <b>真机模式</b>：WebGazer 负责注视（需 localhost / https），MediaPipe 负责手势，两路共用 WebGazer 的摄像头。
+          右手拇指与食指捏合落笔、松开或张开手掌抬笔；拇指朝上切换工具、食指朝上撤回；左手张开拖动平移。左右手识别反了按 <b>H</b> 交换。
+          无摄像头时仍可用鼠标模拟：移动＝注视，按住＝落笔，<b>空格＋拖动＝左手平移</b>；
+          1–6 选色、E 画笔/橡皮、T 笔尖来源、B 画布黑/白、R 复位、Ctrl+Z 撤回、Ctrl+Y 重做、
+          P 颜色条、C 清空、S 保存、G 模拟注视丢失、V 触发 Victory。
+        </div>
+      </aside>
+      <button class="landing-back" id="btnGuideBack" type="button">返回</button>
+    </section>
+  </div>
+</div>
 
 <header class="topbar">
   <div class="brand">
@@ -762,30 +1086,24 @@ body{
 
 <div class="toolbar">
   <div class="palette-wrap">
-    <button class="btn switcher" id="btnPalette" type="button" aria-expanded="false" aria-controls="palette" title="注视本按钮 ＋ 捏合 展开颜色条（鼠标：点击）">
+    <button class="btn switcher" id="btnPalette" type="button" aria-expanded="false" aria-controls="palette" data-dock-label="调色板 · [P]" title="注视本按钮 ＋ 捏合 展开颜色条（鼠标：点击）">
       <i class="swatch-mini" id="switcherDot"></i>调色板<span class="key">[P]</span>
     </button>
     <div class="palette" id="palette" role="listbox" aria-label="调色板"></div>
   </div>
   <div class="actions">
-    <button class="btn" id="btnTool" type="button" title="切换画笔 / 橡皮（拇指朝上、注视 ＋ 捏合，或按 E）"><span id="btnToolLabel">画笔</span><span class="key">[E]</span></button>
-    <button class="btn" id="btnUndo" type="button" title="撤回上一笔（食指朝上、注视 ＋ 捏合，或 Ctrl+Z）">撤回<span class="key">⌃Z</span></button>
-    <button class="btn" id="btnRedo" type="button" title="恢复下一笔（注视 ＋ 捏合，或 Ctrl+Y）">下一步<span class="key">⌃Y</span></button>
-    <button class="btn" id="btnReset" type="button" title="复位视图：把画布平移偏移归零（注视 ＋ 捏合，或按 R）">复位<span class="key">[R]</span></button>
-    <button class="btn wide" id="btnSource" type="button" title="切换笔尖来源：视线九宫格 / 右手手掌（注视 ＋ 捏合，或按 T）"><span id="btnSourceLabel">笔尖·视线</span><span class="key">[T]</span></button>
-    <button class="btn with-dot" id="btnCanvas" type="button" title="切换画布颜色：黑 / 白（注视 ＋ 捏合，或按 B）"><i class="mini-dot" id="canvasDot"></i>画布<span class="key">[B]</span></button>
-    <button class="btn danger" id="btnClear" type="button">清空<span class="key">[C]</span></button>
-    <button class="btn" id="btnSave" type="button">保存<span class="key">[S]</span></button>
+    <button class="btn" id="btnTool" type="button" data-dock-label="画笔 / 橡皮 · [E]" title="切换画笔 / 橡皮（拇指朝上、注视 ＋ 捏合，或按 E）"><span id="btnToolLabel">画笔</span><span class="key">[E]</span></button>
+    <button class="btn" id="btnUndo" type="button" data-dock-label="撤回 · ⌃Z" title="撤回上一笔（食指朝上、注视 ＋ 捏合，或 Ctrl+Z）">撤回<span class="key">⌃Z</span></button>
+    <button class="btn" id="btnRedo" type="button" data-dock-label="恢复下一笔 · ⌃Y" title="恢复下一笔（注视 ＋ 捏合，或 Ctrl+Y）">下一步<span class="key">⌃Y</span></button>
+    <button class="btn" id="btnReset" type="button" data-dock-label="复位视图 · [R]" title="复位视图：把画布平移偏移归零（注视 ＋ 捏合，或按 R）">复位<span class="key">[R]</span></button>
+    <button class="btn wide" id="btnSource" type="button" data-dock-label="笔尖来源 · [T]" title="切换笔尖来源：视线九宫格 / 右手手掌（注视 ＋ 捏合，或按 T）"><span id="btnSourceLabel">笔尖·视线</span><span class="key">[T]</span></button>
+    <button class="btn with-dot" id="btnCanvas" type="button" data-dock-label="画布颜色 · [B]" title="切换画布颜色：黑 / 白（注视 ＋ 捏合，或按 B）"><i class="mini-dot" id="canvasDot"></i>画布<span class="key">[B]</span></button>
+    <button class="btn danger" id="btnClear" type="button" data-dock-label="清空画布 · [C]">清空<span class="key">[C]</span></button>
+    <button class="btn" id="btnSave" type="button" data-dock-label="保存 · [S]">保存<span class="key">[S]</span></button>
   </div>
-</div>
 
-<main class="stage" id="stage">
-  <canvas id="bgLayer"></canvas>
-  <canvas id="staticLayer"></canvas>
-  <canvas id="liveLayer"></canvas>
-  <div class="pen-cursor" id="penCursor"></div>
-
-  <!-- 真机模式：WebGazer 注视 + MediaPipe 手势（鼠标模拟仍保留，互不干扰） -->
+  <!-- 真机模式：WebGazer 注视 + MediaPipe 手势（鼠标模拟仍保留，互不干扰）
+       v3.2：紧跟「保存」右侧，其余按钮顺势左移；窄屏折到第二行 -->
   <section class="real-panel" id="realPanel" aria-label="真机模式控制">
     <div class="real-copy">
       <div class="real-title"><i class="real-dot" id="realDot"></i><span id="realTitle">真机模式</span></div>
@@ -798,6 +1116,13 @@ body{
       <button class="mini-btn ghost" id="btnCalib" type="button" disabled>9 点标定</button>
     </div>
   </section>
+</div>
+
+<main class="stage" id="stage">
+  <canvas id="bgLayer"></canvas>
+  <canvas id="staticLayer"></canvas>
+  <canvas id="liveLayer"></canvas>
+  <div class="pen-cursor" id="penCursor"></div>
 </main>
 
 <!-- 9 点标定浮层：点击每个点，WebGazer 记录「注视点 = 点击点」 -->
@@ -827,30 +1152,7 @@ body{
   <div class="row"><span>HISTORY</span><b id="hudHistory">笔画 0 · 撤回 0 · 恢复 0</b></div>
 </section>
 
-<aside class="help" aria-label="操作帮助">
-  <h2>操作指南</h2>
-  <ul>
-    <li><span class="k">真机启动</span><span class="v">画布上方「开启摄像头」→ 授权 → 建议先做 9 点标定</span></li>
-    <li><span class="k">注视移动</span><span class="v">笔尖按九宫格平滑跟随视线</span></li>
-    <li><span class="k">捏合</span><span class="v">落笔 · 笔尖移动即画线（橡皮模式下擦除）</span></li>
-    <li><span class="k">张开手掌</span><span class="v">抬笔 · 只移动笔尖不画线</span></li>
-    <li><span class="k">拇指朝上</span><span class="v">切换画笔 / 橡皮；按住不重复，需先张开手掌再下一次</span></li>
-    <li><span class="k">食指朝上</span><span class="v">撤回一笔（等价 Ctrl+Z）；按住不重复</span></li>
-    <li><span class="k">调色板+捏合</span><span class="v">展开颜色条（默认收起，防误触）</span></li>
-    <li><span class="k">注视色块 0.8s</span><span class="v">停留选中并自动收起</span></li>
-    <li><span class="k">注视+捏合</span><span class="v">撤回 / 下一步 / 复位 / 笔尖来源 / 画布色 / 工具 / 清空 / 保存（双条件）</span></li>
-    <li><span class="k">左手张开拖动</span><span class="v">平移画布内容（平移期间笔尖锁定，不落笔）</span></li>
-    <li><span class="k">Victory</span><span class="v">切换到下一个颜色（降级兜底）</span></li>
-  </ul>
-  <div class="hint">
-    <b>真机模式</b>：WebGazer 负责注视（需 localhost / https），MediaPipe 负责手势，两路共用 WebGazer 的摄像头。
-    右手拇指与食指捏合落笔、松开或张开手掌抬笔；拇指朝上切换工具、食指朝上撤回；左手张开拖动平移。左右手识别反了按 <b>H</b> 交换。
-    无摄像头时仍可用鼠标模拟：移动＝注视，按住＝落笔，<b>空格＋拖动＝左手平移</b>；
-    1–6 选色、E 画笔/橡皮、T 笔尖来源、B 画布黑/白、R 复位、Ctrl+Z 撤回、Ctrl+Y 重做、
-    P 颜色条、C 清空、S 保存、G 模拟注视丢失、V 触发 Victory。
-  </div>
-</aside>
-
+<!-- 操作指南只在入口页出现；画板内不再显示帮助面板 -->
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <!-- WebGazer 2.1.2（本地 patched 版，facemesh 模型走 ./vendor/webgazer/facemesh_model） -->
@@ -936,6 +1238,9 @@ body{
 
   const clamp = (v, a, b) => (v < a ? a : (v > b ? b : v));
   const clamp01 = (v) => clamp(v, 0, 1);
+
+  /** 入口页 → 画板：为 false 时画板尚未进入，输入与快捷键一律不响应 */
+  let boardActive = false;
 
   /* ============================================================
    * 2. DOM 引用
@@ -1067,6 +1372,7 @@ body{
 
   /* ---- 鼠标：注视方向（九宫格）＋ 握拳 ---- */
   window.addEventListener('mousemove', (e) => {
+    if (!boardActive) return;   // 入口页：不把鼠标当作笔尖输入
     if (real.running) return;   // 真机模式：注视/手势独占输入，鼠标只用于点按钮
     const nx = (e.clientX - stageRect.left) / stageRect.width;
     const ny = (e.clientY - stageRect.top) / stageRect.height;
@@ -1113,6 +1419,7 @@ body{
   }, { passive: true });
 
   window.addEventListener('mousedown', (e) => {
+    if (!boardActive) return;
     if (real.running) return;
     // TODO: 替换为 MediaPipe GestureRecognizer 的 Closed_Fist 分类结果
     if (e.button === 0) raw.down = true;
@@ -1121,6 +1428,7 @@ body{
   });
 
   window.addEventListener('mouseup', (e) => {
+    if (!boardActive) return;
     if (real.running) return;
     // TODO: 替换为 GestureRecognizer 的非握拳（Open_Palm）分类结果
     if (e.button === 0) raw.down = false;
@@ -1143,6 +1451,7 @@ body{
 
   /* ---- 键盘：开发期快捷键 ---- */
   window.addEventListener('keydown', (e) => {
+    if (!boardActive) return;   // 入口页：快捷键不作用于画板
     const k = e.key;
     const mod = e.metaKey || e.ctrlKey;
 
@@ -2476,15 +2785,32 @@ body{
   }
 
   function collectRects() {
-    rects.switcher = btnPalette.getBoundingClientRect();
-    rects.tool = btnTool.getBoundingClientRect();
-    rects.undo = btnUndo.getBoundingClientRect();
-    rects.redo = btnRedo.getBoundingClientRect();
-    rects.reset = btnReset.getBoundingClientRect();
-    rects.source = btnSource.getBoundingClientRect();
-    rects.canvas = btnCanvas.getBoundingClientRect();
-    rects.clear = btnClear.getBoundingClientRect();
-    rects.save = btnSave.getBoundingClientRect();
+    // 按钮矩形取「布局盒」：offset* 不受 Floating Dock 的 transform 影响，
+    // 这样放大只改变视觉，注视命中区域保持恒定，相邻按钮不会互相抢判定。
+    const bar = btnPalette.offsetParent || document.querySelector('.toolbar');
+    const barBox = bar.getBoundingClientRect();
+    const layout = (el) => {
+      const left = barBox.left + el.offsetLeft;
+      const top = barBox.top + el.offsetTop;
+      return {
+        left,
+        top,
+        width: el.offsetWidth,
+        height: el.offsetHeight,
+        right: left + el.offsetWidth,
+        bottom: top + el.offsetHeight
+      };
+    };
+
+    rects.switcher = layout(btnPalette);
+    rects.tool = layout(btnTool);
+    rects.undo = layout(btnUndo);
+    rects.redo = layout(btnRedo);
+    rects.reset = layout(btnReset);
+    rects.source = layout(btnSource);
+    rects.canvas = layout(btnCanvas);
+    rects.clear = layout(btnClear);
+    rects.save = layout(btnSave);
     if (state.paletteOpen) {
       for (let i = 0; i < swatchEls.length; i++) {
         rects.swatches[i] = swatchEls[i].getBoundingClientRect();
@@ -2972,6 +3298,7 @@ body{
     updateGazeDir();
     updateGazeSelect(now);
     updateUiTargets(now);
+    if (updateDockFx) updateDockFx();   // Floating Dock：注视/鼠标驱动工具栏联动放大
 
     if (state.liveDirty) {
       redrawLive();
@@ -2984,7 +3311,155 @@ body{
   }
 
   /* ============================================================
-   * 15. 启动
+   * 14.5 Floating Dock（Aceternity 同款距离映射）
+   *   以按钮中心为原点：|dx| ≥ radius 时不放大，中心处放大到 1.42 倍，
+   *   中间按距离线性衰减（对应原版 40 → 70 的图标放大逻辑）。
+   *   驱动源优先用注视点，没开摄像头时用鼠标。
+   *   基准盒尺寸（100×64）不变，只写 --dock-scale / --dock-lift。
+   * ============================================================ */
+  let updateDockFx = null;
+
+  (function initFloatingDock() {
+    const toolbarEl = document.querySelector('.toolbar');
+    if (!toolbarEl) return;
+
+    const dockBtns = Array.from(toolbarEl.querySelectorAll('.btn'));
+    if (!dockBtns.length) return;
+
+    const tip = document.createElement('div');
+    tip.className = 'dock-tip';
+    tip.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(tip);
+
+    const DOCK = {
+      radius: 170,      // 联动半径（px）
+      maxGrowth: 0.42,  // 中心处放大 42%（100 → 142），对齐原版 40 → 70 的比例
+      maxLift: 14,      // 中心处上浮（px）
+      rowTol: 90,       // 换行保护：纵向超过该距离的按钮不参与联动
+      ease: 0.24        // 每帧插值系数：注视点抖动时仍保持顺滑
+    };
+
+    const mouse = { x: 0, y: 0, has: false };
+    const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    window.addEventListener('pointermove', (event) => {
+      mouse.x = event.clientX;
+      mouse.y = event.clientY;
+      mouse.has = true;
+    }, { passive: true });
+    window.addEventListener('pointerout', (event) => {
+      if (!event.relatedTarget) mouse.has = false;
+    });
+    window.addEventListener('blur', () => { mouse.has = false; });
+
+    function paint() {
+      // 注视优先：隔空画板的主交互是眼睛，鼠标只是兜底
+      const useGaze = gazeActive();
+      const px = useGaze ? state.gazeScreenX : (mouse.has ? mouse.x : null);
+      const py = useGaze ? state.gazeScreenY : (mouse.has ? mouse.y : null);
+      const box = toolbarEl.getBoundingClientRect();
+      const x = px === null ? -1e4 : px - box.left;
+      const y = py === null ? -1e4 : py - box.top;
+
+      let bestEl = null;
+      let bestF = 0;
+
+      for (const el of dockBtns) {
+        let target = 0;
+        if (px !== null && !el.classList.contains('is-disabled')) {
+          const cx = el.offsetLeft + el.offsetWidth / 2;
+          const cy = el.offsetTop + el.offsetHeight / 2;
+          if (Math.abs(y - cy) <= DOCK.rowTol) {
+            // Aceternity 的线性映射：中心满格，±radius 处衰减为 0
+            target = Math.max(0, 1 - Math.abs(x - cx) / DOCK.radius);
+          }
+        }
+
+        const prev = Number(el.dataset.dockF || 0);
+        const next = prev + (target - prev) * DOCK.ease;
+        const f = Math.abs(next - target) < 0.002 ? target : next;
+        el.dataset.dockF = String(f);
+
+        if (!reduced) {
+          el.style.setProperty('--dock-scale', (1 + DOCK.maxGrowth * f).toFixed(4));
+          el.style.setProperty('--dock-lift', (-DOCK.maxLift * f).toFixed(2) + 'px');
+        }
+
+        if (f > bestF) { bestF = f; bestEl = el; }
+      }
+
+      if (bestEl && bestF > 0.45 && bestEl.dataset.dockLabel) {
+        tip.textContent = bestEl.dataset.dockLabel;
+        tip.style.left = (box.left + bestEl.offsetLeft + bestEl.offsetWidth / 2).toFixed(1) + 'px';
+        // 工具栏贴顶，气泡朝下弹出：贴在放大后按钮的下沿
+        tip.style.top = (box.top + bestEl.offsetTop + bestEl.offsetHeight - DOCK.maxLift * bestF + 10).toFixed(1) + 'px';
+        tip.classList.add('is-on');
+      } else {
+        tip.classList.remove('is-on');
+      }
+    }
+
+    updateDockFx = paint;
+  })();
+
+  /* ============================================================
+   * 15. 入口页：操作指南 / 进入画板
+   * ------------------------------------------------------------
+   * 打开页面停在入口页（body.is-landing），画板 UI 全部收起；
+   * 只有点击「进入画板」才移除 is-landing、显示画板并重新测量画布。
+   * 画板内不再提供操作指南，需要回看时刷新页面回到入口页即可。
+   * ============================================================ */
+  const landingEl = $('landing');
+  const homePanel = $('homePanel');
+  const guidePanel = $('guidePanel');
+
+  function showGuide() {
+    if (boardActive) return;
+    homePanel.hidden = true;
+    guidePanel.hidden = false;
+    landingEl.scrollTop = 0;
+  }
+
+  function showHome() {
+    if (boardActive) return;
+    guidePanel.hidden = true;
+    homePanel.hidden = false;
+    landingEl.scrollTop = 0;
+  }
+
+  function enterBoard() {
+    if (boardActive) return;
+    boardActive = true;
+
+    guidePanel.hidden = true;
+    homePanel.hidden = true;
+    landingEl.hidden = true;
+    document.body.classList.remove('is-landing');
+
+    // 画板此前是 display:none，画布测得的宽高为 0：显示后必须立刻重新同步，
+    // 否则首帧会被拉伸成 1×1。ResizeObserver 也会触发一次，这里主动兜底。
+    syncSize();
+    requestAnimationFrame(() => {
+      syncSize();
+      window.dispatchEvent(new Event('resize'));
+    });
+    setTimeout(syncSize, 160);
+
+    toast('已进入画板 · 移动鼠标或用注视控制笔尖');
+  }
+
+  $('btnOpenGuide').addEventListener('click', showGuide);
+  $('btnEnterBoard').addEventListener('click', enterBoard);
+  $('btnGuideBack').addEventListener('click', showHome);
+
+  // 入口页里 Esc = 从指南返回首页
+  window.addEventListener('keydown', (e) => {
+    if (boardActive || e.key !== 'Escape') return;
+    showHome();
+  });
+
+  /* ============================================================
+   * 16. 启动
    * ============================================================ */
   buildPalette();
   selectColor(0, false);
