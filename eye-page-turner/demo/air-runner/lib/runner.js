@@ -1113,8 +1113,8 @@ export class RunnerGame {
       squash = 0.8;
     }
 
-    const x = W / 2 + off * W * 0.17;
-    const bw = W * 0.5 * scale;
+    const x = W / 2 + off * W * 0.3;
+    const bw = W * 0.2 * scale;
     const bh = bw / (this.bow.naturalWidth / this.bow.naturalHeight);
     const bottom = H + dip - lift;
 
