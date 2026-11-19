@@ -18,6 +18,13 @@
  *            进入画板后整页收起，画板内不再出现指南面板。
  * v3.2 变更：真机模式控制条从画布浮层移入工具栏，紧贴「保存」右侧，
  *            其余按钮顺势左移；窄屏自动折到工具栏第二行，画布不再被遮挡。
+ * v3.3 变更：入口页标题改为「AIR CANVAS」，并加入 Aceternity Lamp 灯效
+ *            （顶部光源线 + 向下光幕 + 发光标题，纯 CSS）。
+ * v3.4 变更：入口页去掉两个按钮，改为三段式上下滑动：
+ *            上＝操作指南（向上滑 / 滚轮上推）、中＝封面、下＝画板（向下滑 / 滚轮下推，
+ *            画板页露出 60% 即自动进入）。封面排版换成杂志扉页风：
+ *            细字距小标 + 大号 Didot 衬线标题（白色主体、蓝色错位投影）+ 斜体副标。
+ *            台灯灯效保留；进入画板后滚轮上推或点顶栏「封面」退回。
  * ============================================================ */
 :root{
   --bg:#0a0e17;
@@ -77,6 +84,35 @@ body{
   text-align:right;
 }
 .meta b{ color:var(--accent); font-weight:600; }
+/* 顶栏右侧：状态字 + 「封面」返回（从画板回到入口页封面） */
+.topbar-end{ display:flex; align-items:center; gap:16px; }
+.cover-back{
+  height:28px;
+  padding:0 12px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:rgba(10,14,23,.6);
+  color:var(--muted);
+  font:600 10px/1 ui-monospace,Menlo,Consolas,monospace;
+  letter-spacing:.2em;
+  text-indent:.2em;
+  cursor:pointer;
+  transition:color var(--ease),border-color var(--ease),box-shadow var(--ease);
+}
+.cover-back:hover,
+.cover-back:focus-visible{
+  color:var(--accent);
+  border-color:var(--accent);
+  box-shadow:0 0 22px -8px var(--accent);
+  outline:none;
+}
+@media (max-width:1100px){
+  /* 窄屏顶栏：品牌副标与 GAZE + GESTURE 占位大，先让位给「封面」返回 */
+  .topbar{ padding:12px 18px; gap:10px; }
+  .brand .sub{ display:none; }
+  .meta{ display:none; }
+  .cover-back{ height:26px; padding:0 10px; letter-spacing:.12em; text-indent:.12em; }
+}
 
 /* ---------------- 工具栏 ---------------- */
 .toolbar{
@@ -543,191 +579,332 @@ body{
 }
 .help .hint b{ color:var(--warn); font-weight:600; }
 
-/* ---------------- 首页（入口页，非画板） ----------------
- * v3.1：打开页面先进入入口页，只有点了「进入画板」才显示画板；
- *       操作指南只在入口页提供，画板里不再出现。
- * 入口页显示时，用 body.is-landing 把整套画板 UI 收起。 */
+/* ---------------- 首页（封面 / 指南 / 画板 三段式滑动） ----------------
+ * v3.4：去掉「操作指南 / 进入画板」两个按钮，改成上下滑动切换：
+ *       向上拖（滚轮上推）看操作指南 —— 它在封面之上；
+ *       向下拖（滚轮下推）进画板 —— 它在封面之下。
+ * 封面排版改为杂志扉页风格：细字距小标 + 大号衬线标题（白色主体 / 蓝色错位投影）
+ * + 斜体衬线副标 + 滑动提示；顶部台灯灯效保留，标题投影直接用台灯色。
+ * 入口页显示时把画板 UI 淡出（原来是 display:none，改为透明度 + 可见性，
+ * 这样画布始终按真实尺寸排版，进入画板时不会出现 1×1 拉伸）。 */
 body.is-landing > .topbar,
 body.is-landing > .toolbar,
 body.is-landing > .stage,
-body.is-landing > .hud{ display:none; }
+body.is-landing > .hud{
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+}
+.topbar,.toolbar,.stage,.hud{
+  transition:opacity .45s cubic-bezier(.22,.61,.36,1),
+             visibility .45s,
+             transform .45s cubic-bezier(.22,.61,.36,1);
+}
 
 .landing{
   position:fixed;
   inset:0;
   z-index:500;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:44px 24px;
-  overflow:auto;
   background:
-    radial-gradient(760px 520px at 50% 6%, rgba(76,201,240,.16), transparent 70%),
-    radial-gradient(680px 460px at 84% 94%, rgba(179,136,255,.12), transparent 72%),
+    radial-gradient(900px 560px at 50% 2%, rgba(63,123,255,.15), transparent 66%),
+    radial-gradient(780px 520px at 84% 98%, rgba(76,201,240,.10), transparent 72%),
     var(--bg);
+  opacity:1;
+  transition:opacity .5s cubic-bezier(.22,.61,.36,1);
 }
 .landing[hidden]{ display:none; }
-/* 网格纹理：与画板背景同源的科技感底纹 */
+/* 进入画板：整页淡出并让出指针事件（滚轮仍由 window 监听） */
+.landing.is-gone{ opacity:0; pointer-events:none; }
+/* 底纹：与画板同源的网格，只在中心亮起 */
 .landing::before{
   content:"";
   position:absolute;
   inset:0;
   background-image:
-    linear-gradient(rgba(31,43,69,.55) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(31,43,69,.55) 1px, transparent 1px);
-  background-size:48px 48px;
-  -webkit-mask-image:radial-gradient(ellipse at 50% 38%, #000 28%, transparent 78%);
-  mask-image:radial-gradient(ellipse at 50% 38%, #000 28%, transparent 78%);
+    linear-gradient(rgba(31,43,69,.5) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(31,43,69,.5) 1px, transparent 1px);
+  background-size:64px 64px;
+  -webkit-mask-image:radial-gradient(ellipse at 50% 30%, #000 20%, transparent 74%);
+  mask-image:radial-gradient(ellipse at 50% 30%, #000 20%, transparent 74%);
   pointer-events:none;
 }
-.landing-inner{
+
+/* 滑动容器：三张全屏纸摞成一摞，滚到哪张停哪张 */
+.deck{
   position:relative;
-  width:100%;
-  max-width:880px;
-  margin:auto;
+  height:100%;
+  overflow-y:auto;
+  overflow-x:hidden;
+  scroll-snap-type:y mandatory;
+  scrollbar-width:none;
+  -webkit-overflow-scrolling:touch;
 }
-.landing-brand{ text-align:center; margin-bottom:34px; }
-.landing-brand h1{
-  margin:0;
-  font-size:clamp(30px,5vw,46px);
-  font-weight:800;
-  letter-spacing:.2em;
-}
-.landing-brand h1 .accent{ color:var(--accent); text-shadow:0 0 34px rgba(76,201,240,.65); }
-.landing-sub{
-  margin:12px 0 0;
-  font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;
-  letter-spacing:.4em;
-  color:var(--muted);
-}
-.landing-lead{
-  margin:0 0 26px;
-  text-align:center;
-  font-size:14px;
-  line-height:1.85;
-  color:var(--muted);
-}
-.landing-cards{
-  display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:18px;
-}
-.landing-card{
+.deck::-webkit-scrollbar{ display:none; }
+
+.sheet{
   position:relative;
+  height:100%;
   display:flex;
   flex-direction:column;
-  align-items:flex-start;
-  gap:8px;
-  padding:26px 24px 28px;
-  border-radius:20px;
-  border:1px solid var(--line);
-  background:rgba(17,24,39,.74);
-  color:var(--text);
-  text-align:left;
-  font-family:inherit;
-  cursor:pointer;
-  transition:transform var(--ease),border-color var(--ease),box-shadow var(--ease),background var(--ease);
-}
-.landing-card:hover,
-.landing-card:focus-visible{
-  transform:translateY(-3px);
-  border-color:var(--accent);
-  box-shadow:0 0 44px -14px var(--accent);
-  outline:none;
-}
-.landing-card .landing-num{
-  font:700 13px/1 ui-monospace,Menlo,Consolas,monospace;
-  letter-spacing:.06em;
-  color:var(--accent);
-}
-.landing-card .landing-title{
-  font-size:22px;
-  font-weight:800;
-  letter-spacing:.14em;
-}
-.landing-card .landing-desc{
-  font-size:12.5px;
-  line-height:1.7;
-  letter-spacing:.04em;
-  color:var(--muted);
-}
-.landing-card.is-primary{
-  border-color:rgba(76,201,240,.5);
-  background:linear-gradient(160deg,rgba(76,201,240,.18),rgba(17,24,39,.82) 62%);
-}
-.landing-card.is-primary:hover,
-.landing-card.is-primary:focus-visible{
-  box-shadow:0 0 56px -12px var(--accent);
-}
-.landing-foot{
-  margin:24px 0 0;
+  align-items:center;
+  justify-content:center;
+  padding:clamp(28px,5vh,64px) clamp(18px,5vw,72px);
+  scroll-snap-align:start;
+  scroll-snap-stop:always;
   text-align:center;
-  font:600 11px/1.7 ui-monospace,Menlo,Consolas,monospace;
-  letter-spacing:.12em;
-  color:rgba(125,141,168,.78);
 }
 
-/* 入口页里的指南：沿用 .help 排版，但改成文档式静态面板 */
-.guide-panel{ display:grid; gap:18px; }
-.guide-panel[hidden]{ display:none; }
-.landing .help{
-  position:static;
+/* 页眉小标：细字距、全大写 */
+.eyebrow{
+  position:relative;
+  z-index:2;
+  margin:0;
+  font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;
+  letter-spacing:.42em;
+  text-indent:.42em;
+  text-transform:uppercase;
+  color:rgba(186,203,226,.72);
+}
+
+/* 主标题：高反差衬线，白字 + 蓝色错位投影（套印感） */
+.display{
+  position:relative;
+  z-index:2;
+  margin:clamp(12px,2.2vh,26px) 0 0;
+  font-family:Didot,"Bodoni 72","Bodoni MT","Playfair Display","Times New Roman",Georgia,"Songti SC",serif;
+  font-weight:700;
+  font-size:clamp(56px,13.8vw,198px);
+  line-height:.94;
+  letter-spacing:-.004em;
+  color:#fff;
+  text-shadow:0 0 90px rgba(76,201,240,.24);
+}
+.display > span{ position:relative; z-index:2; }
+.display::before,
+.display::after{
+  content:attr(data-text);
+  position:absolute;
+  left:0;
+  top:0;
   width:100%;
-  padding:24px 26px;
-  border-radius:20px;
-  border:1px solid var(--line);
-  background:rgba(17,24,39,.74);
-  backdrop-filter:none;
-  -webkit-backdrop-filter:none;
-  pointer-events:auto;
-  font-size:13px;
-  line-height:1.75;
+  pointer-events:none;
 }
-.landing .help h2{
-  margin:0 0 14px;
-  font-size:12px;
-  letter-spacing:.3em;
+/* 实心位移层：颜色跟台灯一致（--lamp-rgb），只从右下角露出一线亮边 */
+.display::after{
+  z-index:1;
+  color:#4cc9f0;
+  transform:translate(.023em,.027em);
 }
-.landing .help ul{
-  grid-template-columns:minmax(0,1fr);
-  row-gap:10px;
+/* 描边重影：再错开一点，模拟印版没有对齐 */
+.display::before{
+  z-index:0;
+  color:transparent;
+  -webkit-text-stroke:1.2px rgba(76,201,240,.7);
+  transform:translate(.036em,.043em);
 }
-.landing .help li{ align-items:flex-start; gap:14px; }
-.landing .help .k{ min-width:112px; font-size:12px; }
-.landing .help .hint{
-  margin-top:16px;
-  padding-top:14px;
-  font-size:12px;
-  line-height:1.8;
-}
-.landing-back{
-  justify-self:center;
-  min-width:150px;
-  height:48px;
-  padding:0 26px;
-  border-radius:12px;
-  border:1px solid var(--line);
-  background:rgba(10,14,23,.72);
-  color:var(--text);
-  font:700 14px/1 ui-sans-serif,system-ui,sans-serif;
-  letter-spacing:.18em;
-  cursor:pointer;
-  transition:border-color var(--ease),box-shadow var(--ease),color var(--ease);
-}
-.landing-back:hover,
-.landing-back:focus-visible{
-  border-color:var(--accent);
-  color:var(--accent);
-  box-shadow:0 0 28px -8px var(--accent);
-  outline:none;
-}
-@media (max-width:720px){
-  .landing{ padding:32px 18px; }
-  .landing-brand{ margin-bottom:24px; }
-  .landing-cards{ grid-template-columns:minmax(0,1fr); }
-  .landing .help ul{ grid-template-columns:minmax(0,1fr); }
+.display--sm{ font-size:clamp(36px,6.6vw,84px); }
+
+/* 副标：斜体衬线 */
+.lede{
+  position:relative;
+  z-index:2;
+  margin:clamp(14px,2.2vh,24px) 0 0;
+  font-family:Didot,"Bodoni 72",Georgia,"Songti SC",serif;
+  font-style:italic;
+  font-size:clamp(15px,2vw,25px);
+  letter-spacing:.03em;
+  color:rgba(224,235,250,.84);
 }
 
+/* 滑动提示 */
+.cue{
+  position:absolute;
+  left:50%;
+  bottom:clamp(16px,3.2vh,32px);
+  transform:translateX(-50%);
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin:0;
+  font:600 10px/1 ui-monospace,Menlo,Consolas,monospace;
+  letter-spacing:.4em;
+  text-indent:.4em;
+  text-transform:uppercase;
+  color:rgba(140,159,187,.82);
+  white-space:nowrap;
+  pointer-events:none;
+}
+.cue i{
+  font-style:normal;
+  font-size:12px;
+  letter-spacing:0;
+  text-indent:0;
+  animation:cue-bob 2.6s ease-in-out infinite;
+}
+.cue--top{ top:clamp(14px,2.8vh,26px); bottom:auto; }
+.cue--top i{ animation-name:cue-bob-up; }
+@keyframes cue-bob{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(4px); } }
+@keyframes cue-bob-up{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-4px); } }
+
+/* ---------------- 封面 ---------------- */
+.hero{
+  position:relative;
+  width:min(1180px,100%);
+  padding-top:clamp(74px,12vh,130px);
+}
+/* 台灯灯效：Aceternity「Lamp Section Header」
+ * 顶部一条水平光源线，下方一片向下渐隐的光幕把标题照亮。
+ * 纯 CSS 实现（无 Tailwind / framer-motion），颜色跟随 --lamp-rgb。 */
+.lamp{
+  --lamp-rgb:76,201,240;
+  position:absolute;
+  top:0;
+  left:50%;
+  width:min(1180px,100%);
+  height:clamp(300px,34vw,420px);
+  transform:translateX(-50%);
+  pointer-events:none;
+  z-index:0;
+}
+.lamp__part{
+  position:absolute;
+  left:50%;
+  top:0;
+  animation:lamp-fade 1.1s ease-out both;
+}
+@keyframes lamp-fade{
+  from{ opacity:0; }
+  to{ opacity:1; }
+}
+/* 光幕：横向渐变给出中间亮、两侧渐隐的柔和光带，纵向 mask 控制向下衰减。
+ * 全部使用线性渐变，不依赖 blur / conic，避免出现中轴亮柱和硬边。 */
+.lamp__curtain{
+  width:88%;
+  height:100%;
+  transform:translateX(-50%);
+  background:linear-gradient(90deg,
+    rgba(var(--lamp-rgb),0) 0%,
+    rgba(var(--lamp-rgb),.07) 14%,
+    rgba(var(--lamp-rgb),.16) 32%,
+    rgba(var(--lamp-rgb),.25) 46%,
+    rgba(var(--lamp-rgb),.28) 50%,
+    rgba(var(--lamp-rgb),.25) 54%,
+    rgba(var(--lamp-rgb),.16) 68%,
+    rgba(var(--lamp-rgb),.07) 86%,
+    rgba(var(--lamp-rgb),0) 100%);
+  -webkit-mask-image:linear-gradient(180deg,#000 0%,#000 12%,rgba(0,0,0,.66) 42%,rgba(0,0,0,.3) 68%,rgba(0,0,0,.06) 88%,rgba(0,0,0,0) 100%);
+  mask-image:linear-gradient(180deg,#000 0%,#000 12%,rgba(0,0,0,.66) 42%,rgba(0,0,0,.3) 68%,rgba(0,0,0,.06) 88%,rgba(0,0,0,0) 100%);
+  animation-delay:.06s;
+}
+/* 外围溢光：更宽更淡的一层，让光幕边缘融进背景 */
+.lamp__spill{
+  width:100%;
+  height:100%;
+  transform:translateX(-50%);
+  background:linear-gradient(90deg,
+    rgba(var(--lamp-rgb),0) 0%,
+    rgba(var(--lamp-rgb),.03) 24%,
+    rgba(var(--lamp-rgb),.06) 50%,
+    rgba(var(--lamp-rgb),.03) 76%,
+    rgba(var(--lamp-rgb),0) 100%);
+  -webkit-mask-image:linear-gradient(180deg,#000 0%,rgba(0,0,0,.7) 30%,rgba(0,0,0,.28) 62%,rgba(0,0,0,0) 96%);
+  mask-image:linear-gradient(180deg,#000 0%,rgba(0,0,0,.7) 30%,rgba(0,0,0,.28) 62%,rgba(0,0,0,0) 96%);
+  animation-delay:.14s;
+}
+/* 光源线：顶部那一道水平亮线 */
+.lamp__line{
+  width:75%;
+  height:3px;
+  border-radius:999px;
+  transform:translateX(-50%);
+  background:linear-gradient(90deg,
+    transparent,
+    rgba(var(--lamp-rgb),.35) 10%,
+    rgba(var(--lamp-rgb),1) 50%,
+    rgba(var(--lamp-rgb),.35) 90%,
+    transparent);
+  box-shadow:
+    0 0 12px rgba(var(--lamp-rgb),.95),
+    0 0 34px rgba(var(--lamp-rgb),.6),
+    0 0 80px rgba(var(--lamp-rgb),.35);
+  animation-delay:.02s;
+}
+
+/* ---------------- 01 操作指南 ---------------- */
+.sheet--guide{
+  /* 内容用 margin:auto 垂直居中：内容比屏幕高时 auto 自动归零，
+     不会像 justify-content:center 那样把顶部裁掉 */
+  justify-content:flex-start;
+  overflow-y:auto;
+  overscroll-behavior:auto;
+  padding-top:clamp(40px,8vh,78px);
+  padding-bottom:clamp(64px,11vh,104px);
+}
+.guide-wrap{ width:min(1080px,100%); margin:auto 0; }
+.guide-list{
+  position:relative;
+  z-index:2;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:0 clamp(24px,3.4vw,54px);
+  width:100%;
+  margin:clamp(16px,2.8vh,28px) 0 0;
+  padding:0;
+  list-style:none;
+  text-align:left;
+}
+.guide-list li{
+  display:flex;
+  align-items:baseline;
+  gap:14px;
+  padding:9px 0;
+  border-top:1px solid rgba(31,43,69,.92);
+  font-size:12.8px;
+  line-height:1.65;
+  color:rgba(200,213,232,.9);
+}
+.guide-list .k{
+  flex:0 0 104px;
+  font:600 10.5px/1.75 ui-monospace,Menlo,Consolas,monospace;
+  letter-spacing:.08em;
+  color:var(--accent);
+}
+.guide-list .v{ flex:1 1 auto; }
+.guide-note{
+  position:relative;
+  z-index:2;
+  margin:clamp(14px,2.4vh,24px) 0 0;
+  padding-top:14px;
+  border-top:1px solid var(--line);
+  text-align:left;
+  font-size:12px;
+  line-height:1.9;
+  color:rgba(148,166,192,.92);
+}
+.guide-note b{ color:var(--warn); font-weight:600; }
+/* 指南页内容可能比屏幕高：提示跟着内容走，避免压住正文 */
+.sheet--guide .cue{
+  position:static;
+  transform:none;
+  margin-top:clamp(16px,3vh,28px);
+}
+
+/* ---------------- 03 画板扉页 ---------------- */
+.board-intro{ width:min(900px,100%); }
+
+/* ---------------- 窄屏 ---------------- */
+@media (max-width:760px){
+  .sheet{ padding:24px 18px 66px; }
+  .hero{ padding-top:64px; }
+  .display{ font-size:clamp(44px,14.5vw,88px); }
+  .display--sm{ font-size:clamp(32px,9.5vw,58px); }
+  .lamp{ height:220px; }
+  .lamp__curtain{ width:100%; }
+  .lamp__line{ width:90%; }
+  .guide-list{ grid-template-columns:minmax(0,1fr); }
+  .guide-list .k{ flex-basis:92px; }
+  .cue{ letter-spacing:.26em; text-indent:.26em; font-size:9.5px; }
+}
 /* ---------------- Toast ---------------- */
 .toast{
   position:fixed;
@@ -1020,68 +1197,81 @@ body.is-landing > .hud{ display:none; }
 <body class="is-landing">
 
 <!-- ============================================================
-     首页 · 入口页（不是画板）
-     1 操作指南 / 2 进入画板；进入画板后本页整体隐藏，指南也不会出现在画板里
+     首页 · 三段式滑动（封面居中）
+     上：操作指南（向上拖 / 滚轮上推）　下：画板（向下拖 / 滚轮下推）
+     不再有「操作指南 / 进入画板」按钮，滑到画板页即自动进入
      ============================================================ -->
 <div class="landing" id="landing">
-  <div class="landing-inner">
-    <header class="landing-brand">
-      <h1>隔空画板<span class="accent">.</span></h1>
-      <p class="landing-sub">AIR CANVAS · GAZE + GESTURE</p>
-    </header>
+  <div class="deck" id="deck">
 
-    <section id="homePanel" aria-label="入口选择">
-      <p class="landing-lead">用眼睛定位笔尖，用手势落笔。<br />第一次使用建议先花一分钟看一遍操作指南。</p>
-      <div class="landing-cards">
-        <button class="landing-card" id="btnOpenGuide" type="button">
-          <span class="landing-num">1</span>
-          <span class="landing-title">操作指南</span>
-          <span class="landing-desc">手势、注视与快捷键说明</span>
-        </button>
-        <button class="landing-card is-primary" id="btnEnterBoard" type="button">
-          <span class="landing-num">2</span>
-          <span class="landing-title">进入画板</span>
-          <span class="landing-desc">开始隔空作画</span>
-        </button>
-      </div>
-      <p class="landing-foot">进入画板后不再显示操作指南；刷新页面即可回到本页。</p>
-    </section>
-
-    <section class="guide-panel" id="guidePanel" aria-label="操作指南" hidden>
-      <aside class="help">
-        <h2>操作指南</h2>
-        <ul>
+    <!-- 01 · 操作指南（封面之上） -->
+    <section class="sheet sheet--guide" id="sheetGuide" aria-label="操作指南">
+      <div class="guide-wrap">
+        <p class="eyebrow">01 · 使用说明</p>
+        <h2 class="display display--sm" data-text="操作指南"><span>操作指南</span></h2>
+        <p class="lede">一分钟读完，之后全靠眼睛和手。</p>
+        <ul class="guide-list">
           <li><span class="k">真机启动</span><span class="v">工具栏「保存」右侧「开启摄像头」→ 授权 → 建议先做 9 点标定</span></li>
           <li><span class="k">注视移动</span><span class="v">笔尖按九宫格平滑跟随视线</span></li>
           <li><span class="k">捏合</span><span class="v">落笔 · 笔尖移动即画线（橡皮模式下擦除）</span></li>
           <li><span class="k">张开手掌</span><span class="v">抬笔 · 只移动笔尖不画线</span></li>
-          <li><span class="k">拇指朝上</span><span class="v">切换画笔 / 橡皮；按住不重复，需先张开手掌再下一次</span></li>
+          <li><span class="k">拇指朝上</span><span class="v">切换画笔 / 橡皮；按住不重复</span></li>
           <li><span class="k">食指朝上</span><span class="v">撤回一笔（等价 Ctrl+Z）；按住不重复</span></li>
-          <li><span class="k">调色板+捏合</span><span class="v">展开颜色条（默认收起，防误触）</span></li>
+          <li><span class="k">调色板＋捏合</span><span class="v">展开颜色条（默认收起，防误触）</span></li>
           <li><span class="k">注视色块 0.8s</span><span class="v">停留选中并自动收起</span></li>
-          <li><span class="k">注视+捏合</span><span class="v">撤回 / 下一步 / 复位 / 笔尖来源 / 画布色 / 工具 / 清空 / 保存（双条件）</span></li>
-          <li><span class="k">左手张开拖动</span><span class="v">平移画布内容（平移期间笔尖锁定，不落笔）</span></li>
+          <li><span class="k">注视＋捏合</span><span class="v">撤回 / 下一步 / 复位 / 笔尖来源 / 画布色 / 工具 / 清空 / 保存</span></li>
+          <li><span class="k">左手张开拖动</span><span class="v">平移画布内容（平移期间笔尖锁定）</span></li>
           <li><span class="k">Victory</span><span class="v">切换到下一个颜色（降级兜底）</span></li>
         </ul>
-        <div class="hint">
+        <p class="guide-note">
           <b>真机模式</b>：WebGazer 负责注视（需 localhost / https），MediaPipe 负责手势，两路共用 WebGazer 的摄像头。
           右手拇指与食指捏合落笔、松开或张开手掌抬笔；拇指朝上切换工具、食指朝上撤回；左手张开拖动平移。左右手识别反了按 <b>H</b> 交换。
           无摄像头时仍可用鼠标模拟：移动＝注视，按住＝落笔，<b>空格＋拖动＝左手平移</b>；
           1–6 选色、E 画笔/橡皮、T 笔尖来源、B 画布黑/白、R 复位、Ctrl+Z 撤回、Ctrl+Y 重做、
           P 颜色条、C 清空、S 保存、G 模拟注视丢失、V 触发 Victory。
-        </div>
-      </aside>
-      <button class="landing-back" id="btnGuideBack" type="button">返回</button>
+        </p>
+      </div>
+      <p class="cue"><i>↓</i><span>回到封面 / 进入画板</span></p>
     </section>
+
+    <!-- 02 · 封面（默认停在这里） -->
+    <section class="sheet sheet--hero" id="sheetHero" aria-label="封面">
+      <div class="hero">
+        <div class="lamp" aria-hidden="true">
+          <div class="lamp__part lamp__spill"></div>
+          <div class="lamp__part lamp__curtain"></div>
+          <div class="lamp__part lamp__line"></div>
+        </div>
+        <p class="eyebrow">隔空画板 · 第 03 版 · 眼动 ＋ 手势</p>
+        <h1 class="display" data-text="Air Canvas"><span>Air Canvas</span></h1>
+        <p class="lede">注视为笔，手势为墨。</p>
+      </div>
+      <p class="cue cue--top"><i>↑</i><span>操作指南</span></p>
+      <p class="cue"><span>画板</span><i>↓</i></p>
+    </section>
+
+    <!-- 03 · 画板（封面之下） -->
+    <section class="sheet sheet--board" id="sheetBoard" aria-label="画板">
+      <div class="board-intro">
+        <p class="eyebrow">02 · 画板</p>
+        <h2 class="display display--sm" data-text="开始作画"><span>开始作画</span></h2>
+        <p class="lede">继续向下滑，进入隔空画板。</p>
+      </div>
+      <p class="cue cue--top"><i>↑</i><span>封面</span></p>
+      <p class="cue"><span>进入画板</span><i>↓</i></p>
+    </section>
+
   </div>
 </div>
-
 <header class="topbar">
   <div class="brand">
     <h1>隔空画板<span class="accent">.</span></h1>
     <span class="sub">AIR CANVAS</span>
   </div>
-  <div class="meta">GAZE <b>+</b> GESTURE</div>
+  <div class="topbar-end">
+    <div class="meta">GAZE <b>+</b> GESTURE</div>
+    <button class="cover-back" id="btnCoverBack" type="button" title="回到封面（也可以滚轮向上推 / Esc）">封面 ↑</button>
+  </div>
 </header>
 
 <div class="toolbar">
@@ -3403,41 +3593,35 @@ body.is-landing > .hud{ display:none; }
   })();
 
   /* ============================================================
-   * 15. 入口页：操作指南 / 进入画板
+   * 15. 入口页：封面 / 操作指南 / 画板（上下滑动切换）
    * ------------------------------------------------------------
-   * 打开页面停在入口页（body.is-landing），画板 UI 全部收起；
-   * 只有点击「进入画板」才移除 is-landing、显示画板并重新测量画布。
-   * 画板内不再提供操作指南，需要回看时刷新页面回到入口页即可。
+   * 三张全屏「纸」摞在一起：操作指南在上、封面居中、画板在下。
+   * 打开时停在封面；向上滑看指南，向下滑进画板（画板页露出 60% 即自动进入）。
+   * 进入后入口页淡出、画板 UI 淡入；滚轮上推（或点右上「封面」）可退回封面。
    * ============================================================ */
   const landingEl = $('landing');
-  const homePanel = $('homePanel');
-  const guidePanel = $('guidePanel');
+  const deckEl = $('deck');
+  const sheetHero = $('sheetHero');
+  const sheetBoard = $('sheetBoard');
 
-  function showGuide() {
-    if (boardActive) return;
-    homePanel.hidden = true;
-    guidePanel.hidden = false;
-    landingEl.scrollTop = 0;
-  }
+  const ENTER_RATIO = 0.6;    // 画板页露出 60% 即进入
+  const EXIT_WHEEL = 260;     // 画板内滚轮上推的累计阈值（像素）
+  let exitAcc = 0;
+  let lastModeAt = 0;
 
-  function showHome() {
-    if (boardActive) return;
-    guidePanel.hidden = true;
-    homePanel.hidden = false;
-    landingEl.scrollTop = 0;
-  }
+  const coverTop = () => sheetHero.offsetTop;
 
   function enterBoard() {
     if (boardActive) return;
     boardActive = true;
+    exitAcc = 0;
+    lastModeAt = performance.now();
 
-    guidePanel.hidden = true;
-    homePanel.hidden = true;
-    landingEl.hidden = true;
+    landingEl.classList.add('is-gone');
+    landingEl.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('is-landing');
 
-    // 画板此前是 display:none，画布测得的宽高为 0：显示后必须立刻重新同步，
-    // 否则首帧会被拉伸成 1×1。ResizeObserver 也会触发一次，这里主动兜底。
+    // 画布一直按真实尺寸排版，这里再同步一次兜底（窗口可能在门外变过大小）
     syncSize();
     requestAnimationFrame(() => {
       syncSize();
@@ -3448,15 +3632,58 @@ body.is-landing > .hud{ display:none; }
     toast('已进入画板 · 移动鼠标或用注视控制笔尖');
   }
 
-  $('btnOpenGuide').addEventListener('click', showGuide);
-  $('btnEnterBoard').addEventListener('click', enterBoard);
-  $('btnGuideBack').addEventListener('click', showHome);
+  function exitBoard() {
+    if (!boardActive) return;
+    boardActive = false;
+    exitAcc = 0;
+    lastModeAt = performance.now();
 
-  // 入口页里 Esc = 从指南返回首页
+    document.body.classList.add('is-landing');
+    landingEl.classList.remove('is-gone');
+    landingEl.removeAttribute('aria-hidden');
+
+    // 直接回封面：临时关掉吸附，避免回退过程中被拉回画板页
+    deckEl.style.scrollSnapType = 'none';
+    deckEl.scrollTop = coverTop();
+    setTimeout(() => { deckEl.style.scrollSnapType = ''; }, 80);
+
+    toast('已回到封面 · 向上滑查看操作指南');
+  }
+
+  // 滑到画板页露出足够多时自动进入（只读两个尺寸，直接同步判断即可）
+  deckEl.addEventListener('scroll', () => {
+    if (boardActive) return;
+    const h = deckEl.clientHeight || 1;
+    const ratio = (deckEl.scrollTop - (sheetBoard.offsetTop - h)) / h;
+    if (ratio >= ENTER_RATIO) enterBoard();
+  }, { passive: true });
+
+  // 画板内滚轮上推 = 退回封面（捏合/拖动不占滚轮，不会和落笔冲突）
+  window.addEventListener('wheel', (e) => {
+    if (!boardActive) return;
+    if (performance.now() - lastModeAt < 800) { exitAcc = 0; return; }
+    if (calibOverlay.classList.contains('is-open')) return;
+    if (e.deltaY < 0) {
+      exitAcc += Math.min(-e.deltaY, 140);
+      if (exitAcc >= EXIT_WHEEL) exitBoard();
+    } else {
+      exitAcc = 0;
+    }
+  }, { passive: true });
+
+  $('btnCoverBack').addEventListener('click', exitBoard);
+
+  // Esc：画板里回封面；指南里回封面
   window.addEventListener('keydown', (e) => {
-    if (boardActive || e.key !== 'Escape') return;
-    showHome();
+    if (e.key !== 'Escape') return;
+    if (boardActive) { exitBoard(); return; }
+    if (deckEl.scrollTop < deckEl.clientHeight * 0.6) deckEl.scrollTop = coverTop();
   });
+
+  // 初始停在封面（浏览器可能恢复上次滚动位置，先关掉）
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  deckEl.scrollTop = coverTop();
+  requestAnimationFrame(() => { if (!boardActive) deckEl.scrollTop = coverTop(); });
 
   /* ============================================================
    * 16. 启动
