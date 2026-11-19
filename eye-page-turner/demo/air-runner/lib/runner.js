@@ -329,25 +329,54 @@ export class RunnerGame {
     const { W, H } = this;
     ctx.clearRect(0, 0, W, H);
 
-    // 天空
+    // 天空：白天的薄云与散射光
     const sky = ctx.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, '#06120f');
-    sky.addColorStop(0.45, '#0c211c');
-    sky.addColorStop(1, '#0f2f27');
+    sky.addColorStop(0, '#040d0b');
+    sky.addColorStop(0.14, '#071613');
+    sky.addColorStop(0.3, '#0b211b');
+    sky.addColorStop(1, '#0c2820');
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, W, H);
 
-    // 萤火点（原星点，压暗以符合河谷夜色）
-    ctx.fillStyle = 'rgba(190, 240, 214, 0.20)';
-    for (const s of this.stars) {
+    const horizon = H * 0.34;
+
+    // 云：几团亮云压在远山上空
+    for (let i = 0; i < 5; i++) {
+      const cx = (((i * 0.31 + 0.12) % 1) * 1.1 - 0.05) * W;
+      const cy = H * (0.03 + (i % 3) * 0.045);
+      const rw = W * (0.16 + (i % 4) * 0.05);
+      const rh = rw * 0.16;
+      const cg = ctx.createRadialGradient(cx, cy, rh * 0.2, cx, cy, rw);
+      cg.addColorStop(0, 'rgba(198, 240, 228, 0.11)');
+      cg.addColorStop(0.55, 'rgba(198, 240, 228, 0.045)');
+      cg.addColorStop(1, 'rgba(198, 240, 228, 0)');
+      ctx.fillStyle = cg;
       ctx.beginPath();
-      ctx.arc(s.x * W, s.y * H * 0.9, s.r * 0.85, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy, rw, rh, 0, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    const horizon = H * 0.34;
+    // 云隙光：右上斜向左下，screen 叠加避免发灰
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    for (let i = 0; i < 3; i++) {
+      const bx = W * (0.55 + i * 0.11);
+      const bw = W * 0.045;
+      const g = ctx.createLinearGradient(bx, 0, bx - W * 0.42, H * 0.62);
+      g.addColorStop(0, 'rgba(158, 232, 208, 0.045)');
+      g.addColorStop(1, 'rgba(158, 232, 208, 0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(bx - bw, 0);
+      ctx.lineTo(bx + bw, 0);
+      ctx.lineTo(bx - W * 0.36 + bw * 1.6, H * 0.6);
+      ctx.lineTo(bx - W * 0.36 - bw * 1.6, H * 0.6);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
 
-    // 两层河谷山脊，极慢视差
+    // 三层山脊：越远越淡，形成大气透视
     const drift = this.stats.distance * 0.012;
     const ridge = (baseY, amp, freq, phase, color) => {
       ctx.beginPath();
@@ -364,16 +393,18 @@ export class RunnerGame {
       ctx.fillStyle = color;
       ctx.fill();
     };
-    ridge(horizon + 1, 0.072, 5.2, drift * 0.6, '#061b17');
-    ridge(horizon + 1, 0.1, 3.1, drift * 0.9 + 1.7, '#0a2620');
+    ridge(horizon + 1, 0.115, 4.1, drift * 0.45, '#153038');
+    ridge(horizon + 1, 0.092, 5.6, drift * 0.6 + 2.4, '#122b28');
+    ridge(horizon + 1, 0.068, 6.4, drift * 0.78 + 2.2, '#0f2420');
+    ridge(horizon + 1, 0.044, 3.2, drift * 0.9 + 1.7, '#0b1b17');
 
-    // 谷底雾带，柔化地平线
-    const mist = ctx.createLinearGradient(0, horizon - H * 0.06, 0, horizon + H * 0.10);
-    mist.addColorStop(0, 'rgba(138, 214, 184, 0)');
-    mist.addColorStop(0.42, 'rgba(138, 214, 184, 0.07)');
-    mist.addColorStop(1, 'rgba(138, 214, 184, 0)');
+    // 谷底雾带：白天的水汽更亮
+    const mist = ctx.createLinearGradient(0, horizon - H * 0.05, 0, horizon + H * 0.06);
+    mist.addColorStop(0, 'rgba(150, 216, 196, 0)');
+    mist.addColorStop(0.45, 'rgba(150, 216, 196, 0.035)');
+    mist.addColorStop(1, 'rgba(150, 216, 196, 0)');
     ctx.fillStyle = mist;
-    ctx.fillRect(0, horizon - H * 0.06, W, H * 0.16);
+    ctx.fillRect(0, horizon - H * 0.05, W, H * 0.11);
 
     this._drawRoad(ctx, now);
     this._drawObstacles(ctx, now);
@@ -395,8 +426,8 @@ export class RunnerGame {
 
     // 河岸底色：两侧压暗，让河面成为唯一亮面
     const bank = ctx.createLinearGradient(0, horizon, 0, H);
-    bank.addColorStop(0, 'rgba(19, 42, 31, 0)');
-    bank.addColorStop(1, 'rgba(14, 32, 23, 0.95)');
+    bank.addColorStop(0, 'rgba(16, 40, 28, 0)');
+    bank.addColorStop(1, 'rgba(7, 24, 17, 0.95)');
     ctx.fillStyle = bank;
     ctx.fillRect(0, horizon, W, H - horizon);
 
@@ -405,21 +436,24 @@ export class RunnerGame {
       const inner = [];
       for (let i = 0; i <= 22; i++) {
         const t = i / 22;
-        inner.push([W / 2 + side * halfAt(t), yAt(t), scaleAt(t)]);
+        inner.push([W / 2 + side * halfAt(t), yAt(t), scaleAt(t), t]);
       }
       ctx.beginPath();
       ctx.moveTo(inner[0][0], inner[0][1]);
       for (const [x, y] of inner) ctx.lineTo(x, y);
       // 由近及远退回外侧轮廓：先横向外扩，再往上抬，坡面才立得起来
       for (let i = inner.length - 1; i >= 0; i--) {
-        const [x, y, s] = inner[i];
-        ctx.lineTo(x + side * W * (0.06 + 0.34 * s), y - H * (0.02 + 0.10 * s));
+        const [x, y, s, t] = inner[i];
+        ctx.lineTo(
+          x + side * W * (0.05 + 0.3 * s) * (1 + 0.34 * Math.sin(t * 3.4 + side * 1.9) + 0.12 * Math.sin(t * 8.1 + side)),
+          y - H * (0.02 + 0.10 * s)
+        );
       }
       ctx.closePath();
-      const slope = ctx.createLinearGradient(W / 2, 0, W / 2 + side * W * 0.55, 0);
-      slope.addColorStop(0, 'rgba(26, 62, 45, 0.96)');
-      slope.addColorStop(0.32, 'rgba(16, 44, 33, 0.985)');
-      slope.addColorStop(1, 'rgba(6, 18, 14, 1)');
+      const slope = ctx.createLinearGradient(0, horizon, 0, H);
+      slope.addColorStop(0, 'rgba(24, 62, 41, 0.97)');
+      slope.addColorStop(0.45, 'rgba(14, 40, 27, 0.985)');
+      slope.addColorStop(1, 'rgba(4, 14, 10, 1)');
       ctx.fillStyle = slope;
       ctx.fill();
 
@@ -427,7 +461,7 @@ export class RunnerGame {
       for (let k = 0; k < 7; k++) {
         const t = 0.16 + (k / 7) * 0.78;
         const s = scaleAt(t);
-        ctx.fillStyle = `rgba(27, 60, 43, ${0.22 + 0.2 * s})`;
+        ctx.fillStyle = `rgba(30, 72, 46, ${0.26 + 0.24 * s})`;
         ctx.beginPath();
         ctx.ellipse(
           W / 2 + side * (halfAt(t) + W * (0.02 + (((k * 31) % 7) / 7) * 0.08) * s),
@@ -453,7 +487,7 @@ export class RunnerGame {
     const trees = [];
     for (const side of [-1, 1]) {
       for (let row = 0; row < 2; row++) {
-        const count = row === 0 ? 11 : 9;
+        const count = row === 0 ? 21 : 16;
         const phase = (this.stats.distance * (row === 0 ? 1.4 : 0.9)) % 1;
         for (let k = 0; k < count; k++) {
           const t = 1 - (k + phase) / count;
@@ -486,16 +520,22 @@ export class RunnerGame {
       const dir = mirror ? -1 : 1;
       const tw = h * 0.4;
       ctx.globalAlpha = alpha;
+      if (!mirror) {
+        ctx.fillStyle = 'rgba(3, 12, 8, 0.32)';
+        ctx.beginPath();
+        ctx.ellipse(x, y + h * 0.015, tw * 0.9, tw * 0.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.lineCap = 'round';
-      ctx.strokeStyle = mirror ? 'rgba(5, 18, 13, 0.95)' : 'rgba(14, 32, 24, 0.98)';
+      ctx.strokeStyle = mirror ? 'rgba(5, 18, 13, 0.95)' : 'rgba(8, 21, 15, 0.98)';
       ctx.lineWidth = Math.max(1, h * 0.05);
       ctx.beginPath();
       ctx.moveTo(x, y);
       ctx.lineTo(x, y - dir * h * 0.5);
       ctx.stroke();
       ctx.fillStyle = mirror
-        ? 'rgba(5, 22, 17, 0.96)'
-        : `rgba(${Math.round(23 + tint * 15)}, ${Math.round(60 + tint * 24)}, ${Math.round(44 + tint * 17)}, 0.98)`;
+        ? 'rgba(16, 52, 38, 0.92)'
+        : `rgba(${Math.round(9 + tint * 7)}, ${Math.round(30 + tint * 14)}, ${Math.round(19 + tint * 9)}, 0.98)`;
       if (needle) {
         for (let i = 0; i < 3; i++) {
           const w = tw * (1 - i * 0.26);
@@ -516,7 +556,7 @@ export class RunnerGame {
         ctx.fill();
       }
       if (!mirror) {
-        ctx.strokeStyle = 'rgba(176, 236, 202, 0.2)';
+        ctx.strokeStyle = 'rgba(186, 240, 212, 0.22)';
         ctx.lineWidth = Math.max(0.8, h * 0.018);
         ctx.beginPath();
         ctx.arc(x - tw * 0.18, y - h * 0.72, tw * 0.62, Math.PI * 1.02, Math.PI * 1.52);
@@ -525,60 +565,17 @@ export class RunnerGame {
       ctx.globalAlpha = 1;
     };
 
-    // ── 水下倒影：山影压暗岸边，再叠上树的镜像 ──
+    // 近岸水色顺势暗下去，不做任何形状化倒影：形状一硬就假
     ctx.save();
     this._waterPath(ctx, halfAt, horizon);
     ctx.clip();
-
-    // 河心月光反光：分三层叠加，中心最亮、两侧柔和过渡
-    for (const [w, a] of [[0.62, 0.04], [0.48, 0.05], [0.34, 0.055]]) {
-      ctx.beginPath();
-      for (let i = 0; i <= 16; i++) ctx.lineTo(W / 2 - halfAt(i / 16) * w, yAt(i / 16));
-      for (let i = 16; i >= 0; i--) ctx.lineTo(W / 2 + halfAt(i / 16) * w, yAt(i / 16));
-      ctx.closePath();
-      const g = ctx.createLinearGradient(0, horizon, 0, H);
-      g.addColorStop(0, `rgba(150, 236, 214, ${a * 0.25})`);
-      g.addColorStop(0.55, `rgba(150, 236, 214, ${a * 1.6})`);
-      g.addColorStop(1, `rgba(150, 236, 214, ${a * 2.6})`);
-      ctx.fillStyle = g;
-      ctx.fill();
-    }
-
-    // 对岸树林的倒影带：内沿做成起伏的树线，否则只会读成一片阴影
-    for (const side of [-1, 1]) {
-      const N = 44;
-      ctx.beginPath();
-      for (let i = 0; i <= N; i++) {
-        const t = i / N;
-        ctx.lineTo(W / 2 + side * halfAt(t), yAt(t));
-      }
-      for (let i = N; i >= 0; i--) {
-        const t = i / N;
-        const s2 = scaleAt(t);
-        const jig = (Math.sin(t * 47) * 0.5 + Math.sin(t * 19 + 1.3) * 0.5) * W * 0.016 * s2;
-        ctx.lineTo(W / 2 + side * (halfAt(t) - W * 0.16 * s2 + jig), yAt(t));
-      }
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(7, 26, 20, 0.58)';
-      ctx.fill();
-    }
-
-    // 倒影：贴岸的竖条被水波切成错开的小段，才是水面的样子
-    for (const tr of trees) {
-      const s2 = tr.s;
-      const edge = W / 2 + tr.side * halfAt(tr.t);
-      const hgt = H * (0.085 + tr.h / H) * 0.95;
-      const wid = Math.max(2.2, H * 0.021 * s2);
-      const segs = 4;
-      const segH = hgt / segs;
-      const a0 = tr.row === 0 ? 0.5 : 0.34;
-      for (let i = 0; i < segs; i++) {
-        const a = a0 * (1 - i / (segs + 0.6));
-        const jitter = ((i % 2 ? 1 : -1) * wid * 0.16) + Math.sin(this.stats.distance * 3 + i * 1.7 + tr.t * 11) * wid * 0.12;
-        ctx.fillStyle = `rgba(4, 18, 13, ${a})`;
-        ctx.fillRect(edge - tr.side * wid * 0.5 + jitter, tr.y + i * segH, wid, Math.max(1.5, segH - 2.4));
-      }
-    }
+    const edgeShade = ctx.createLinearGradient(0, 0, W, 0);
+    edgeShade.addColorStop(0, 'rgba(5, 20, 16, 0.18)');
+    edgeShade.addColorStop(0.26, 'rgba(5, 20, 16, 0)');
+    edgeShade.addColorStop(0.74, 'rgba(5, 20, 16, 0)');
+    edgeShade.addColorStop(1, 'rgba(5, 20, 16, 0.18)');
+    ctx.fillStyle = edgeShade;
+    ctx.fillRect(0, horizon, W, H - horizon);
     ctx.restore();
 
     for (const tr of trees) paintTree(tr, 1, false);
@@ -586,8 +583,8 @@ export class RunnerGame {
     // 水面反光
     const sheen = ctx.createLinearGradient(0, horizon, 0, H);
     sheen.addColorStop(0, 'rgba(140, 232, 214, 0)');
-    sheen.addColorStop(0.6, 'rgba(140, 232, 214, 0.06)');
-    sheen.addColorStop(1, 'rgba(140, 232, 214, 0.15)');
+    sheen.addColorStop(0.6, 'rgba(232, 252, 248, 0.06)');
+    sheen.addColorStop(1, 'rgba(232, 252, 248, 0.15)');
     ctx.fillStyle = sheen;
     this._waterPath(ctx, halfAt, horizon);
     ctx.fill();
@@ -768,7 +765,7 @@ export class RunnerGame {
         ctx.beginPath();
         ctx.ellipse(cx, y, W * 0.016 * s, W * 0.006 * s, 0, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = `rgba(94, 150, 106, ${0.1 + 0.24 * s})`;
+        ctx.fillStyle = `rgba(52, 104, 72, ${0.1 + 0.24 * s})`;
         ctx.beginPath();
         ctx.ellipse(cx, y - W * 0.002 * s, W * 0.01 * s, W * 0.003 * s, 0, 0, Math.PI * 2);
         ctx.fill();
@@ -780,9 +777,9 @@ export class RunnerGame {
     const fadeTop = horizon - H * 0.035;
     const fadeH = H * 0.15;
     const fade = ctx.createLinearGradient(0, fadeTop, 0, fadeTop + fadeH);
-    fade.addColorStop(0, 'rgba(11, 31, 26, 0)');
-    fade.addColorStop(0.24, 'rgba(11, 31, 26, 0.74)');
-    fade.addColorStop(1, 'rgba(11, 31, 26, 0)');
+    fade.addColorStop(0, 'rgba(9, 32, 28, 0)');
+    fade.addColorStop(0.24, 'rgba(9, 32, 28, 0.74)');
+    fade.addColorStop(1, 'rgba(9, 32, 28, 0)');
     ctx.fillStyle = fade;
     ctx.fillRect(0, fadeTop, W, fadeH);
   }
@@ -865,13 +862,13 @@ export class RunnerGame {
       );
     }
 
-    // 夜色统一：压到与场景一致的青绿低亮度
+    // 把贴图拉向参考图的玉青色，再补一层极淡的白提亮
     ctx.fillStyle = 'rgba(7, 34, 31, 0.38)';
     ctx.fillRect(0, horizon, W, span);
     // 远端雾化：地平线附近柔化，避免贴图起始处出现硬边
     const fade = ctx.createLinearGradient(0, horizon, 0, horizon + span * 0.34);
-    fade.addColorStop(0, 'rgba(9, 32, 28, 0.92)');
-    fade.addColorStop(0.55, 'rgba(9, 32, 28, 0.42)');
+    fade.addColorStop(0, 'rgba(9, 32, 28, 0.94)');
+    fade.addColorStop(0.55, 'rgba(9, 32, 28, 0.4)');
     fade.addColorStop(1, 'rgba(9, 32, 28, 0)');
     ctx.fillStyle = fade;
     ctx.fillRect(0, horizon, W, span * 0.34);
