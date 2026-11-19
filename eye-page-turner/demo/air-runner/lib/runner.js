@@ -227,16 +227,16 @@ export class RunnerGame {
     if (Math.abs(this.targetLane - this.laneVisual) < 0.01) this.laneVisual = this.targetLane;
     this.lane = Math.round(this.laneVisual);
 
-    // 生成障碍
+    // 生成障碍：基础间隔拉长，并设下限，避免连续贴脸
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0) {
-      const gapBase = 0.95 - Math.min(0.5, this.stats.distance / 1300);
-      this.spawnTimer = clamp(gapBase / diffK, 0.38, 1.2) * rand(0.85, 1.2);
+      const gapBase = 1.32 - Math.min(0.42, this.stats.distance / 1500);
+      this.spawnTimer = clamp(gapBase / diffK, 0.66, 1.7) * rand(0.92, 1.16);
       this._spawn();
     }
 
-    // 推进障碍
-    const hitWindow = 0.055;
+    // 推进障碍（0.12 让判定点落在玩家脚下，视觉与手感一致）
+    const hitWindow = 0.12;
     for (const ob of this.obstacles) {
       const prevT = ob.t;
       ob.t -= this.speed * dt;
@@ -255,13 +255,29 @@ export class RunnerGame {
   }
 
   _spawn() {
+    // 最小间距：上一个障碍还没走远就不再生成，避免两连发
+    if (this.obstacles.some((o) => o.t > 0.80)) {
+      this.spawnTimer = 0.22;
+      return;
+    }
+
     const r = Math.random();
     let type = ObstacleType.BLOCK;
     const hardK = this.difficulty === 'hard' ? 0.42 : this.difficulty === 'easy' ? 0.2 : 0.3;
     if (r < hardK) type = ObstacleType.LOW;
     else if (r < hardK * 2) type = ObstacleType.HIGH;
 
-    const lane = Math.floor(Math.random() * this.laneCount);
+    // 通路保护：同批障碍里若已有 laneCount-1 条被占，只允许生成在剩余车道，
+    // 避免出现「三条车道同时堵死」的必死组合。
+    const used = new Set(this.obstacles.filter((o) => o.t > 0.82).map((o) => o.lane));
+    let lane = Math.floor(Math.random() * this.laneCount);
+    if (used.size >= this.laneCount - 1) {
+      const free = [];
+      for (let i = 0; i < this.laneCount; i++) if (!used.has(i)) free.push(i);
+      if (!free.length) return;
+      lane = free[Math.floor(Math.random() * free.length)];
+    }
+
     this.obstacles.push({ lane, t: 1, type });
   }
 
@@ -293,9 +309,10 @@ export class RunnerGame {
 
   _project(t, laneOffset) {
     const horizon = this.H * 0.34;
-    const scale = 1 - t * 0.86;
-    const y = horizon + (this.H - horizon) * scale;
-    const x = this.W / 2 + laneOffset * this.W * 0.3 * scale;
+    const depth = 1 - t; // 0 = 最远, 1 = 玩家平面
+    const scale = 0.10 + 0.90 * depth;
+    const y = horizon + (this.H - horizon) * depth;
+    const x = this.W / 2 + laneOffset * this.W * 0.30 * scale;
     return { x, y, scale };
   }
 
@@ -312,13 +329,43 @@ export class RunnerGame {
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, W, H);
 
-    // 星点
-    ctx.fillStyle = 'rgba(214, 240, 228, 0.42)';
+    // 萤火点（原星点，压暗以符合河谷夜色）
+    ctx.fillStyle = 'rgba(190, 240, 214, 0.20)';
     for (const s of this.stars) {
       ctx.beginPath();
-      ctx.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2);
+      ctx.arc(s.x * W, s.y * H * 0.9, s.r * 0.85, 0, Math.PI * 2);
       ctx.fill();
     }
+
+    const horizon = H * 0.34;
+
+    // 两层河谷山脊，极慢视差
+    const drift = this.stats.distance * 0.012;
+    const ridge = (baseY, amp, freq, phase, color) => {
+      ctx.beginPath();
+      ctx.moveTo(-2, baseY);
+      for (let x = 0; x <= W + 2; x += W / 26) {
+        const k = x / W;
+        const y =
+          baseY -
+          (amp + Math.sin(k * freq + phase) * amp * 0.55 + Math.sin(k * freq * 2.7 + phase * 1.7) * amp * 0.22) * H;
+        ctx.lineTo(x, y);
+      }
+      ctx.lineTo(W + 2, baseY);
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+    };
+    ridge(horizon + 1, 0.072, 5.2, drift * 0.6, '#061b17');
+    ridge(horizon + 1, 0.1, 3.1, drift * 0.9 + 1.7, '#0a2620');
+
+    // 谷底雾带，柔化地平线
+    const mist = ctx.createLinearGradient(0, horizon - H * 0.06, 0, horizon + H * 0.10);
+    mist.addColorStop(0, 'rgba(138, 214, 184, 0)');
+    mist.addColorStop(0.42, 'rgba(138, 214, 184, 0.07)');
+    mist.addColorStop(1, 'rgba(138, 214, 184, 0)');
+    ctx.fillStyle = mist;
+    ctx.fillRect(0, horizon - H * 0.06, W, H * 0.16);
 
     this._drawRoad(ctx, now);
     this._drawObstacles(ctx, now);
@@ -328,110 +375,273 @@ export class RunnerGame {
       ctx.fillStyle = `rgba(240, 90, 120, ${0.28 * this.hitFlash})`;
       ctx.fillRect(0, 0, W, H);
     }
-    if (this.shielded(now)) {
-      ctx.strokeStyle = 'rgba(80, 220, 200, 0.7)';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(W / 2 + (this.laneVisual - 1) * W * 0.3, H * 0.78, W * 0.11, 0, Math.PI * 2);
-      ctx.stroke();
-    }
   }
 
   _drawRoad(ctx, now) {
     const { W, H } = this;
     const horizon = H * 0.34;
+    const nearHalf = W * 0.375;
+    const scaleAt = (t) => 0.10 + 0.90 * (1 - t);
+    const yAt = (t) => horizon + (H - horizon) * (1 - t);
+    const halfAt = (t) => nearHalf * scaleAt(t);
 
-    // 路面
-    const road = ctx.createLinearGradient(0, horizon, 0, H);
-    road.addColorStop(0, 'rgba(20, 52, 45, 0.28)');
-    road.addColorStop(0.55, 'rgba(13, 40, 35, 0.72)');
-    road.addColorStop(1, 'rgba(8, 28, 25, 0.96)');
-    ctx.fillStyle = road;
-    const nearHalf = W * 0.42;
-    const farHalf = W * 0.42 * 0.14;
+    // 河岸底色：两侧压暗，让河面成为唯一亮面
+    const bank = ctx.createLinearGradient(0, horizon, 0, H);
+    bank.addColorStop(0, 'rgba(19, 42, 31, 0)');
+    bank.addColorStop(1, 'rgba(14, 32, 23, 0.95)');
+    ctx.fillStyle = bank;
+    ctx.fillRect(0, horizon, W, H - horizon);
+
+    // 河道水面（近远宽度与 _project 的 scale 完全一致）
+    const water = ctx.createLinearGradient(0, horizon, 0, H);
+    water.addColorStop(0, 'rgba(24, 86, 78, 0.6)');
+    water.addColorStop(0.45, 'rgba(12, 64, 60, 0.91)');
+    water.addColorStop(1, 'rgba(5, 34, 33, 0.99)');
+    ctx.fillStyle = water;
     ctx.beginPath();
-    ctx.moveTo(W / 2 - farHalf, horizon);
-    ctx.lineTo(W / 2 + farHalf, horizon);
-    ctx.lineTo(W / 2 + nearHalf, H);
-    ctx.lineTo(W / 2 - nearHalf, H);
+    ctx.moveTo(W / 2 - halfAt(1), horizon);
+    ctx.lineTo(W / 2 + halfAt(1), horizon);
+    ctx.lineTo(W / 2 + halfAt(0), H);
+    ctx.lineTo(W / 2 - halfAt(0), H);
     ctx.closePath();
     ctx.fill();
 
-    // 水面反光：靠远端淡、近端略亮，给深色路面一点呼吸
+    // 水面反光
     const sheen = ctx.createLinearGradient(0, horizon, 0, H);
-    sheen.addColorStop(0, 'rgba(120, 226, 196, 0)');
-    sheen.addColorStop(0.7, 'rgba(120, 226, 196, 0.05)');
-    sheen.addColorStop(1, 'rgba(120, 226, 196, 0.10)');
+    sheen.addColorStop(0, 'rgba(140, 232, 214, 0)');
+    sheen.addColorStop(0.6, 'rgba(140, 232, 214, 0.06)');
+    sheen.addColorStop(1, 'rgba(140, 232, 214, 0.15)');
     ctx.fillStyle = sheen;
     ctx.fill();
 
-    // 双侧护栏
-    for (const side of [-1, 1]) {
-      const g = ctx.createLinearGradient(0, horizon, 0, H);
-      g.addColorStop(0, 'rgba(120, 226, 196, 0.12)');
-      g.addColorStop(1, 'rgba(70, 201, 138, 0.85)');
-      ctx.strokeStyle = g;
-      ctx.lineWidth = 3;
+    // 横向水波：随里程向近处滚动，用二次曲线做出轻微起伏
+    const flow = (this.stats.distance * 5) % 1;
+    for (let k = 0; k < 16; k++) {
+      const t = 1 - (k + flow) / 16;
+      if (t < 0.02 || t > 0.995) continue;
+      const s = scaleAt(t);
+      const y = yAt(t);
+      const half = halfAt(t);
+      const wob = Math.sin(this.stats.distance * 1.7 + k * 0.9) * H * 0.005 * s;
+      ctx.strokeStyle = `rgba(150, 226, 208, ${0.008 + 0.032 * s})`;
+      ctx.lineWidth = Math.max(0.6, 1.7 * s);
       ctx.beginPath();
-      ctx.moveTo(W / 2 + side * farHalf, horizon);
-      ctx.lineTo(W / 2 + side * nearHalf, H);
+      ctx.moveTo(W / 2 - half * 0.97, y);
+      ctx.quadraticCurveTo(W / 2, y + wob, W / 2 + half * 0.97, y);
       ctx.stroke();
     }
 
-    // 车道虚线（随里程滚动）
-    const phase = (this.stats.distance * 3) % 1;
+    // 航道浮标：替代车道虚线，暖黄浮球串起三条水道
+    const dashPhase = (this.stats.distance * 2.4) % 1;
     for (let i = 1; i < this.laneCount; i++) {
-      const off = (i - this.laneCount / 2) * 2 * 0.5; // -1, 1
-      for (let k = 0; k < 8; k++) {
-        const t0 = k / 8 + phase / 8;
-        const t1 = t0 + 0.045;
-        if (t1 > 1) continue;
-        const a = this._project(1 - t0, off);
-        const b = this._project(1 - Math.min(1, t1), off);
-        ctx.strokeStyle = 'rgba(196, 238, 220, 0.30)';
-        ctx.lineWidth = Math.max(1, 3 * b.scale);
+      const off = (i - this.laneCount / 2) * 1; // 3 车道 → ±0.5
+      for (let k = 0; k < 11; k++) {
+        const t = 1 - (k + dashPhase) / 11;
+        if (t < 0.03 || t > 0.99) continue;
+        const p = this._project(t, off);
+        const r = Math.max(0.7, 3.1 * p.scale);
+        // 水面倒影
+        ctx.fillStyle = `rgba(255, 228, 168, ${0.08 + 0.10 * p.scale})`;
         ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.stroke();
+        ctx.ellipse(p.x, p.y + r * 1.5, r * 1.9, r * 0.55, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // 浮球
+        ctx.fillStyle = `rgba(255, 208, 116, ${0.22 + 0.52 * p.scale})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = `rgba(255, 246, 214, ${0.20 + 0.45 * p.scale})`;
+        ctx.beginPath();
+        ctx.arc(p.x - r * 0.28, p.y - r * 0.30, r * 0.40, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
+
+    // 双侧河岸木桩：桩身 + 顶端暖灯 + 岸线
+    for (const side of [-1, 1]) {
+      for (let k = 0; k < 11; k++) {
+        const t = 1 - (k + flow) / 11;
+        if (t < 0.02 || t > 0.99) continue;
+        const s = scaleAt(t);
+        const x = W / 2 + side * halfAt(t);
+        const y = yAt(t);
+        const postH = H * 0.055 * s;
+        ctx.strokeStyle = `rgba(190, 148, 100, ${0.12 + 0.42 * s})`;
+        ctx.lineWidth = Math.max(1, 2.6 * s);
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x, y - postH);
+        ctx.stroke();
+        // 顶端灯点
+        ctx.fillStyle = `rgba(255, 214, 150, ${0.18 + 0.50 * s})`;
+        ctx.beginPath();
+        ctx.arc(x, y - postH, Math.max(0.8, 2.2 * s), 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      const g = ctx.createLinearGradient(0, horizon, 0, H);
+      g.addColorStop(0, 'rgba(196, 158, 110, 0.05)');
+      g.addColorStop(1, 'rgba(206, 170, 122, 0.34)');
+      ctx.strokeStyle = g;
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.moveTo(W / 2 + side * halfAt(1), horizon);
+      ctx.lineTo(W / 2 + side * halfAt(0), H);
+      ctx.stroke();
+    }
+
+    // 水面碎光：随里程向近处漂移
+    for (let k = 0; k < 26; k++) {
+      const t = 1 - ((k * 0.618 + this.stats.distance * 0.9) % 1);
+      if (t < 0.05 || t > 0.97) continue;
+      const s = scaleAt(t);
+      const y = yAt(t);
+      const laneOff = ((k % 7) - 3) * 0.22;
+      const x = W / 2 + laneOff * W * 0.3 * s + Math.sin(k * 2.3) * W * 0.015 * s;
+      const r = Math.max(0.6, 2.4 * s);
+      ctx.fillStyle = `rgba(196, 246, 236, ${0.04 + 0.14 * s})`;
+      ctx.beginPath();
+      ctx.ellipse(x, y, r * 2.4, r * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 河岸草丛：贴边生长，随里程滚动
+    const bankPhase = (this.stats.distance * 3.4) % 1;
+    for (const side of [-1, 1]) {
+      for (let k = 0; k < 13; k++) {
+        const t = 1 - (k + bankPhase) / 13;
+        if (t < 0.03 || t > 0.98) continue;
+        const s = scaleAt(t);
+        const y = yAt(t);
+        const edge = W / 2 + side * halfAt(t);
+        const baseX = edge + side * W * 0.035 * s;
+        const gh = H * 0.06 * s;
+        const cw = W * 0.006 * s;
+        ctx.strokeStyle = `rgba(96, 162, 116, ${0.1 + 0.38 * s})`;
+        ctx.lineWidth = Math.max(0.8, 2 * s);
+        for (let b = 0; b < 3; b++) {
+          const bx = baseX + (b - 1) * cw * 2.4;
+          const lean = (b - 1) * cw * 3 + Math.sin(k * 1.7 + b) * cw;
+          ctx.beginPath();
+          ctx.moveTo(bx, y);
+          ctx.quadraticCurveTo(bx + lean * 0.4, y - gh * 0.6, bx + lean, y - gh);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // 远端雾化：路面在地平线处淡入，避免生硬的梯形收口
+    const fade = ctx.createLinearGradient(0, horizon, 0, horizon + H * 0.11);
+    fade.addColorStop(0, 'rgba(11, 31, 26, 0.96)');
+    fade.addColorStop(1, 'rgba(11, 31, 26, 0)');
+    ctx.fillStyle = fade;
+    ctx.fillRect(0, horizon, W, H * 0.11);
   }
 
   _drawObstacles(ctx, now) {
     for (const ob of this.obstacles) {
       const off = ob.lane - (this.laneCount - 1) / 2; // -1 / 0 / +1
       const p = this._project(ob.t, off);
-      const w = this.W * 0.15 * p.scale;
-      const h = this.H * 0.2 * p.scale;
-      const alpha = clamp(1.2 - ob.t, 0.25, 1);
+      const w = this.W * 0.19 * p.scale;
+      const h = this.H * 0.235 * p.scale;
+      const alpha = clamp(1.45 - 1.1 * ob.t, 0.36, 1);
 
       ctx.save();
       ctx.globalAlpha = alpha;
 
+      // 水面接触阴影：让石头和木头"落"在河面上
+      ctx.fillStyle = 'rgba(2, 14, 16, 0.42)';
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y, w * 0.58, w * 0.17, 0, 0, Math.PI * 2);
+      ctx.fill();
+
       if (ob.type === ObstacleType.BLOCK) {
-        ctx.fillStyle = '#4e6158';
-        this._roundRect(ctx, p.x - w / 2, p.y - h, w, h, 4 * p.scale);
+        // 河中巨石：必须变道
+        const bw = w * 0.94;
+        const bh = h * 0.80;
+        ctx.beginPath();
+        ctx.moveTo(p.x - bw * 0.5, p.y);
+        ctx.lineTo(p.x - bw * 0.44, p.y - bh * 0.52);
+        ctx.lineTo(p.x - bw * 0.18, p.y - bh * 0.94);
+        ctx.lineTo(p.x + bw * 0.16, p.y - bh * 1.0);
+        ctx.lineTo(p.x + bw * 0.46, p.y - bh * 0.58);
+        ctx.lineTo(p.x + bw * 0.5, p.y);
+        ctx.closePath();
+        const rock = ctx.createLinearGradient(p.x, p.y - bh, p.x, p.y);
+        rock.addColorStop(0, '#7d8b83');
+        rock.addColorStop(0.55, '#5c6a63');
+        rock.addColorStop(1, '#3c4a45');
+        ctx.fillStyle = rock;
         ctx.fill();
-        ctx.strokeStyle = '#ff9f8e';
-        ctx.lineWidth = Math.max(1, 2.4 * p.scale);
+        // 顶部受光棱
+        ctx.strokeStyle = 'rgba(198, 226, 214, 0.45)';
+        ctx.lineWidth = Math.max(1, 2 * p.scale);
+        ctx.beginPath();
+        ctx.moveTo(p.x - bw * 0.18, p.y - bh * 0.94);
+        ctx.lineTo(p.x + bw * 0.16, p.y - bh * 1.0);
         ctx.stroke();
+        // 苔藓
+        ctx.fillStyle = 'rgba(94, 160, 106, 0.5)';
+        ctx.beginPath();
+        ctx.ellipse(p.x - bw * 0.1, p.y - bh * 0.86, bw * 0.2, bh * 0.09, -0.3, 0, Math.PI * 2);
+        ctx.fill();
       } else if (ob.type === ObstacleType.LOW) {
-        ctx.fillStyle = '#e8b96f';
-        this._roundRect(ctx, p.x - w / 2, p.y - h * 0.32, w, h * 0.32, 3 * p.scale);
+        // 横在河面的倒木：跳过去
+        const lh = h * 0.34;
+        const wood = ctx.createLinearGradient(0, p.y - lh, 0, p.y);
+        wood.addColorStop(0, '#a5764c');
+        wood.addColorStop(0.55, '#7a5236');
+        wood.addColorStop(1, '#4e3423');
+        ctx.fillStyle = wood;
+        this._roundRect(ctx, p.x - w / 2, p.y - lh, w, lh, lh * 0.42);
+        ctx.fill();
+        // 端面年轮
+        ctx.fillStyle = '#c09468';
+        ctx.beginPath();
+        ctx.ellipse(p.x - w / 2 + lh * 0.34, p.y - lh / 2, lh * 0.22, lh * 0.34, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(122, 82, 54, 0.85)';
+        ctx.lineWidth = Math.max(0.6, 1.2 * p.scale);
+        ctx.beginPath();
+        ctx.ellipse(p.x - w / 2 + lh * 0.34, p.y - lh / 2, lh * 0.11, lh * 0.18, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        // 苔藓
+        ctx.fillStyle = 'rgba(99, 168, 110, 0.6)';
+        this._roundRect(ctx, p.x - w * 0.36, p.y - lh, w * 0.56, Math.max(1.2, lh * 0.26), 2 * p.scale);
         ctx.fill();
       } else {
-        ctx.fillStyle = '#e3a76c';
-        this._roundRect(ctx, p.x - w / 2, p.y - h * 1.15, w, h * 0.3, 3 * p.scale);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(227, 167, 108, 0.55)';
-        ctx.lineWidth = 1;
+        // 低垂树枝：滑铲通过
+        const barY = p.y - h * 1.12;
+        const barH = Math.max(1.6, h * 0.2);
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = '#7a5236';
+        ctx.lineWidth = Math.max(2, 7 * p.scale);
         ctx.beginPath();
-        ctx.moveTo(p.x - w / 2, p.y - h * 0.85);
-        ctx.lineTo(p.x - w / 2, p.y);
-        ctx.moveTo(p.x + w / 2, p.y - h * 0.85);
-        ctx.lineTo(p.x + w / 2, p.y);
+        ctx.moveTo(p.x - w * 0.54, barY - barH * 0.5);
+        ctx.quadraticCurveTo(p.x, barY + barH * 0.85, p.x + w * 0.54, barY - barH * 0.4);
         ctx.stroke();
+        // 叶簇
+        ctx.fillStyle = 'rgba(104, 196, 122, 0.88)';
+        for (const [dx, dy, rx, ry] of [
+          [-0.3, 0.18, 0.17, 0.1],
+          [-0.06, 0.3, 0.18, 0.11],
+          [0.2, 0.2, 0.16, 0.1],
+          [0.42, 0.06, 0.11, 0.08],
+          [-0.42, 0.04, 0.1, 0.07],
+        ]) {
+          ctx.beginPath();
+          ctx.ellipse(p.x + dx * w, barY + dy * barH * 2.2, rx * w, ry * h, 0.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // 两侧垂藤
+        ctx.strokeStyle = 'rgba(104, 196, 122, 0.5)';
+        ctx.lineWidth = Math.max(0.8, 1.6 * p.scale);
+        for (const sx of [-0.46, -0.2, 0.46]) {
+          ctx.beginPath();
+          ctx.moveTo(p.x + sx * w, barY + barH * 0.2);
+          ctx.lineTo(p.x + sx * w * 1.06, barY + h * (sx === -0.2 ? 0.46 : 0.3));
+          ctx.stroke();
+        }
       }
       ctx.restore();
     }
@@ -453,30 +663,62 @@ export class RunnerGame {
       y = baseY + H * 0.02;
     }
 
-    const w = W * 0.07;
-    const h = H * 0.075 * squash;
+    const w = W * 0.085;
+    const h = H * 0.05 * squash;
 
-    // 拖影
-    const trail = ctx.createLinearGradient(x, y - h * 3, x, y);
-    trail.addColorStop(0, 'rgba(70, 201, 138, 0)');
-    trail.addColorStop(1, 'rgba(70, 201, 138, 0.32)');
+    // 船尾水痕
+    const trail = ctx.createLinearGradient(x, y - h * 2.4, x, y);
+    trail.addColorStop(0, 'rgba(182, 246, 231, 0)');
+    trail.addColorStop(1, 'rgba(182, 246, 231, 0.2)');
     ctx.fillStyle = trail;
-    ctx.fillRect(x - w * 0.35, y - h * 3, w * 0.7, h * 3);
-
-    // 本体
-    const body = ctx.createLinearGradient(x - w / 2, y - h, x + w / 2, y);
-    body.addColorStop(0, '#8ff0cd');
-    body.addColorStop(1, '#2f9e80');
-    ctx.fillStyle = body;
-    this._roundRect(ctx, x - w / 2, y - h, w, h, 6);
+    ctx.beginPath();
+    ctx.moveTo(x - w * 0.2, y - h * 2.4);
+    ctx.lineTo(x + w * 0.2, y - h * 2.4);
+    ctx.lineTo(x + w * 0.42, y);
+    ctx.lineTo(x - w * 0.42, y);
+    ctx.closePath();
     ctx.fill();
+
+    // 小舟船体：尖头圆尾
+    const hull = ctx.createLinearGradient(x, y - h * 1.9, x, y + h * 0.3);
+    hull.addColorStop(0, '#a8f5da');
+    hull.addColorStop(0.5, '#4fc9a6');
+    hull.addColorStop(1, '#22836b');
+    ctx.beginPath();
+    ctx.moveTo(x, y - h * 1.9);
+    ctx.bezierCurveTo(x + w * 0.28, y - h * 1.5, x + w * 0.5, y - h * 0.7, x + w * 0.46, y - h * 0.1);
+    ctx.quadraticCurveTo(x + w * 0.4, y + h * 0.28, x, y + h * 0.3);
+    ctx.quadraticCurveTo(x - w * 0.4, y + h * 0.28, x - w * 0.46, y - h * 0.1);
+    ctx.bezierCurveTo(x - w * 0.5, y - h * 0.7, x - w * 0.28, y - h * 1.5, x, y - h * 1.9);
+    ctx.closePath();
+    ctx.fillStyle = hull;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(196, 255, 240, 0.55)';
+    ctx.lineWidth = Math.max(1, 1.8);
+    ctx.stroke();
+
+    // 内舱：船沿亮、舱内暗，形状才立得住
+    ctx.fillStyle = 'rgba(9, 46, 39, 0.5)';
+    ctx.beginPath();
+    ctx.ellipse(x, y - h * 0.72, w * 0.2, h * 0.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 尾部水花（跳跃时收起）
+    if (!this.jumping(now)) {
+      ctx.fillStyle = 'rgba(214, 250, 240, 0.3)';
+      for (const sx of [-1, 1]) {
+        ctx.beginPath();
+        ctx.ellipse(x + sx * w * 0.44, y + h * 0.3, w * 0.17, h * 0.1, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
 
     // 护盾光效
     if (this.shielded(now)) {
       ctx.strokeStyle = 'rgba(160, 255, 235, 0.9)';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.arc(x, y - h * 0.6, Math.max(w, h) * 0.95, 0, Math.PI * 2);
+      ctx.arc(x, y - h * 0.55, w * 0.92, 0, Math.PI * 2);
       ctx.stroke();
     }
 
@@ -484,7 +726,8 @@ export class RunnerGame {
     if (now < this.invulnUntil && Math.floor(now / 90) % 2 === 0) {
       ctx.globalAlpha = 0.5;
       ctx.fillStyle = '#ffffff';
-      this._roundRect(ctx, x - w / 2, y - h, w, h, 6);
+      ctx.beginPath();
+      ctx.ellipse(x, y - h * 0.5, w * 0.42, h * 1.1, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
     }
