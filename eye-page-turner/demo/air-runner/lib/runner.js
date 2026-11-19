@@ -599,12 +599,16 @@ export class RunnerGame {
       }
     }
 
-    // 远端雾化：路面在地平线处淡入，避免生硬的梯形收口
-    const fade = ctx.createLinearGradient(0, horizon, 0, horizon + H * 0.11);
-    fade.addColorStop(0, 'rgba(11, 31, 26, 0.96)');
+    // 远端雾化：路面在地平线处淡入，避免生硬的梯形收口。
+    // 渐变必须跨过地平线——从线上方就开始加深，否则 horizon 会留下一条全幅横向硬边。
+    const fadeTop = horizon - H * 0.035;
+    const fadeH = H * 0.15;
+    const fade = ctx.createLinearGradient(0, fadeTop, 0, fadeTop + fadeH);
+    fade.addColorStop(0, 'rgba(11, 31, 26, 0)');
+    fade.addColorStop(0.24, 'rgba(11, 31, 26, 0.74)');
     fade.addColorStop(1, 'rgba(11, 31, 26, 0)');
     ctx.fillStyle = fade;
-    ctx.fillRect(0, horizon, W, H * 0.11);
+    ctx.fillRect(0, fadeTop, W, fadeH);
   }
 
   /** 河道水面的梯形路径（与 _project 的 scale、halfAt 完全同源） */
@@ -729,9 +733,16 @@ export class RunnerGame {
         const rock = ctx.createLinearGradient(p.x, p.y - bh, p.x, p.y);
         rock.addColorStop(0, '#7d8b83');
         rock.addColorStop(0.55, '#5c6a63');
-        rock.addColorStop(1, '#3c4a45');
+        rock.addColorStop(1, '#232d2a');
         ctx.fillStyle = rock;
         ctx.fill();
+        // 吃水线：与水面交接处提一点亮，石头才不会像浮在图上的贴片
+        ctx.strokeStyle = 'rgba(186, 232, 216, 0.26)';
+        ctx.lineWidth = Math.max(1, 1.6 * p.scale);
+        ctx.beginPath();
+        ctx.moveTo(p.x - bw * 0.5, p.y + 0.5);
+        ctx.lineTo(p.x + bw * 0.5, p.y + 0.5);
+        ctx.stroke();
         // 顶部受光棱
         ctx.strokeStyle = 'rgba(198, 226, 214, 0.45)';
         ctx.lineWidth = Math.max(1, 2 * p.scale);

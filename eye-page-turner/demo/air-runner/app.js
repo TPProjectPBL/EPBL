@@ -560,6 +560,17 @@ function setMode(mode, { silent = false } = {}) {
   state.mode = mode;
   // 高亮跟随「游戏内目标模式」，而不是当前生效模式：菜单阶段生效模式恒为 mouse
   const target = state.settings.mode || 'dual';
+  // 供 CSS 判断是否还需要注视层：鼠标/纯手势模式下箭头和识别带一律不显示
+  document.body.dataset.mode = target;
+  const hintEl = $('#gestureHint');
+  if (hintEl) {
+    hintEl.textContent = {
+      dual: '看向左右两侧变道 · 挥手跳 / 下滑 · 握拳护盾',
+      gaze: '看向左右两侧变道',
+      hand: '挥手跳 / 下滑 · 握拳护盾',
+      mouse: '← → 变道 · ↑ / 空格 跳 · ↓ 滑 · Shift 护盾',
+    }[target] || '看向左右两侧变道 · 挥手跳 / 下滑 · 握拳护盾';
+  }
   $$('.card[data-mode]').forEach((c) => c.classList.toggle('picked', c.dataset.mode === target));
   const needCam = mode === 'dual' || mode === 'gaze' || mode === 'hand';
   chip('chipMode', `模式：${{ dual: '双模态', gaze: '纯眼动', hand: '纯手势', mouse: '鼠标键盘' }[mode]}`);

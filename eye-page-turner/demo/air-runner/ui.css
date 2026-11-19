@@ -452,8 +452,8 @@ body[data-screen="game"] .cam-preview.show {
 .gaze-range.left::after { right: 0; }
 .gaze-range.right::after { left: 0; }
 
-body[data-screen="game"] .gaze-range { opacity: .45; }
-body[data-screen="countdown"] .gaze-range { opacity: .5; }
+body[data-screen="game"] .gaze-range { opacity: .2; }
+body[data-screen="countdown"] .gaze-range { opacity: .3; }
 .gaze-range.active {
   opacity: 1;
   background: linear-gradient(90deg, rgba(70, 201, 138, 0.42), rgba(70, 201, 138, 0.03));
@@ -528,6 +528,25 @@ body[data-screen="countdown"] .gaze-range { opacity: .5; }
 }
 .zone.arrow.look::before { background: rgba(16, 46, 37, 0.86); }
 .zone.arrow.cur::before { background: rgba(24, 74, 58, 0.92); }
+
+/* 鼠标 / 纯手势模式：整套注视提示没有意义，直接不占画面 */
+body[data-mode="mouse"] .zone-strip,
+body[data-mode="mouse"] .gaze-overlay,
+body[data-mode="hand"] .zone-strip,
+body[data-mode="hand"] .gaze-overlay { display: none; }
+
+/* 跑起来以后箭头要为视野让路：缩小、压暗，只有视线真的落上去时才亮起来。
+   菜单 / 教学页保持大箭头，因为那正是教用户"看哪边"的时候。 */
+body[data-screen="game"] .zone.arrow,
+body[data-screen="countdown"] .zone.arrow {
+  width: clamp(104px, 10vw, 158px);
+  height: clamp(72px, 7vw, 110px);
+  opacity: .2;
+  transition: transform .18s, filter .18s, opacity .25s;
+}
+body[data-screen="game"] .zone.arrow::before { background: rgba(8, 24, 20, 0.55); }
+body[data-screen="game"] .zone.arrow.look,
+body[data-screen="countdown"] .zone.arrow.look { opacity: .88; }
 .gesture-hint {
   position: absolute; z-index: 20; left: 0; right: 0; top: 96px; text-align: center;
   font-size: 12px; color: #8aa79a; letter-spacing: .4px;
