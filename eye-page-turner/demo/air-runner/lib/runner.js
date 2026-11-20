@@ -1109,8 +1109,8 @@ export class RunnerGame {
       lift = Math.sin(Math.PI * k) * H * 0.11;
       scale = 1 + lift / (H * 2.8);
     } else if (this.sliding(now)) {
-      dip = H * 0.03;
-      squash = 0.8;
+      dip = H * 0.015;
+      squash = 0.88;
     }
 
     const x = W / 2 + off * W * 0.3;
