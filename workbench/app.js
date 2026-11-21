@@ -290,27 +290,9 @@ function detectFrameError(frame, mod) {
 }
 
 function renderModuleBar(mod) {
-  const bar = byId('moduleBar');
-  bar.hidden = false;
-  byId('modName').textContent = mod.name;
+  const rail = byId('rightbar');
+  rail.hidden = false;
   byId('crumb').textContent = mod.name;
-
-  const meta = byId('modMeta');
-  meta.textContent = '';
-  (mod.capabilities || []).forEach((cap) => meta.appendChild(tag(cap === 'camera' ? '摄像头' : '后端', '')));
-  (mod.requires || []).forEach((req) => meta.appendChild(tag(req === 'cdn' ? 'CDN 依赖' : '本地资源', req === 'cdn' ? 'cdn' : '')));
-  const path = document.createElement('code');
-  path.textContent = mod.standaloneUrl || mod.path;
-  meta.appendChild(path);
-
-  const note = byId('modNote');
-  if (mod.note) {
-    note.hidden = false;
-    note.textContent = '提示：' + mod.note;
-  } else {
-    note.hidden = true;
-    note.textContent = '';
-  }
 }
 
 function showEmpty(title, detail) {
@@ -370,7 +352,7 @@ function newScreen(className) {
   teardownFrame();
   const stage = byId('stage');
   stage.replaceChildren();
-  byId('moduleBar').hidden = true;
+  byId('rightbar').hidden = true;
   const el = document.createElement('div');
   el.className = 'screen ' + className;
   stage.appendChild(el);
@@ -732,7 +714,7 @@ async function showReleases() {
   setView('releases');
   teardownFrame();
   markActive('releases');
-  byId('moduleBar').hidden = true;
+  byId('rightbar').hidden = true;
   byId('crumb').textContent = '下载中心';
 
   const stage = byId('stage');

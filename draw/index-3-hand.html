@@ -46,41 +46,59 @@ body{
   height:100vh;
   overflow:hidden;
   display:grid;
-  grid-template-rows:auto auto 1fr;
+  grid-template-columns:minmax(0,1fr) 320px;
+  grid-template-rows:1fr;
   background:var(--bg);
   color:var(--text);
   font-family:ui-sans-serif,system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
   -webkit-font-smoothing:antialiased;
 }
 
-/* ---------------- 顶栏 ---------------- */
+/* ---------------- 右侧工具栏 ---------------- */
+.side{
+  grid-column:2;
+  grid-row:1;
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+  overflow-y:auto;
+  border-left:1px solid var(--line);
+  background:rgba(17,26,19,.9);
+  scrollbar-width:thin;
+  scrollbar-color:var(--line) transparent;
+  z-index:45;
+}
+.side::-webkit-scrollbar{ width:8px; }
+.side::-webkit-scrollbar-thumb{ background:var(--line); border-radius:8px; }
+
+/* ---------------- 侧栏顶栏（标题 + 封面） ---------------- */
 .topbar{
   display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:16px;
-  padding:14px 26px;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:8px;
+  padding:18px 18px 14px;
   border-bottom:1px solid var(--line);
-  background:linear-gradient(180deg,rgba(17,26,19,.94),rgba(10,14,23,.8));
+  background:rgba(17,26,19,.5);
 }
-.brand{ display:flex; align-items:baseline; gap:12px; }
+.brand{ display:flex; flex-direction:column; align-items:flex-start; gap:4px; }
 .brand h1{
   margin:0;
-  font-size:22px;
+  font-size:21px;
   font-weight:800;
-  letter-spacing:.16em;
+  letter-spacing:.12em;
 }
 .brand h1 .accent{ color:var(--accent); }
 .brand .sub{
-  font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;
+  font:600 10px/1 ui-monospace,Menlo,Consolas,monospace;
   letter-spacing:.3em;
   color:var(--muted);
 }
 .meta{
-  font:600 11px/1.7 ui-monospace,Menlo,Consolas,monospace;
-  letter-spacing:.24em;
+  font:600 10px/1.7 ui-monospace,Menlo,Consolas,monospace;
+  letter-spacing:.2em;
   color:var(--muted);
-  text-align:right;
+  text-align:left;
 }
 .meta b{ color:var(--accent); font-weight:600; }
 /* 顶栏右侧：状态字 + 「封面」返回（从画板回到入口页封面） */
@@ -105,26 +123,17 @@ body{
   box-shadow:0 0 22px -8px var(--accent);
   outline:none;
 }
-@media (max-width:1100px){
-  /* 窄屏顶栏：品牌副标与 GAZE + GESTURE 占位大，先让位给「封面」返回 */
-  .topbar{ padding:12px 18px; gap:10px; }
-  .brand .sub{ display:none; }
-  .meta{ display:none; }
-  .cover-back{ height:26px; padding:0 10px; letter-spacing:.12em; text-indent:.12em; }
-}
 
-/* ---------------- 工具栏 ---------------- */
+/* ---------------- 侧栏工具栏（竖排） ---------------- */
 .toolbar{
-  /* Grid + minmax(0,1fr)：窄屏时左侧可收缩，让操作按钮保持完整可见 */
-  display:grid;
-  /* 三列：调色板(可收缩但不窄于按钮内容) / 操作按钮 / 真机模式条 */
-  grid-template-columns:minmax(140px,1fr) auto auto;
-  align-items:center;
-  gap:16px;
-  padding:14px 26px;
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:14px;
+  padding:16px 18px;
   border-bottom:1px solid var(--line);
-  background:rgba(17,26,19,.72);
-  /* 修改2：颜色条浮层的定位基准；z-index 高于画布，低于 toast */
+  background:rgba(17,26,19,.34);
+  /* 调色板浮层的定位基准 */
   position:relative;
   z-index:45;
 }
@@ -134,51 +143,45 @@ body{
   display:flex;
   align-items:center;
   gap:0;
-  flex:1 1 0;
+  width:100%;
   min-width:0;
 }
 .palette{
-  /* 修改2：展开后作为浮层铺满整条工具栏宽度，不再与「画笔 / 撤回 / …」争抢空间。
-     若留在流内，窄屏下 6 个色块会被压缩到十几像素甚至被裁切，
-     而监视用户的注视点无法滚动，紫 / 白将永远选不到。 */
+  /* 侧栏竖排下，色板从调色板按钮下方展开为 3 列网格（6 色两行） */
   position:absolute;
   top:calc(100% - 6px);
-  left:26px;
-  display:flex;
+  left:18px;
+  right:18px;
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
   align-items:center;
-  gap:12px;
+  gap:10px;
   box-sizing:border-box;
   border-radius:16px;
   border:1px solid rgba(255,255,255,.10);
-  background:rgba(13,18,30,.96);
+  background:rgba(13,18,30,.97);
   box-shadow:0 28px 64px -20px rgba(0,0,0,.86);
-  /* 默认收起：宽度 0 + 不接收指针事件 */
-  width:0;
+  /* 默认收起：向下平移 + 不接收指针事件 */
+  transform:translateY(-8px);
   padding:0;
   overflow:hidden;
   opacity:0;
   pointer-events:none;
-  transition:width .24s ease,opacity .24s ease,padding .24s ease;
+  transition:opacity .24s ease,transform .24s ease,padding .24s ease;
 }
 .palette.is-open{
-  width:calc(100% - 52px);
-  padding:10px;
+  padding:12px;
   opacity:1;
+  transform:translateY(0);
   pointer-events:auto;
 }
 .palette::-webkit-scrollbar{ display:none; }
 
 .swatch{
   position:relative;
-  flex:1 1 0;
-  /* min-width 必须为 0：v1 用 120px 是因为色条独占整个 1fr 单元格；
-     v2 在同一格里新增了「调色板」按钮，可用宽度减少约 150px，
-     若仍锁 120px，6 个色块（6×120+5×12=780px）会被裁切，
-     且色条是 overflow-x:auto + 隐藏滚动条，末尾色块会被挡住。
-     改为可收缩后，6 个色块始终完整可见（窄屏自动变窄）。 */
   min-width:0;
-  height:64px;
-  border-radius:14px;
+  height:56px;
+  border-radius:12px;
   border:1px solid rgba(255,255,255,.16);
   background:var(--c);
   cursor:pointer;
@@ -212,17 +215,23 @@ body{
   color:rgba(10,14,23,.62);
   pointer-events:none;
 }
-.actions{ display:flex; gap:12px; flex:0 0 auto; flex-wrap:wrap; justify-content:flex-end; }
+.actions{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+  width:100%;
+}
 .btn{
   position:relative;
-  min-width:124px;
-  height:64px;
-  border-radius:14px;
+  width:100%;
+  min-width:0;
+  height:52px;
+  border-radius:12px;
   border:1px solid var(--line);
   background:rgba(10,14,23,.66);
   color:var(--text);
-  font:700 15px/1 ui-sans-serif,system-ui,sans-serif;
-  letter-spacing:.18em;
+  font:700 13px/1 ui-sans-serif,system-ui,sans-serif;
+  letter-spacing:.1em;
   cursor:pointer;
   /* Floating Dock：按钮放大时不改变布局，
      只用 transform 做「指针靠近 → 本项放大上浮、左右邻项轻微联动」。
@@ -378,8 +387,10 @@ body{
   box-shadow:0 0 22px -6px var(--warn);
 }
 
-/* ---------------- 画布 ---------------- */
+/* ---------------- 画布（左侧主区） ---------------- */
 .stage{
+  grid-column:1;
+  grid-row:1;
   position:relative;
   overflow:hidden;
   cursor:none;
@@ -451,20 +462,12 @@ body{
   opacity:.9;
 }
 
-/* ---------------- HUD（左下） ---------------- */
+/* ---------------- HUD（侧栏底部） ---------------- */
 .hud{
-  position:fixed;
-  left:26px;
-  bottom:26px;
-  z-index:40;
-  min-width:336px;
-  padding:14px 18px;
-  border-radius:14px;
-  border:1px solid var(--line);
-  background:rgba(17,26,19,.74);
-  backdrop-filter:blur(10px);
-  -webkit-backdrop-filter:blur(10px);
-  font:400 12px/1.7 ui-monospace,Menlo,Consolas,monospace;
+  margin-top:auto;
+  padding:16px 18px 20px;
+  border-top:1px solid var(--line);
+  font:400 11.5px/1.7 ui-monospace,Menlo,Consolas,monospace;
   letter-spacing:.06em;
   color:var(--muted);
   pointer-events:none;
@@ -560,15 +563,13 @@ body{
  * + 斜体衬线副标 + 滑动提示；顶部台灯灯效保留，标题投影直接用台灯色。
  * 入口页显示时把画板 UI 淡出（原来是 display:none，改为透明度 + 可见性，
  * 这样画布始终按真实尺寸排版，进入画板时不会出现 1×1 拉伸）。 */
-body.is-landing > .topbar,
-body.is-landing > .toolbar,
 body.is-landing > .stage,
-body.is-landing > .hud{
+body.is-landing > .side{
   opacity:0;
   visibility:hidden;
   pointer-events:none;
 }
-.topbar,.toolbar,.stage,.hud{
+.topbar,.toolbar,.stage,.hud,.side{
   transition:opacity .45s cubic-bezier(.22,.61,.36,1),
              visibility .45s,
              transform .45s cubic-bezier(.22,.61,.36,1);
@@ -905,18 +906,15 @@ body.is-landing > .hud{
 }
 
 /* ---------------- 真机模式控制条（WebGazer + MediaPipe） ----------------
- * v3.2：从画布上方浮层改为工具栏内的一项，固定在工具栏右侧；
- *       高度与工具栏按钮一致(64px)，画布不再被它遮挡。
- *       摄像头预览改成向下弹出的浮层，只在运行时出现，且不吃指针事件。 */
+ * v3.5：随工具区进入右侧栏，改为竖排；摄像头预览内嵌显示（不再浮层遮挡画布）。 */
 .real-panel{
   position:relative;
   z-index:1;
   display:flex;
-  align-items:center;
-  gap:8px;
-  flex:0 0 auto;
-  height:64px;
-  padding:0 10px;
+  flex-direction:column;
+  align-items:stretch;
+  gap:10px;
+  padding:12px;
   border-radius:14px;
   border:1px solid rgba(169,219,123,.26);
   background:rgba(17,26,19,.86);
@@ -957,7 +955,7 @@ body.is-landing > .hud{
 .real-panel .real-status{
   display:block;
   margin-top:3px;
-  max-width:150px;
+  max-width:100%;
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
@@ -967,15 +965,11 @@ body.is-landing > .hud{
 .real-panel .real-status.err{ color:var(--danger); }
 .real-panel .real-status.on{ color:#06d6a0; }
 .real-panel .real-preview{
-  /* 运行时才出现的摄像头预览：从工具栏向下弹出的浮层，
-     不吃指针事件，避免遮住画布时影响落笔 */
-  position:absolute;
-  top:calc(100% + 12px);
-  right:0;
-  left:auto;
+  /* 侧栏内嵌显示：开启摄像头后占满工具区宽度，不吃指针事件 */
   display:none;
-  width:176px;
-  height:132px;
+  width:100%;
+  height:auto;
+  aspect-ratio:4 / 3;
   border-radius:12px;
   border:1px solid rgba(76,201,240,.34);
   background:#050810;
@@ -986,10 +980,11 @@ body.is-landing > .hud{
 }
 .real-panel.is-live .real-preview{ display:block; }
 .real-panel.is-live #btnRealStart:disabled{ opacity:.72; color:var(--accent); }
-.real-actions{ display:flex; flex-direction:row; align-items:center; gap:8px; flex:0 0 auto; }
+.real-actions{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; width:100%; }
 .mini-btn{
   height:34px;
-  padding:0 10px;
+  padding:0 6px;
+  width:100%;
   border-radius:9px;
   border:1px solid rgba(169,219,123,.38);
   background:rgba(169,219,123,.12);
@@ -1129,29 +1124,18 @@ body.is-landing > .hud{
 }
 .calib-skip:hover{ color:var(--text); border-color:var(--accent); }
 
-@media (max-width:1360px){
-  .toolbar{ grid-template-columns:minmax(0,1fr) auto; }
-  .real-panel{ grid-column:1 / -1; justify-self:end; }
-}
+/* 侧栏在窄屏下收窄，保证画布可用宽度 */
 @media (max-width:1100px){
-  /* 工具栏：调色板固定宽度，其余按钮等分剩余空间，禁止文字换行 */
-  .toolbar{ grid-template-columns:auto minmax(0,1fr); gap:12px; padding:14px 18px; }
-  .palette-wrap{ flex:0 0 auto; }
-  .actions{ flex:1 1 auto; flex-wrap:nowrap; gap:8px; }
-  .btn{ flex:1 1 0; min-width:0; padding:0 6px; font-size:13px; letter-spacing:.08em; }
-  .btn.switcher{ min-width:104px; padding:0 10px; font-size:13px; letter-spacing:.06em; }
-  .btn .key{ right:7px; bottom:7px; font-size:9px; letter-spacing:0; }
-}
-@media (max-width:900px){
-  .real-panel{ width:100%; justify-content:space-between; }
-  .real-panel .real-status{ max-width:150px; }
+  body{ grid-template-columns:minmax(0,1fr) 288px; }
+  .topbar{ padding:14px 14px 12px; }
+  .toolbar{ padding:14px; gap:12px; }
+  .palette{ left:14px; right:14px; }
+  .hud{ padding:14px; }
 }
 @media (max-width:820px){
+  body{ grid-template-columns:minmax(0,1fr) 244px; }
   .btn .key{ display:none; }
-  .actions{ gap:6px; }
-  .btn{ padding:0 4px; font-size:12px; letter-spacing:0; }
-  .btn.with-dot{ gap:4px; }
-  .btn.switcher{ min-width:96px; }
+  .brand h1{ font-size:18px; }
 }
 </style>
 </head>
@@ -1225,6 +1209,14 @@ body.is-landing > .hud{
 
   </div>
 </div>
+<main class="stage" id="stage">
+  <canvas id="bgLayer"></canvas>
+  <canvas id="staticLayer"></canvas>
+  <canvas id="liveLayer"></canvas>
+  <div class="pen-cursor" id="penCursor"></div>
+</main>
+
+<aside class="side" id="side" aria-label="画板工具栏">
 <header class="topbar">
   <div class="brand">
     <h1>隔空画板<span class="accent">.</span></h1>
@@ -1266,25 +1258,6 @@ body.is-landing > .hud{
   </section>
 </div>
 
-<main class="stage" id="stage">
-  <canvas id="bgLayer"></canvas>
-  <canvas id="staticLayer"></canvas>
-  <canvas id="liveLayer"></canvas>
-  <div class="pen-cursor" id="penCursor"></div>
-</main>
-
-<!-- 9 点标定浮层：点击每个点，WebGazer 记录「注视点 = 点击点」 -->
-<div class="calib-overlay" id="calibOverlay" role="dialog" aria-modal="true" aria-label="9 点标定">
-  <div class="calib-head">
-    <h2>9 点标定</h2>
-    <p>头部保持不动，眼睛依次看向每个点，<b>同时用鼠标点击该点</b></p>
-    <div class="calib-bar" id="calibBar">已标定 0 / 9</div>
-  </div>
-  <div id="calibStage"></div>
-  <div class="calib-gaze" id="calibGaze" aria-hidden="true"></div>
-  <button class="calib-skip" id="calibSkip" type="button">跳过标定，直接使用</button>
-</div>
-
 <section class="hud" aria-label="状态栏">
   <div class="row"><span>TIP</span><b id="hudTip">0, 0</b></div>
   <div class="row"><span>STATE</span><b id="hudState">抬笔 · OPEN_PALM</b></div>
@@ -1299,6 +1272,19 @@ body.is-landing > .hud{
   <div class="row"><span>PAN</span><b id="hudPan">偏移 (0, 0)</b></div>
   <div class="row"><span>HISTORY</span><b id="hudHistory">笔画 0</b></div>
 </section>
+</aside>
+
+<!-- 9 点标定浮层：点击每个点，WebGazer 记录「注视点 = 点击点」 -->
+<div class="calib-overlay" id="calibOverlay" role="dialog" aria-modal="true" aria-label="9 点标定">
+  <div class="calib-head">
+    <h2>9 点标定</h2>
+    <p>头部保持不动，眼睛依次看向每个点，<b>同时用鼠标点击该点</b></p>
+    <div class="calib-bar" id="calibBar">已标定 0 / 9</div>
+  </div>
+  <div id="calibStage"></div>
+  <div class="calib-gaze" id="calibGaze" aria-hidden="true"></div>
+  <button class="calib-skip" id="calibSkip" type="button">跳过标定，直接使用</button>
+</div>
 
 <!-- 操作指南只在入口页出现；画板内不再显示帮助面板 -->
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -3614,10 +3600,9 @@ body.is-landing > .hud{
     document.body.appendChild(tip);
 
     const DOCK = {
-      radius: 170,      // 联动半径（px）
+      radius: 150,      // 联动半径（px，欧氏距离）
       maxGrowth: 0.42,  // 中心处放大 42%
       maxLift: 14,      // 中心处上浮（px）
-      rowTol: 90,       // 换行保护：纵向超过该距离的按钮不参与联动
       ease: 0.24        // 每帧插值系数
     };
 
@@ -3649,10 +3634,9 @@ body.is-landing > .hud{
         if (px !== null && !el.classList.contains('is-disabled')) {
           const cx = el.offsetLeft + el.offsetWidth / 2;
           const cy = el.offsetTop + el.offsetHeight / 2;
-          if (Math.abs(y - cy) <= DOCK.rowTol) {
-            // Aceternity 的线性映射：中心满格，±radius 处衰减为 0
-            target = Math.max(0, 1 - Math.abs(x - cx) / DOCK.radius);
-          }
+          // 侧栏为 2 列网格：用欧氏距离联动，横竖布局都适用
+          const dist = Math.hypot(x - cx, y - cy);
+          target = Math.max(0, 1 - dist / DOCK.radius);
         }
 
         const prev = Number(el.dataset.dockF || 0);

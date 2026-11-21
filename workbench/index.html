@@ -7,7 +7,7 @@
 <meta name="description" content="隔空控制器工作台：眼动与手势测试台、视线热力图、GazeFollower 隔空画板和星际跑酷。">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' http://127.0.0.1:8899 ws://127.0.0.1:8899; frame-src 'self' http://127.0.0.1:8789; object-src 'none'; base-uri 'none'">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230c1410'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23a9db7b'/%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23a9db7b' stroke-opacity='.55' stroke-width='1.6'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="style.css?v=20261122c">
+<link rel="stylesheet" href="style.css?v=20261122e">
 </head>
 <body>
 <div class="app">
@@ -28,19 +28,6 @@
       </div>
     </header>
 
-    <section class="module-bar" id="moduleBar" hidden>
-      <div class="mb-left">
-        <h1 id="modName"></h1>
-        <div class="mb-meta" id="modMeta"></div>
-        <p class="mb-note" id="modNote" hidden></p>
-      </div>
-      <div class="mb-right">
-        <button class="btn ghost" id="backBtn">返回导航</button>
-        <button class="btn ghost" id="reloadBtn">重载</button>
-        <button class="btn" id="openBtn">新标签打开</button>
-      </div>
-    </section>
-
     <div class="stage" id="stage">
       <div class="empty" id="placeholder">
         <div class="empty-inner">
@@ -50,10 +37,18 @@
       </div>
     </div>
   </main>
+
+  <aside class="rightbar" id="rightbar" hidden aria-label="模块操作">
+    <div class="rb-actions">
+      <button class="btn ghost" id="backBtn">返回导航</button>
+      <button class="btn ghost" id="reloadBtn">重载</button>
+      <button class="btn" id="openBtn">新标签打开</button>
+    </div>
+  </aside>
 </div>
 
 <script src="../shared/gaze/audit-probe.js"></script>
-<script src="app.js?v=20261122c"></script>
+<script src="app.js?v=20261122d"></script>
 <script src="gaze-host.js?v=20261121f"></script>
 </body>
 </html>
