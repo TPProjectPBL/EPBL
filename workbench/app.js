@@ -1,6 +1,6 @@
 /* 隔空控制器 · 工作台外壳
  * 职责：注册表渲染、hash 路由、iframe 懒加载 + 单实例互斥、下载中心、后端探活。
- * 约束：不使用任何框架与构建工具；所有模块与工作台同源（127.0.0.1:8125）。
+ * 不使用框架与构建工具；独立模块使用自己的本机服务。
  */
 'use strict';
 
@@ -58,12 +58,11 @@ function bindShell() {
   byId('reloadBtn').addEventListener('click', () => {
     const mod = currentModule();
     if (!mod) return;
-    teardownFrame();
     activate(mod, { force: true });
   });
   byId('openBtn').addEventListener('click', () => {
     const mod = currentModule();
-    if (mod) window.open(mod.path, '_blank', 'noopener');
+    if (mod) window.open(mod.standaloneUrl || mod.path, '_blank', 'noopener');
   });
   byId('backBtn').addEventListener('click', () => {
     location.hash = '#/home';
@@ -201,8 +200,11 @@ function route() {
   if (hash === '') return showLanding();
   if (hash === 'calibrate') return showCalibrate();
 
-  // 协议：每次进入页面强制 9 点标定，无例外。
-  // 未完成本次会话标定时，任何主界面 / 空间入口都先回标定屏。
+  const mod = state.modules.find((m) => m.id === hash);
+  // 独立模块在自己的页面内标定。
+  if (mod?.standaloneUrl) return activate(mod);
+
+  // 依赖宿主标定的空间须先完成本次会话标定。
   const calibrated = (() => {
     try {
       return sessionStorage.getItem('epbl.gaze.calibrated') === '1';
@@ -221,7 +223,6 @@ function route() {
     return;
   }
 
-  const mod = state.modules.find((m) => m.id === hash);
   if (!mod) {
     // 未知路由不猜模块：回首页，避免地址栏乱写就进了某个项目
     showLanding();
@@ -231,7 +232,7 @@ function route() {
 }
 
 /* ---------------- iframe 生命周期（单实例互斥） ---------------- */
-function teardownFrame() {
+function teardownFrame({ standaloneCamera = false } = {}) {
   const stage = byId('stage');
   const frame = stage.querySelector('iframe.frame');
   if (frame) {
@@ -241,13 +242,14 @@ function teardownFrame() {
   }
   stage.querySelectorAll('.loading, .empty').forEach((n) => n.remove());
   state.active = null;
+  window.__epblGazeHost?.setStandaloneCamera?.(standaloneCamera);
 }
 
 function activate(mod, { force = false } = {}) {
   if (!force && state.active === mod.id && byId('stage').querySelector('iframe.frame')) return;
 
-  setView('module');
-  teardownFrame();
+  setView('module', { standalone: !!mod.standaloneUrl });
+  teardownFrame({ standaloneCamera: !!mod.standaloneUrl });
   byId('stage').replaceChildren();
   state.active = mod.id;
   localStorage.setItem(LS.last, mod.id);
@@ -266,8 +268,8 @@ function activate(mod, { force = false } = {}) {
   const frame = document.createElement('iframe');
   frame.className = 'frame';
   frame.title = mod.name;
-  frame.setAttribute('allow', FRAME_ALLOW);
-  frame.src = mod.path;
+  frame.setAttribute('allow', mod.standaloneUrl ? 'camera' : FRAME_ALLOW);
+  frame.src = mod.standaloneUrl || mod.path;
 
   let settled = false;
   const slow = setTimeout(() => {
@@ -312,7 +314,7 @@ function renderModuleBar(mod) {
   (mod.capabilities || []).forEach((cap) => meta.appendChild(tag(cap === 'camera' ? '摄像头' : '后端', '')));
   (mod.requires || []).forEach((req) => meta.appendChild(tag(req === 'cdn' ? 'CDN 依赖' : '本地资源', req === 'cdn' ? 'cdn' : '')));
   const path = document.createElement('code');
-  path.textContent = mod.path;
+  path.textContent = mod.standaloneUrl || mod.path;
   meta.appendChild(path);
 
   const note = byId('modNote');
@@ -355,8 +357,10 @@ const DWELL_DECAY = 1.8;    // 视线移开后进度回落倍率
 const screens = { gazeOff: null, view: 'landing' };
 
 /** 切换整页视图：landing | calibrate | nav | module */
-function setView(view) {
+function setView(view, { standalone = false } = {}) {
   document.body.dataset.view = view;
+  byId('gazeCalibBtn').hidden = standalone;
+  byId('gazeModelDot').hidden = standalone;
   screens.view = view;
   if (screens.gazeOff) {
     screens.gazeOff();

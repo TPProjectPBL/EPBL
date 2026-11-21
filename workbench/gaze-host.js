@@ -16,7 +16,7 @@
   ];
   const ENGINE = { name: 'mediapipe-face-landmarker', version: '478', landmarks: 478 };
   /** 构建号：改完代码 bump 一次，index.html 的 ?v= 跟着改，旧标签页一看 console 就知道版本。 */
-  const BUILD = '20261121e';
+  const BUILD = '20261121f';
 
   const S = {
     status: 'none',      // none | ok | stale
@@ -38,6 +38,7 @@
     panel: null,
     // 摄像头 / 推理单例
     cam: null,           // {video, stream, noFrame}
+    cameraEpoch: 0,
     faceEngine: null,
     inferTimer: 0,
     inferErr: '',
@@ -48,6 +49,7 @@
     subs: 0,
     idleTimer: 0,
     exclusive: false,    // 某个模块声明自己独占摄像头
+    standaloneCamera: false,
     gesture: null,
     // 工作台自身（首页/导航页）的视线订阅：不走 iframe，直接在宿主页面里用
     localSubs: new Set(),
@@ -63,6 +65,7 @@
   let FEAT = null;
   const busMod = () => BUS || (BUS = import('../shared/gaze/bus.js?v=' + BUILD + ''));
   const featMod = () => FEAT || (FEAT = import('../shared/gaze/core/features.js?v=' + BUILD + ''));
+  const cameraReserved = () => S.exclusive || S.standaloneCamera;
 
   /** 轻量提示条（不新增 CSS 文件） */
   function notify(text) {
@@ -269,15 +272,16 @@
   }
 
   /**
-   * 摄像头单例。工作台内所有模块共用这一路 {@link stream}，
-   * 模块不再自己 getUserMedia。
+   * 依赖宿主推理的模块共用这一路摄像头。
    * @returns {Promise<{video:HTMLVideoElement, stream:MediaStream, noFrame:boolean}>}
    */
   async function ensureCamera() {
+    if (S.standaloneCamera) throw fail('camera-reserved', '独立模块正在使用摄像头。');
     if (S.cam && S.cam.stream && S.cam.video) return S.cam;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       throw fail('no-camera-api', '当前环境不支持摄像头采集（navigator.mediaDevices 缺失）。');
     }
+    const epoch = S.cameraEpoch;
     let stream;
     try {
       // Alexia 1080p 基线：双模态测试台 / 控制前端统一用 1920×1080。
@@ -291,6 +295,10 @@
       const name = (e && e.name) || 'unknown';
       throw fail('camera-denied', '无法打开摄像头（' + name + '）。请检查系统权限、是否被其他程序占用，然后重试。');
     }
+    if (epoch !== S.cameraEpoch) {
+      stream.getTracks().forEach((track) => track.stop());
+      throw fail('camera-released', '工作台已释放摄像头。');
+    }
     const video = document.createElement('video');
     video.muted = true;
     video.autoplay = true;
@@ -299,7 +307,8 @@
       'position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
     document.body.appendChild(video);
     video.srcObject = stream;
-    S.cam = { video, stream, noFrame: false };
+    const cam = { video, stream, noFrame: false };
+    S.cam = cam;
     S.stream = stream;
     S.video = video;
     try {
@@ -308,8 +317,9 @@
     } catch (e) {
       /* 自动播放被拦：交给 waitVideo 判定 */
     }
-    if (!(await waitVideo(video, 3000))) S.cam.noFrame = true;
-    return S.cam;
+    if (!(await waitVideo(video, 3000))) cam.noFrame = true;
+    if (epoch !== S.cameraEpoch) throw fail('camera-released', '工作台已释放摄像头。');
+    return cam;
   }
 
   /** FaceLandmarker 单例。 */
@@ -979,7 +989,7 @@
       camera: !!S.cam,
       inference: S.inferRunning,
       subscribers: S.subs,
-      exclusive: S.exclusive,
+      exclusive: cameraReserved(),
       hands: S.gestureRunning,
       inferErr: S.inferErr,
       localSubs: S.localSubs.size,
@@ -1077,12 +1087,21 @@
     startInference,
     stopInference,
     releaseCamera,
+    setStandaloneCamera,
   };
 
   /* ------------------------------------------------------------ 宿主推理（模块订阅） */
 
+  function setStandaloneCamera(on) {
+    if (S.standaloneCamera === on) return;
+    S.standaloneCamera = on;
+    if (on) releaseCamera();
+  }
+
   function releaseCamera() {
+    S.cameraEpoch++;
     stopInference();
+    stopHands();
     if (S.stream) {
       try {
         S.stream.getTracks().forEach((t) => t.stop());
@@ -1120,14 +1139,14 @@
    */
   function startInference() {
     if (S.inferTimer) return;
-    if (S.hidden || S.exclusive) return;
+    if (S.hidden || cameraReserved()) return;
     if (SIM) {
       // 模拟模式：没有摄像头/引擎，直接按节奏广播合成 landmarks
       S.inferRunning = true;
       let core = S.sim;
       const simLoop = async () => {
         S.inferTimer = 0;
-        if (S.hidden || S.exclusive) {
+        if (S.hidden || cameraReserved()) {
           S.inferRunning = false;
           return;
         }
@@ -1148,20 +1167,21 @@
           const bus = await busMod();
           bus.broadcastLandmarks(lm, { root: stageEl(), ts: performance.now() });
         } catch (e) {}
-        if (!S.hidden && !S.exclusive) S.inferTimer = setTimeout(simLoop, INFER_MS);
+        if (!S.hidden && !cameraReserved()) S.inferTimer = setTimeout(simLoop, INFER_MS);
       };
       simLoop();
       return;
     }
     // 不因 noFrame 直接放弃：循环里用 videoWidth 判断，设备恢复出帧时能自动接上
+    const epoch = S.cameraEpoch;
     ensureCamera()
       .then(() => ensureEngine())
       .then(() => {
-        if (S.inferTimer || S.hidden || S.exclusive) return;
+        if (epoch !== S.cameraEpoch || S.inferTimer || S.hidden || cameraReserved()) return;
         S.inferRunning = true;
         const loop = async () => {
           S.inferTimer = 0;
-          if (S.hidden || S.exclusive) { S.inferRunning = false; return; }
+          if (S.hidden || cameraReserved()) { S.inferRunning = false; return; }
           const cam = S.cam;
           if (cam && cam.video && cam.video.videoWidth) {
             try {
@@ -1177,7 +1197,9 @@
               S.inferErr = (e && e.message) || 'infer';
             }
           }
-          if (!S.hidden && !S.exclusive) S.inferTimer = setTimeout(loop, INFER_MS);
+          if (epoch === S.cameraEpoch && !S.hidden && !cameraReserved()) {
+            S.inferTimer = setTimeout(loop, INFER_MS);
+          }
         };
         loop();
       })
@@ -1238,13 +1260,14 @@
     // 与广播 landmarks / model 同口径：先取 bus 模块，循环里直接用。
     // 之前这里漏取，导致 bus.broadcastHands 抛 ReferenceError 被 catch 吞掉，手势永远广播不出去。
     const bus = await busMod();
+    if (S.standaloneCamera || cam !== S.cam) return null;
     S.gestureRunning = true;
     S.lastHandCount = -1;
 
     const loop = async () => {
       S.gestureTimer = 0;
-      if (!S.gestureRunning) return;
-      if (S.hidden || S.exclusive) {
+      if (!S.gestureRunning || cam !== S.cam) return;
+      if (S.hidden || cameraReserved()) {
         S.gestureTimer = setTimeout(loop, 600);
         return;
       }
@@ -1268,7 +1291,7 @@
       } catch (e) {
         S.gestureErr = String((e && e.message) || e).slice(0, 120);
       }
-      S.gestureTimer = setTimeout(loop, HANDS_MS);
+      if (S.gestureRunning && cam === S.cam) S.gestureTimer = setTimeout(loop, HANDS_MS);
     };
     loop();
     notify('手势引擎已就绪 · 手部结果开始广播');

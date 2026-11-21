@@ -1,26 +1,41 @@
 # 隔空控制器（Air Controller）· 交接文档
 
-> 写给**完全没有上下文的新会话**。先读完这一份再动代码，能省掉至少两小时的重踩。
-> 最后更新：2026-11-17 ｜ HEAD：`4aac8fc`（origin/main 0/0；本次文档改动尚未提交）
+> 最后更新：2026-11-21 ｜ HEAD：`5e81f55`（与本地 `origin/main` 引用一致，工作台接入和 BlazeFace 本地化仍在工作区）
 > 团队仓库：`origin = TPProjectPBL/EPBL` ｜ 本机克隆**只配了 origin**（旧文档里的个人 fork `jarvis` 已移除）
 > 分工（按提交历史）：AlexiaWHsu = 眼动 / dual-test / 控制后端 ｜ Evelyn = 文档 / fruit-slice ｜ **Thriving-r = 隔空画板 `draw/`**
 
 ---
 
-## 0. 新会话快速上手（按顺序做这 5 步）
+## 0. 2026-11-21 工作台与隔空画板
 
-1. **读完本文件**，重点看 **第 3 节（当前状态与遗留）** 和 **第 5 节（坑）**。第 3 节记录了眼动 0 fps 的根因（已修复）与判据，第 4 节列了剩余待办。
-2. **看工程蓝图**：`outputs/隔空控制器-工程蓝图.html`（按阶段的可视化说明 + 理想效果 + 踩坑）。
-3. **起服务**（项目根目录）：
-   - `python3 -m http.server 8125` → 本机调试用 `http://localhost:8125/...`
-   - **必须 `localhost` 或 `https`**：WebGazer / `getUserMedia` 在非安全源下会被直接拦住。
-   - 内网/其它设备：`python3 .deepworks/tmp/ssl/https_server.py` → `https://<内网IP>:8443/...`
-     （脚本 + 证书在 `.deepworks/tmp/ssl/`，**不进仓库**；本机当前没有，见第 9 节）
-4. **改 JS 后先做语法自检，再到浏览器实测**：
-   - 本机已有 node（v24.20.0），可直接 `node --check` 或抽 `<script type="module">` 后 `node --check xxx.mjs`；
-   - 历史用法 `python3 .deepworks/tmp/check_js_balance.py <目标文件>` 是**本机脚本、未随仓库分发**，换机器需重建（见 5.4 第 16 条），**务必带文件参数**。
-5. **不要假设"改完就能用"**：摄像头 / 标定 / 手势手感的真实表现只能靠用户真机复测；
-   DeepWorks Browser 可用于无摄像头的页面结构、控制台报错与 DOM 验证。
+### 启动与复测
+
+在仓库根目录分别启动两个服务：
+
+```bash
+# 终端 1 · 工作台静态服务（8125）
+python3 scripts/serve.py 8125 .
+
+# 终端 2 · GazeFollower 画板服务（8789）
+draw/.venv/bin/python draw/gazefollower_server.py
+```
+
+- 工作台画板入口为 `http://127.0.0.1:8125/workbench/index.html#/draw`，也可直开 `http://127.0.0.1:8789/index-3-hand-gazefollower.html`。后启动 8789 时，点工作台工具栏的「重载」。进入画板后点「开启摄像头」，依次点击并注视 9 个标定点。画板重载或视口尺寸变化后需要重新标定。
+- 本机 `draw/.venv` 使用 Python 3.12，已安装 `gazefollower==1.1.0`。虚拟环境在 Git 忽略范围内，换机器需要重新安装依赖。服务正常时，`http://127.0.0.1:8789/gaze/health` 返回 `{"model":"GazeFollower"}`。
+- 测试台、热力图和跑酷仍由工作台宿主统一标定并提供推理。首次在工作台运行这条链路时，用 `bash scripts/fetch-gaze-model.sh` 准备本地 Face Landmarker 模型，再在工作台完成 9 点标定和 5 点验证。
+- 真机复测项包括画板 9 点标定、视线笔尖、捏合落笔，以及从跑酷切入画板、再切回跑酷后摄像头和手势是否恢复。进入画板后可在工作台顶层控制台查看 `__epblGazeHost.getStatus()`，预期 `exclusive: true`、`camera: false`、`hands: false`。
+
+### 已提交的改动
+
+- `5e81f55` 新增 `draw/index-3-hand-gazefollower.html` 和 `draw/gazefollower_server.py`。画板浏览器端开一条摄像头流，MediaPipe 在浏览器内识别手势，同一路的 JPEG 帧送往本机 `/gaze/features` 提取 258 维注视特征。9 点样本交给 `/gaze/calibrate` 拟合岭回归，浏览器持有权重并计算视线坐标。
+- `57077e1` 修复工作台宿主漏取 `bus` 导致手势广播失效的问题。跑酷进入时订阅 `onHands` 并请求宿主启动手部推理，离开时退订并请求停止。
+- `6bdf3ca`、`0384b98`、`f98e729` 更新宿主统一标定：摄像头弹窗与头位引导、1080p 理想采集分辨率、百分制验证结果与内置诊断。实现入口见 `workbench/gaze-host.js` 和 `shared/gaze/calibrate/`。
+
+### 工作区尚未提交
+
+- `workbench/modules.json` 将 `draw` 切到 8789 的 `standaloneUrl`。`workbench/app.js` 对该路由直接加载独立 iframe，授予 `camera` 权限并隐藏宿主标定按钮和状态点。「重载」和「新标签打开」都使用同一个独立地址。
+- `workbench/gaze-host.js` 在进入画板时停止手部推理并释放宿主摄像头，独立画板打开期间阻止宿主重新取流。`cameraEpoch` 用来作废已发出但迟到的取流请求，返回的媒体轨道会被关闭。离开画板后，宿主可按订阅重新取流。`workbench/index.html` 的 CSP 放行 8789 iframe，前端版本号更新为 `20261121f`。
+- 保留 `draw/index-3-hand.html` 作为独立 WebGazer 版。该版使用的 `draw/vendor/webgazer/webgazer.js` 把 BlazeFace 从 TF Hub 改为本地模型并设置 `fromTFHub: false`。目前 `draw/vendor/webgazer/blazeface_model/model.json` 和 `group1-shard1of1.bin` 都是未跟踪文件，提交这项修复时要随 vendor 补丁一并纳入。
 
 ---
 
@@ -32,9 +47,9 @@
 
 > **眼动负责"指哪"（当鼠标光标），手势负责"做什么"（当命令）。**
 
-- **眼动**：WebGazer 2.1.2（本地 vendor + 本地 facemesh 模型）→ 视线定位 → EMA 平滑 → 按钮磁吸。
+- **眼动**：工作台宿主用 MediaPipe Face Landmarker 和共享视线模型；独立画板用 GazeFollower；旧演示页和对照入口保留 WebGazer 2.1.2。
 - **手势**：MediaPipe GestureRecognizer / Hands（21 点）→ 6 个静态手势 + 方向滚动。
-- **形态**：纯前端 HTML/JS，**无构建工具、无框架**，浏览器 + 摄像头即可跑。
+- **形态**：工作台和各 Web 页面用 HTML/JS，无需构建；GazeFollower 画板的注视推理由本机 Python 服务提供。
 - **目标场景**：双手被占用、不便接触、行动不便。
 
 **明确不做**：iOS 原生（`EyeControlApp/` 已废弃）；1–2 米不可靠的捏合 / 摇滚 / 快速甩动手势。
@@ -83,18 +98,18 @@
 | 页面 | 作用 | 状态 |
 |---|---|---|
 | `gesture-test/index.html` | 手势精确度测试台：7 项测试（6 动作 + 中立态），逐项帧级准确率 / 状态机确认率 / 混淆矩阵 / 导出 JSON | ✅ 用户实测「精度非常高」 |
-| `dual-test/index.html` | 眼动光标 + 手势控制测试台：9 点标定、眼动精度（12 目标）、眼-手联合点击（10 轮）、导出 JSON | ✅ 眼动已修复（`d475f0c`），待真机复测 |
+| `dual-test/index.html` | 眼动光标 + 手势控制测试台：工作台内用共享模型，保留 13 点 WebGazer 对照标定；支持眼动精度、眼-手联合点击和导出 JSON | 早期眼动 0 fps 问题已修复（`d475f0c`） |
 
 **gesture-test 是当前唯一被验证"识别精度很高"的手势实现，它是双模页的参考标准。**
 它的取流方式：页面自己 `getUserMedia({video:{width:{ideal:1280},height:{ideal:720},facingMode:"user"}})` → 自有 `<video>` → `recognizer.recognizeForVideo(video, now)`，`numHands:1`，三个置信度 `0.5`，循环节流 34ms，GPU 失败回退 CPU。
 
-### 隔空画板：`draw/`（Thriving-r 负责）✅ 功能完整，真机手感与取流基线待复测
+### 独立 WebGazer 画板：`draw/index-3-hand.html`（Thriving-r 负责）
 
-眼动 / 手势驱动的隔空画板，现仅保留手势优先版（原 `draw/index.html` 眼动版已删除，其渲染与工具层已合并进 `index-3-hand.html`）：
+本节记录 WebGazer 版的功能和历史验证。原 `draw/index.html` 的渲染与工具层已合并进这版。工作台使用的 GazeFollower 版见第 0 节。
 
 | 文件 | 形态 | 落笔方式 | 适用 |
 |---|---|---|---|
-| `draw/index-3-hand.html` | 手势优先版（含原 v3.0 眼动标定 + 视线九宫格 + 全套工具层） | 拇指+食指**捏合**落笔（<0.45 落 / >0.60 抬），握拳也可落笔；**默认笔尖 = 视线九宫格**，按 `T` 可切 **食指指尖（landmark 8）**（One Euro 平滑） | 主路径 |
+| `draw/index-3-hand.html` | 手势优先版（含原 v3.0 眼动标定 + 视线九宫格 + 全套工具层） | 拇指+食指**捏合**落笔（<0.45 落 / >0.60 抬），握拳也可落笔；**默认笔尖 = 视线九宫格**，按 `T` 可切 **食指指尖（landmark 8）**（One Euro 平滑） | 独立访问 |
 
 它支持：
 
@@ -133,14 +148,13 @@
 
 ---
 
-## 3. 当前状态与遗留（最重要的 60 行）
+## 3. dual-test 历史故障：WebGazer 眼动 0 fps
 
 ### 3.1 已修复：dual-test 眼动 0 fps（2026-10-31，`d475f0c`）
 
-第 4.1 节的改法已经落地并提交：`dual-test/index.html` 现在让 WebGazer 自己以 720p 开流
-（`webgazer.params.camConstraints`），`handImg` 直接指向 `#webgazerVideoFeed`，
-自建的 `#cam` 与 `getUserMedia` 临时替换都已删除，并补了「3 秒无视线输出」兜底日志。
-**代码层面闭环，真机效果仍待用户复测**（本机没有摄像头，无法代验）。
+第 4.1 节记录了当时的修复。`dual-test/index.html` 的 WebGazer 对照路径由 WebGazer 自己开流，
+原先的 720p 理想分辨率后来提升到 1080p，`handImg` 直接指向 `#webgazerVideoFeed`。
+工作台模式下，测试台可直接使用宿主推理与共享模型。
 
 ### 3.2 历史现象与判据（仍然有效，别再重踩）
 
@@ -240,7 +254,7 @@
 - **补光**：⚠️ 必须**可见光**。Brio 是 RGB + IR-cut，红外补光灯无效。用户当前选择"先不买灯"。
 - 待实测调参：`gFinger=1.2`、`gThumb=1.25`、`gDead=0.12`、`gEnter=3`、`gStep=40`、`gScroll=120`；磁吸 `gravity`（70px 中档）未定死。
 
-### 4.6 隔空画板真机复测（Thriving-r，不阻塞主链路）
+### 4.6 独立 WebGazer 画板真机复测（Thriving-r）
 
 `draw/index-3-hand.html` 只做过合成 landmark 验证，真实摄像头还欠五项：
 
@@ -263,7 +277,7 @@
 3. **绝不要让多个 `<video>` 消费同一条 `MediaStream`**（本次 0 fps 的根因）。Chrome 不报错，但媒体管线会静默卡住。
 4. **`onGaze` 从未被调用 vs 回调返回 `null` 是两回事**，看 `视线` 灯的颜色区分（见第 3 节表格）。不要一看到"未检测到脸"就去查光照。
 5. **标定时手要放下**。手挡在额头/眼前 → facemesh 完全无输出 → 看起来像"眼动坏了"。
-6. **MediaPipe face_mesh 的 wasm 会 `Aborted` 崩溃**——眼动就认准 WebGazer，别退回 face_mesh。
+6. 早期 `MediaPipe face_mesh` 的 WASM 曾出现 `Aborted`，旧演示因此改用 WebGazer。当前工作台使用 `shared/gaze/engine/face-engine.js` 的 MediaPipe Face Landmarker。
 
 ### 5.2 手势
 
@@ -305,19 +319,22 @@
 
 | 服务 | 端口 | 命令 | 说明 |
 |---|---|---|---|
-| 本地调试 HTTP | 8125 | `python3 -m http.server 8125` | 仅本机，`localhost` 是安全源，不受证书限制 |
+| 工作台静态服务 | 8125 | `python3 scripts/serve.py 8125 .` | 绑定 `127.0.0.1`，开发时禁用缓存 |
+| GazeFollower 画板 | 8789 | `draw/.venv/bin/python draw/gazefollower_server.py` | 绑定 `127.0.0.1`，提供画板页面和注视推理接口 |
 | 内网 HTTPS | 8443 | `python3 .deepworks/tmp/ssl/https_server.py` | 白名单 `controller-demo`、`outputs`、`gesture-test`、`dual-test`、`draw`；根路径 302 → 主页面。**脚本和证书不进仓库，本机当前缺失，换机器需重建** |
 
-> 用户当前主要在 **localhost:8125** 上测 dual-test（避免"不安全证书"页面带来的摄像头/模型限制）。
+> 浏览器摄像头需要安全上下文。本机可用 `127.0.0.1` 或 `localhost`，局域网访问需要 HTTPS。8789 是访问者设备自己的本机服务。
 
 ### 访问地址
 
 | 用途 | 地址 |
 |---|---|
 | 主控制器 | `http://localhost:8125/controller-demo/index.html` ｜ 内网 `https://<内网IP>:8443/controller-demo/index.html` |
-| **眼动+手势测试台（当前主战场）** | `http://localhost:8125/dual-test/index.html` |
+| 工作台 | `http://127.0.0.1:8125/workbench/index.html` |
+| 眼动 + 手势测试台 | `http://127.0.0.1:8125/workbench/index.html#/dual-test` ｜ 独立对照 `http://localhost:8125/dual-test/index.html` |
 | 手势测试台（精度基准） | `http://localhost:8125/gesture-test/index.html` |
-| **隔空画板（手势版 / 含眼动标定）** | `http://localhost:8125/draw/index-3-hand.html` |
+| GazeFollower 隔空画板 | `http://127.0.0.1:8125/workbench/index.html#/draw` ｜ 直开 `http://127.0.0.1:8789/index-3-hand-gazefollower.html` |
+| 独立 WebGazer 画板 | `http://localhost:8125/draw/index-3-hand.html` |
 | 控制前端（眼动/手势采集） | `http://localhost:8125/control-frontend/index.html` |
 | 手势切水果 | Python 版 `outputs/fruit-slice/`（纯前端 `gesture-fruit/` 已删除） |
 | 信任证书（内网 HTTPS 用） | `https://<内网IP>:8443/ca.crt` |
@@ -351,13 +368,16 @@ openssl verify -CAfile ca.crt server.crt
 
 | 文件 | 角色 |
 |---|---|
-| `dual-test/index.html` | **当前主战场**：眼动光标 + 手势命令测试台；9 点标定 / 眼动精度 12 目标 / 眼-手联合 10 轮 / 导出 JSON。眼动已在 `d475f0c` 修复，待真机复测 |
+| `workbench/modules.json`、`workbench/app.js`、`workbench/gaze-host.js` | 模块入口、iframe 生命周期、统一标定与摄像头交接 |
+| `shared/gaze/` | Face Landmarker 引擎、标定协议、共享模型存储与 iframe 通信 |
+| `dual-test/index.html` | 眼动和手势测试台，接收宿主模型，也可走 13 点 WebGazer 对照标定 |
 | `gesture-test/index.html` | **手势精度的黄金基准**（约 633 行）：7 项测试、逐手势准确率、混淆矩阵、导出 JSON。用户实测"精度非常高" |
 | `controller-demo/index.html` | 主控制器：WebGazer 集成、标定、意图吸附、dwell、手势状态机、`handBusyUntil` 防冲突。**眼动可用性的参照实现** |
 | `controller-demo/vendor/webgazer/` | 已 patch 的 WebGazer 2.1.2 + 本地 `facemesh_model/`（**必须提交**） |
 | `controller-demo/webgazer-gaze.html` | 眼动对照页，调 EMA / 磁吸参数用 |
 | `controller-demo/hero.html` | 协作者 hero 视觉页（`?mode=hero`），保留 |
-| **`draw/index-3-hand.html`** | **隔空画板（Thriving-r）**：含 v3.0 眼动标定 + 默认视线九宫格笔尖（按 `T` 切食指指尖）+ 捏合 / 握拳落笔 + 拇指切工具 / 食指撤回，`AirCanvasKit` 移植自 dual-test |
+| `draw/index-3-hand-gazefollower.html`、`draw/gazefollower_server.py` | 工作台隔空画板页面和 8789 本机服务 |
+| **`draw/index-3-hand.html`** | **独立 WebGazer 画板（Thriving-r）**：含 v3.0 眼动标定 + 默认视线九宫格笔尖（按 `T` 切食指指尖）+ 捏合 / 握拳落笔 + 拇指切工具 / 食指撤回，`AirCanvasKit` 移植自 dual-test |
 | **`draw/index-3-hand-测试记录.md`** | 画板手势版的参数、7 项合成验证（6 通过 / 快线断点未压测）、回归红线与待真机复测清单 |
 | **`draw/models/` + `draw/vendor/vision/`** | **共用资源**：`gesture_recognizer.task` + MediaPipe Vision wasm；gesture-test / dual-test 均以 `../draw/...` 引用，**别删别挪** |
 | `control-backend/` | 控制后端（FastAPI + Playwright），`launcher.command` 一键起停；含 `test_control.py` 真实 Chrome 回读验证 |
@@ -367,7 +387,7 @@ openssl verify -CAfile ca.crt server.crt
 | `HANDOFF.md` | 本文件，新会话第一份要读 |
 | `.deepworks/tmp/check_js_balance.py` | JS 括号自检脚本（gitignore），**必须带文件参数**；本机当前缺失，可用 `node --check` 替代 |
 | `.deepworks/tmp/ssl/` | 内网证书 + HTTPS 服务器（**私钥，绝不提交**）；本机当前缺失，换机器需重建 |
-| `eye-page-turner/` | 旧眼动翻页器，仅参考 |
+| `eye-page-turner/demo/air-runner/` | 工作台跑酷模块，订阅宿主人脸与手部结果 |
 
 ---
 
@@ -383,7 +403,12 @@ openssl verify -CAfile ca.crt server.crt
 ### 最近提交链（倒序）
 
 ```
-4aac8fc chore(release): 重建 v1.0.0 DMG，包含视线热力图模块           ← 当前 HEAD
+5e81f55 feat(draw): add standalone GazeFollower canvas              ← 当前 HEAD
+57077e1 fix(gesture): 恢复工作台内手势识别
+f98e729 fix(gaze): 撤掉错误的距离阈值缩放 + 标定结果内置诊断
+0384b98 feat(gaze): 融合标定对齐 Alexia 1080p 采集基线
+6bdf3ca feat(gaze): 统一标定改为摄像头弹窗 + 标准框头控，测试用百分制正确率
+4aac8fc chore(release): 重建 v1.0.0 DMG，包含视线热力图模块
 6b0dbd8 feat(workbench): 接入视线热力图模块，移除 hero 与旧控制器入口
 e391064 style(workbench): 统一蓝黑色系配色
 1005f6c feat(packaging): 控制小窗 py2app 打包与 DMG 流水线，启动器支持打包形态和首次自举
@@ -431,17 +456,3 @@ b5069b9 dual-test: 手势改为与 gesture-test 完全一致的取流方式（�
 - 工具链：**有 node v24.20.0**（项目本身仍是零构建）、Python 3.9.6、openssl、macOS 自带 `jsc`；无 deno / bun。
 - DeepWorks Browser（Chrome DevTools 插件）可用，能做无摄像头的页面结构 / 控制台 / DOM 验证；摄像头、标定与手势手感仍需用户真机复测。
 - `.gitignore` 已忽略：`.DS_Store`、`.opencode/`、`.deepworks/`、`opencode.jsonc`、`EyeControlApp/`、`uploads/`、`outputs/眼动追踪系统设计报告.html`、`node_modules/`、`dist/`、`build/`、`*.log`、`*.task`、`*.tflite`、`.venv/`。→ 换机器需手动重建 `https_server.py`、`ext.cnf`、证书、`check_js_balance.py`。
-- 当前模型（仅记录）：`dth/DeepSeek-V4.1-Flash`。
-
----
-
-## 10. 给新会话的一句话总结
-
-> 眼动与手势两条链路都已跑通：dual-test 的眼动 0 fps 已在 `d475f0c` 修复
-> （让 WebGazer 自己开 720p 流，`handImg = #webgazerVideoFeed`），仍待真机复测标定精度与联合点击。
-> 隔空画板 `draw/` 只有一版：`index-3-hand.html`（默认视线九宫格笔尖，按 `T` 切食指指尖；
-> 捏合 / 握拳落笔，拇指切工具 / 食指撤回；原眼动版 `index.html` 已删除并并入此文件）。
-> 功能与合成验证已完成（6 项通过，快线断点未单独压测），
-> **真机手感（镜像方向、指尖抖动、快甩断点、捏合阈值）与取流基线
-> （canvas 640×480 → 1280×720 `<video>`）是当前最该补的一环**。
-> 改完 JS 先 `node --check`，再让用户 `Cmd+Shift+R` 强刷实测。

@@ -11,13 +11,12 @@
  * v2   变更：视线九宫格笔尖 / 开门+停留选色 / 撤回 / 重做 / 橡皮
  * v2.1 变更（修改6）：双手分工——左手平移画布（世界坐标 + panOffset）、笔尖来源可切换、复位视图
  * v2.1 变更（修改7）：画布颜色可切换（黑 / 白），网格线随画布色适配
- * v3.0 变更：接入 GazeFollower 注视（9 点标定 / 平滑 / 按钮磁吸）与 MediaPipe
+ * v3.0 变更：接入 GazeFollower 注视（9 点标定 / 平滑）与 MediaPipe
  *            手势（握拳落笔 / 张开抬笔 / 左手平移），两路共用浏览器摄像头。
  *            鼠标模拟保留为无摄像头环境的降级方案。
  * v3.1 变更：新增入口页（1 操作指南 / 2 进入画板）；操作指南只放在入口页，
  *            进入画板后整页收起，画板内不再出现指南面板。
- * v3.2 变更：真机模式控制条从画布浮层移入工具栏，紧贴「保存」右侧，
- *            其余按钮顺势左移；窄屏自动折到工具栏第二行，画布不再被遮挡。
+ * v3.2 变更：真机模式控制条从画布浮层移入工具栏，位于操作按钮右侧；窄屏自动折到工具栏第二行，画布不再被遮挡。
  * v3.3 变更：入口页标题改为「AIR CANVAS」，并加入 Aceternity Lamp 灯效
  *            （顶部光源线 + 向下光幕 + 发光标题，纯 CSS）。
  * v3.4 变更：入口页去掉两个按钮，改为三段式上下滑动：
@@ -116,9 +115,9 @@ body{
 
 /* ---------------- 工具栏 ---------------- */
 .toolbar{
-  /* Grid + minmax(0,1fr)：窄屏时左侧可收缩，保证「清空 / 保存」按钮永远完整可见 */
+  /* Grid + minmax(0,1fr)：窄屏时左侧可收缩，让操作按钮保持完整可见 */
   display:grid;
-  /* 三列：调色板(可收缩但不窄于按钮内容) / 操作按钮 / 真机模式条(紧跟保存右侧) */
+  /* 三列：调色板(可收缩但不窄于按钮内容) / 操作按钮 / 真机模式条 */
   grid-template-columns:minmax(140px,1fr) auto auto;
   align-items:center;
   gap:16px;
@@ -175,7 +174,7 @@ body{
   /* min-width 必须为 0：v1 用 120px 是因为色条独占整个 1fr 单元格；
      v2 在同一格里新增了「调色板」按钮，可用宽度减少约 150px，
      若仍锁 120px，6 个色块（6×120+5×12=780px）会被裁切，
-     且色条是 overflow-x:auto + 隐藏滚动条，注视无法滚动 → 紫/白选不到。
+     且色条是 overflow-x:auto + 隐藏滚动条，末尾色块会被挡住。
      改为可收缩后，6 个色块始终完整可见（窄屏自动变窄）。 */
   min-width:0;
   height:64px;
@@ -191,16 +190,18 @@ body{
   transform:translateY(-1px);
   box-shadow:0 0 20px -2px var(--c);
 }
-.swatch.is-gazed{
-  border-color:rgba(255,255,255,.92);
-  box-shadow:0 0 26px -2px var(--c),0 0 0 2px rgba(255,255,255,.35) inset;
-  z-index:3;
-}
 .swatch.is-active{
   border-color:#fff;
   transform:scale(1.2);
   box-shadow:0 0 30px -2px var(--c);
   z-index:4;
+}
+.swatch.is-highlighted{
+  outline:2px solid #fff;
+  outline-offset:2px;
+  transform:translateY(-2px);
+  box-shadow:0 0 24px var(--c);
+  z-index:5;
 }
 .swatch .tag{
   position:absolute;
@@ -211,26 +212,10 @@ body{
   color:rgba(10,14,23,.62);
   pointer-events:none;
 }
-/* 修改2：停留进度＝自下而上的填充动效（0.8 秒） */
-.swatch .fill{
-  position:absolute;
-  inset:0;
-  background:rgba(255,255,255,.34);
-  transform:scaleY(0);
-  transform-origin:bottom center;
-  opacity:0;
-  pointer-events:none;
-  transition:opacity var(--ease);
-}
-.swatch.is-gazed .fill{ opacity:1; }
-
 .actions{ display:flex; gap:12px; flex:0 0 auto; flex-wrap:wrap; justify-content:flex-end; }
 .btn{
   position:relative;
-  /* v2.1：工具栏新增「复位 / 笔尖 / 画布」三个按钮（共 8 个），
-     基准宽度由 128px 收紧到 100px，保证 1280px 窗口仍单行排布；
-     更窄的窗口由 .actions 的 flex-wrap 兜底换行，不会裁切或溢出。 */
-  min-width:100px;
+  min-width:124px;
   height:64px;
   border-radius:14px;
   border:1px solid var(--line);
@@ -239,7 +224,7 @@ body{
   font:700 15px/1 ui-sans-serif,system-ui,sans-serif;
   letter-spacing:.18em;
   cursor:pointer;
-  /* Floating Dock：基准盒尺寸（100×64）保持不变，
+  /* Floating Dock：按钮放大时不改变布局，
      只用 transform 做「指针靠近 → 本项放大上浮、左右邻项轻微联动」。
      --dock-scale / --dock-lift 由脚本按指针距离实时写入。 */
   --dock-scale:1;
@@ -259,11 +244,6 @@ body{
   outline:2px solid var(--accent);
   outline-offset:2px;
 }
-.btn.is-gazed{
-  border-color:var(--accent);
-  box-shadow:0 0 0 1px var(--accent) inset,0 0 26px -6px var(--accent);
-  z-index:68;
-}
 .btn.is-armed{ animation:armedPulse .45s ease-in-out; }
 @keyframes armedPulse{
   0%,100%{ box-shadow:0 0 0 1px var(--accent) inset,0 0 10px -6px var(--accent); }
@@ -272,10 +252,6 @@ body{
 .btn.danger:hover{
   border-color:var(--danger);
   box-shadow:0 0 22px -6px var(--danger);
-}
-.btn.danger.is-gazed{
-  border-color:var(--danger);
-  box-shadow:0 0 0 1px var(--danger) inset,0 0 26px -6px var(--danger);
 }
 .btn.danger.is-armed{ animation:armedPulseDanger .45s ease-in-out; }
 @keyframes armedPulseDanger{
@@ -335,7 +311,7 @@ body{
   align-items:center;
   justify-content:center;
   gap:9px;
-  min-width:116px;
+  min-width:132px;
   padding:0 16px;
   white-space:nowrap;
 }
@@ -353,9 +329,6 @@ body{
   background:rgba(76,201,240,.14);
   box-shadow:0 0 0 1px var(--accent) inset,0 0 26px -8px var(--accent);
 }
-
-/* 修改6：笔尖来源按钮文案较长（「笔尖·视线」），单独放宽基准宽度 */
-.btn.wide{ min-width:116px; }
 
 /* 修改7：画布颜色按钮带一个当前画布色的小色块 */
 .btn.with-dot{
@@ -377,7 +350,7 @@ body{
 /* 修改7：白画布状态下按钮上的色块边框需要更深，否则白点消失在白底按钮上 */
 .btn.with-dot .mini-dot.on-light{ border-color:rgba(10,14,23,.45); }
 
-/* 修改3/4：无可撤回 / 无可恢复时按钮置灰且不可点 */
+/* 无可撤回的笔画时，撤回按钮置灰且不可点 */
 .btn.is-disabled{
   opacity:.36;
   filter:grayscale(.55);
@@ -715,6 +688,7 @@ body.is-landing > .hud{
   letter-spacing:.03em;
   color:rgba(224,235,250,.84);
 }
+.hero .lede{ font-family:"Bodoni 72",Didot,Georgia,serif; }
 
 /* 滑动提示 */
 .cue{
@@ -752,6 +726,7 @@ body.is-landing > .hud{
   width:min(1180px,100%);
   padding-top:clamp(74px,12vh,130px);
 }
+.hero > :is(.lamp,.eyebrow,.display){ top:clamp(-28px,-3vh,-12px); }
 /* 台灯灯效：Aceternity「Lamp Section Header」
  * 顶部一条水平光源线，下方一片向下渐隐的光幕把标题照亮。
  * 纯 CSS 实现（无 Tailwind / framer-motion），颜色跟随 --lamp-rgb。 */
@@ -931,7 +906,7 @@ body.is-landing > .hud{
 }
 
 /* ---------------- 真机模式控制条（GazeFollower + MediaPipe） ----------------
- * v3.2：从画布上方浮层改为工具栏内的一项，固定在「保存」右侧；
+ * v3.2：从画布上方浮层改为工具栏内的一项，固定在工具栏右侧；
  *       高度与工具栏按钮一致(64px)，画布不再被它遮挡。
  *       摄像头预览改成向下弹出的浮层，只在运行时出现，且不吃指针事件。 */
 .real-panel{
@@ -1128,20 +1103,7 @@ body.is-landing > .hud{
 }
 .calib-skip:hover{ color:var(--text); border-color:var(--accent); }
 
-@media (max-width:1500px){
-  /* 给「保存」右侧的真机模式条腾出位置：按钮基准宽度略收 4px，
-     使 1366 这类常见笔记本宽度仍能单行排布，不折行、不缩字号 */
-  .btn{ min-width:96px; }
-  .btn.wide{ min-width:112px; }
-}
-@media (max-width:1410px){
-  /* 再窄一档：按钮基准再收 8px，让 1366 宽度仍能放下「真机模式条」单行 */
-  .btn{ min-width:88px; }
-  .btn.wide{ min-width:108px; }
-}
 @media (max-width:1360px){
-  /* 窗口不够宽时，真机模式条折到工具栏第二行（仍在保存下方右侧），
-     这样 8 个操作按钮不会被挤压，也不需要缩小字号 */
   .toolbar{ grid-template-columns:minmax(0,1fr) auto; }
   .real-panel{ grid-column:1 / -1; justify-self:end; }
 }
@@ -1152,7 +1114,6 @@ body.is-landing > .hud{
   .actions{ flex:1 1 auto; flex-wrap:nowrap; gap:8px; }
   .btn{ flex:1 1 0; min-width:0; padding:0 6px; font-size:13px; letter-spacing:.08em; }
   .btn.switcher{ min-width:104px; padding:0 10px; font-size:13px; letter-spacing:.06em; }
-  .btn.wide{ min-width:0; }
   .btn .key{ right:7px; bottom:7px; font-size:9px; letter-spacing:0; }
 }
 @media (max-width:900px){
@@ -1162,7 +1123,8 @@ body.is-landing > .hud{
 @media (max-width:820px){
   .btn .key{ display:none; }
   .actions{ gap:6px; }
-  .btn{ font-size:12px; letter-spacing:0; }
+  .btn{ padding:0 4px; font-size:12px; letter-spacing:0; }
+  .btn.with-dot{ gap:4px; }
   .btn.switcher{ min-width:96px; }
 }
 </style>
@@ -1184,25 +1146,25 @@ body.is-landing > .hud{
         <h2 class="display display--sm" data-text="操作指南"><span>操作指南</span></h2>
         <p class="lede">一分钟读完，之后全靠眼睛和手。</p>
         <ul class="guide-list">
-          <li><span class="k">真机启动</span><span class="v">工具栏「保存」右侧「开启摄像头」→ 授权后自动进入 9 点标定</span></li>
+          <li><span class="k">真机启动</span><span class="v">工具栏「开启摄像头」→ 授权后自动进入 9 点标定</span></li>
           <li><span class="k">注视移动</span><span class="v">完成标定后，笔尖平滑跟随视线</span></li>
           <li><span class="k">捏合</span><span class="v">落笔 · 笔尖移动即画线（橡皮模式下擦除）</span></li>
           <li><span class="k">张开手掌</span><span class="v">抬笔 · 只移动笔尖不画线</span></li>
-          <li><span class="k">拇指朝上</span><span class="v">切换画笔 / 橡皮；按住不重复</span></li>
+          <li><span class="k">拇指朝上</span><span class="v">打开调色板 / 确认高亮颜色</span></li>
+          <li><span class="k">拇指朝下</span><span class="v">切换画笔 / 橡皮</span></li>
+          <li><span class="k">拇指朝左 / 右</span><span class="v">调色板展开时，向对应方向移动一格</span></li>
+          <li><span class="k">调色板内握拳</span><span class="v">抬笔，松开后可再次向同一方向移动</span></li>
           <li><span class="k">食指朝上</span><span class="v">撤回一笔（等价 Ctrl+Z）；按住不重复</span></li>
           <li><span class="k">🤟 我爱你</span><span class="v">调色板收起时，保持约半秒清空画布；提前松手取消</span></li>
-          <li><span class="k">调色板＋捏合</span><span class="v">展开颜色条（默认收起，防误触）</span></li>
-          <li><span class="k">注视色块 0.8s</span><span class="v">停留选中并自动收起</span></li>
-          <li><span class="k">注视＋捏合</span><span class="v">撤回 / 下一步 / 复位 / 笔尖来源 / 画布色 / 工具 / 清空 / 保存</span></li>
           <li><span class="k">左手张开拖动</span><span class="v">平移画布内容（平移期间笔尖锁定）</span></li>
-          <li><span class="k">Victory</span><span class="v">切换到下一个颜色（降级兜底）</span></li>
+          <li><span class="k">✌️ V 手势</span><span class="v">调色板收起时，切换黑 / 白画布</span></li>
         </ul>
         <p class="guide-note">
           <b>真机模式</b>：GazeFollower 本机服务负责注视，浏览器里的 MediaPipe 负责手势，两路共用一个摄像头。
-          右手拇指与食指捏合落笔、松开或张开手掌抬笔；拇指朝上切换工具、食指朝上撤回；左手张开拖动平移。左右手识别反了按 <b>H</b> 交换。
+          视线控制笔尖。用拇指手势选色和切换工具。左右手识别反了按 <b>H</b> 交换。
           无摄像头时仍可用鼠标模拟：移动＝注视，按住＝落笔，<b>空格＋拖动＝左手平移</b>；
-          1–6 选色、E 画笔/橡皮、T 笔尖来源、B 画布黑/白、R 复位、Ctrl+Z 撤回、Ctrl+Y 重做、
-          P 颜色条、C 清空、S 保存、G 模拟注视丢失、V 触发 Victory。
+          1–6 选色、E 画笔/橡皮、B 画布黑/白、Ctrl+Z 撤回、
+          P 颜色条、C 清空、G 模拟注视丢失、V 触发 Victory。
         </p>
       </div>
       <p class="cue"><i>↓</i><span>回到封面 / 进入画板</span></p>
@@ -1218,7 +1180,7 @@ body.is-landing > .hud{
         </div>
         <p class="eyebrow">隔空画板 · GazeFollower ＋ 手势</p>
         <h1 class="display" data-text="Air Canvas"><span>Air Canvas</span></h1>
-        <p class="lede">注视为笔，手势为墨。</p>
+        <p class="lede" lang="en">Your gaze is the pen, your hand the ink.</p>
       </div>
       <p class="cue cue--top"><i>↑</i><span>操作指南</span></p>
       <p class="cue"><span>画板</span><i>↓</i></p>
@@ -1250,24 +1212,20 @@ body.is-landing > .hud{
 
 <div class="toolbar">
   <div class="palette-wrap">
-    <button class="btn switcher" id="btnPalette" type="button" aria-expanded="false" aria-controls="palette" data-dock-label="调色板 · [P]" title="注视本按钮 ＋ 捏合 展开颜色条（鼠标：点击）">
+    <button class="btn switcher" id="btnPalette" type="button" aria-expanded="false" aria-controls="palette" data-dock-label="调色板 · [P]" title="调色板（拇指朝上打开或确认颜色，P 展开 / 收起）">
       <i class="swatch-mini" id="switcherDot"></i>调色板<span class="key">[P]</span>
     </button>
     <div class="palette" id="palette" role="listbox" aria-label="调色板"></div>
   </div>
   <div class="actions">
-    <button class="btn" id="btnTool" type="button" data-dock-label="画笔 / 橡皮 · [E]" title="切换画笔 / 橡皮（拇指朝上、注视 ＋ 捏合，或按 E）"><span id="btnToolLabel">画笔</span><span class="key">[E]</span></button>
-    <button class="btn" id="btnUndo" type="button" data-dock-label="撤回 · ⌃Z" title="撤回上一笔（食指朝上、注视 ＋ 捏合，或 Ctrl+Z）">撤回<span class="key">⌃Z</span></button>
-    <button class="btn" id="btnRedo" type="button" data-dock-label="恢复下一笔 · ⌃Y" title="恢复下一笔（注视 ＋ 捏合，或 Ctrl+Y）">下一步<span class="key">⌃Y</span></button>
-    <button class="btn" id="btnReset" type="button" data-dock-label="复位视图 · [R]" title="复位视图：把画布平移偏移归零（注视 ＋ 捏合，或按 R）">复位<span class="key">[R]</span></button>
-    <button class="btn wide" id="btnSource" type="button" data-dock-label="笔尖来源 · [T]" title="切换笔尖来源：GazeFollower 视线 / 右手手掌（注视 ＋ 捏合，或按 T）"><span id="btnSourceLabel">笔尖·视线</span><span class="key">[T]</span></button>
-    <button class="btn with-dot" id="btnCanvas" type="button" data-dock-label="画布颜色 · [B]" title="切换画布颜色：黑 / 白（注视 ＋ 捏合，或按 B）"><i class="mini-dot" id="canvasDot"></i>画布<span class="key">[B]</span></button>
+    <button class="btn" id="btnTool" type="button" data-dock-label="画笔 / 橡皮 · [E]" title="切换画笔 / 橡皮（拇指朝下或按 E）"><span id="btnToolLabel">画笔</span><span class="key">[E]</span></button>
+    <button class="btn" id="btnUndo" type="button" data-dock-label="撤回 · ⌃Z" title="撤回上一笔（食指朝上或 Ctrl+Z）">撤回<span class="key">⌃Z</span></button>
+    <button class="btn with-dot" id="btnCanvas" type="button" data-dock-label="画布颜色 · [B]" title="切换黑 / 白画布（V 手势或按 B）"><i class="mini-dot" id="canvasDot"></i>画布<span class="key">[B]</span></button>
     <button class="btn danger" id="btnClear" type="button" data-dock-label="清空画布 · [C]">清空<span class="key">[C]</span></button>
-    <button class="btn" id="btnSave" type="button" data-dock-label="保存 · [S]">保存<span class="key">[S]</span></button>
   </div>
 
   <!-- 真机模式：GazeFollower 注视 + MediaPipe 手势（鼠标模拟仍保留，互不干扰）
-       v3.2：紧跟「保存」右侧，其余按钮顺势左移；窄屏折到第二行 -->
+       v3.2：位于操作按钮右侧；窄屏折到第二行 -->
   <section class="real-panel" id="realPanel" aria-label="真机模式控制">
     <div class="real-copy">
       <div class="real-title"><i class="real-dot" id="realDot"></i><span id="realTitle">GazeFollower</span></div>
@@ -1310,9 +1268,9 @@ body.is-landing > .hud{
   <div class="sep"></div>
   <div class="row"><span>MODE</span><b id="hudMode" class="on">待机 · STANDBY</b></div>
   <div class="row"><span>GAZE</span><b id="hudGazeZone">中心 · CENTER</b></div>
-  <div class="row"><span>PEN</span><b id="hudPenSource">笔尖：视线 · GAZE</b></div>
+  <div class="row"><span>PEN</span><b>视线 · GAZE</b></div>
   <div class="row"><span>PAN</span><b id="hudPan">偏移 (0, 0)</b></div>
-  <div class="row"><span>HISTORY</span><b id="hudHistory">笔画 0 · 撤回 0 · 恢复 0</b></div>
+  <div class="row"><span>HISTORY</span><b id="hudHistory">笔画 0</b></div>
 </section>
 
 <!-- 操作指南只在入口页出现；画板内不再显示帮助面板 -->
@@ -1360,9 +1318,7 @@ body.is-landing > .hud{
     penLerp: 0.15,         // 修改1：笔尖向注视目标滑动的 lerp 系数
     minStep: 1.6,          // 最小采样距离(CSS px)，抑制手抖抖动
     penCooldown: 300,      // 落笔/抬笔切换 300ms 冷却
-    dwellMs: 800,          // 修改2：注视色块停留 0.8 秒选中
-    paletteIdleMs: 5000,   // 修改2：颜色条展开后 5 秒无操作自动收起
-    armMs: 450,            // 高代价操作执行前二次视觉确认时长
+    armMs: 450,            // 清空画布的确认时长
     idleMs: 3000,          // 无输入自动进入待机
     maxDpr: 2,             // devicePixelRatio 上限
     maxStrokes: 50,        // 修改3：最多保留最近 50 笔
@@ -1415,14 +1371,9 @@ body.is-landing > .hud{
   const btnTool = $('btnTool');
   const btnToolLabel = $('btnToolLabel');
   const btnUndo = $('btnUndo');
-  const btnRedo = $('btnRedo');
-  const btnReset = $('btnReset');
-  const btnSource = $('btnSource');
-  const btnSourceLabel = $('btnSourceLabel');
   const btnCanvas = $('btnCanvas');
   const canvasDot = $('canvasDot');
   const btnClear = $('btnClear');
-  const btnSave = $('btnSave');
   const penCursor = $('penCursor');
   const toastEl = $('toast');
 
@@ -1449,7 +1400,6 @@ body.is-landing > .hud{
   const hudFps = $('hudFps');
   const hudMode = $('hudMode');
   const hudGazeZone = $('hudGazeZone');
-  const hudPenSource = $('hudPenSource');
   const hudPan = $('hudPan');
   const hudHistory = $('hudHistory');
 
@@ -1478,8 +1428,6 @@ body.is-landing > .hud{
    *   gaze.dir        注视方向量化值：up / down / left / right / center
    *   gazeZone        修改1：注视所在九宫格区域 id，如 'up-left'
    *   gazeTarget      修改1：画布内归一化目标坐标 {x, y}，笔尖向其 lerp
-   *   handTarget      修改6：右手手掌映射到画布的归一化目标坐标 {x, y}
-   *   penSource       修改6：笔尖来源 'gaze'（视线九宫格，默认）| 'hand'（右手手掌）
    *   panActive       修改6：左手平移是否激活（激活期间笔尖锁定 → 不落笔）
    *   panDelta        修改6：本帧左手位移增量（屏幕像素）
    *   pan             修改6：当前画布平移偏移（屏幕像素）＝渲染时的 panOffset
@@ -1494,8 +1442,6 @@ body.is-landing > .hud{
     gaze: { x: 0.5, y: 0.5, dir: 'center' },
     gazeZone: 'mid',
     gazeTarget: { x: 0.5, y: 0.5 },
-    handTarget: { x: 0.5, y: 0.5 },
-    penSource: 'gaze',
     panActive: false,
     panDelta: { x: 0, y: 0 },
     pan: { x: 0, y: 0 },
@@ -1513,8 +1459,6 @@ body.is-landing > .hud{
     gazeY: 0.5,
     gazeTargetX: 0.5,    // 修改1：笔尖目标点（画布内归一化坐标）
     gazeTargetY: 0.5,
-    handTargetX: 0.5,    // 修改6：右手手掌在画布内的归一化坐标（模拟＝鼠标位置）
-    handTargetY: 0.5,
     down: false,         // 握拳
     inside: false,       // 指针是否位于画布区域内
     panDown: false,      // 修改6：左手平移激活（模拟＝按住空格键）
@@ -1556,11 +1500,6 @@ body.is-landing > .hud{
     if (raw.inside) {
       raw.gazeTargetX = clamp01(nx);
       raw.gazeTargetY = clamp01(ny);
-      // TODO: 修改6 —— 替换为 MediaPipe HandLandmarker 中「右手」手掌中心映射到画布的坐标。
-      //       开发期两种笔尖来源同由鼠标位置驱动，区别只在 HUD 标识与 TODO 注释；
-      //       真实接入时视线来自 FaceLandmarker、右手来自 HandLandmarker，两者相互独立。
-      raw.handTargetX = clamp01(nx);
-      raw.handTargetY = clamp01(ny);
     }
 
     // 修改6：左手平移（模拟＝按住空格键 ＋ 移动鼠标）
@@ -1582,7 +1521,7 @@ body.is-landing > .hud{
     if (!boardActive) return;
     if (real.running) return;
     // TODO: 替换为 MediaPipe GestureRecognizer 的 Closed_Fist 分类结果
-    if (e.button === 0) raw.down = true;
+    if (e.button === 0 && stage.contains(e.target)) raw.down = true;
     raw.lastActive = performance.now();
     raw.handSeenAt = raw.lastActive;
   });
@@ -1615,41 +1554,24 @@ body.is-landing > .hud{
     const k = e.key;
     const mod = e.metaKey || e.ctrlKey;
 
-    // 修改3/4：撤回 / 重做（Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y）
-    if (mod && (k === 'z' || k === 'Z')) {
-      if (e.shiftKey) redoOnce(); else undoOnce();
-      e.preventDefault();
-      return;
-    }
-    if (mod && (k === 'y' || k === 'Y')) {
-      redoOnce();
+    if (mod && !e.shiftKey && k.toLowerCase() === 'z') {
+      undoOnce();
       e.preventDefault();
       return;
     }
 
-    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (mod || e.altKey) return;
     raw.lastActive = performance.now();
 
     if (k >= '1' && k <= '6') {
       selectColor(Number(k) - 1, true);
+      if (state.paletteOpen) closePalette();
       e.preventDefault();
     } else if (k === 'c' || k === 'C') {
-      requestHighCost('clear', 'keyboard');
-      e.preventDefault();
-    } else if (k === 's' || k === 'S') {
-      requestHighCost('save', 'keyboard');
+      requestClear('keyboard');
       e.preventDefault();
     } else if (k === 'e' || k === 'E') {
-      // 修改5：画笔 / 橡皮切换（真实场景＝注视工具按钮 ＋ 握拳，双条件）
       toggleTool();
-      e.preventDefault();
-    } else if (k === 't' || k === 'T') {
-      // 修改6：切换笔尖来源（视线九宫格 / 右手手掌）
-      togglePenSource();
-      e.preventDefault();
-    } else if (k === 'r' || k === 'R') {
-      // 修改6：复位视图（panOffset 归零，鼠标模拟）
-      resetView();
       e.preventDefault();
     } else if (k === 'b' || k === 'B') {
       // 修改7：切换画布颜色（黑 / 白，鼠标模拟）
@@ -1664,8 +1586,7 @@ body.is-landing > .hud{
       }
       e.preventDefault();
     } else if (k === 'p' || k === 'P') {
-      // 修改2：开发期直接展开/收起颜色条（真实场景＝注视调色板图标 ＋ 握拳）
-      togglePalette(performance.now());
+      togglePalette();
       e.preventDefault();
     } else if (k === 'g' || k === 'G') {
       faceSimOk = !faceSimOk;
@@ -1677,9 +1598,7 @@ body.is-landing > .hud{
       raw.down = false;
       toast(HANDEDNESS_FLIP ? '左右手已交换 · 左手画 / 右手平移' : '左右手已恢复 · 右手画 / 左手平移');
     } else if (k === 'v' || k === 'V') {
-      // TODO: 接入 GestureRecognizer 的 Victory 手势后，由算法层在
-      //       纯手势模式下调用本函数实现 DB-10 兜底切色。
-      cycleColorByGesture();
+      if (!state.paletteOpen) cycleCanvasTheme();
     }
   });
 
@@ -1716,15 +1635,11 @@ body.is-landing > .hud{
     pointGate: null,
     clearGestureAt: -Infinity,
     lastLeftPalm: null,
-    handSmoothX: 0.5,
-    handSmoothY: 0.5,
-    handSmoothReady: false,
     gazeSmoothX: 0,
     gazeSmoothY: 0,
     gazeInit: false,
     gesture: '',
     side: '',
-    victoryAt: -1e9,
     gazePoints: 0,
     handPoints: 0,
     gazeFps: 0,
@@ -1739,10 +1654,7 @@ body.is-landing > .hud{
   };
   window.__airCanvasReal = real;
 
-  const REAL_SNAP = {
-    ema: clamp(parseFloat(REAL_Q.get('ema')) || 0.18, 0.05, 0.6),
-    gravity: clamp(parseFloat(REAL_Q.get('gravity')) || 82, 0, 200)
-  };
+  const gazeEma = clamp(parseFloat(REAL_Q.get('ema')) || 0.18, 0.05, 0.6);
 
   function setRealUi(kind, text, isError) {
     realDot.classList.toggle('on', kind === 'on');
@@ -1765,7 +1677,7 @@ body.is-landing > .hud{
     btnCalib.disabled = !real.running;
   }
 
-  /** 浏览器 / 页面坐标的注视点 → raw（屏幕坐标用于 UI，画布坐标用于笔尖） */
+  /** 浏览器 / 页面坐标的注视点 → raw（画布坐标用于笔尖） */
   function writeGaze(sx, sy) {
     const vw = Math.max(1, window.innerWidth);
     const vh = Math.max(1, window.innerHeight);
@@ -1781,24 +1693,6 @@ body.is-landing > .hud{
     real.gazePoints++;
   }
 
-  /** 按钮磁吸：只作用于屏幕 UI 命中点，不影响笔尖目标 */
-  function snapGaze(x, y) {
-    let bx = x, by = y, best = REAL_SNAP.gravity, snapped = false;
-    const list = [
-      rects.switcher, rects.tool, rects.undo, rects.redo, rects.reset,
-      rects.source, rects.canvas, rects.clear, rects.save,
-      ...(rects.swatches || [])
-    ];
-    for (const r of list) {
-      if (!r) continue;
-      const cx = r.left + r.width / 2;
-      const cy = r.top + r.height / 2;
-      const d = Math.hypot(x - cx, y - cy);
-      if (d < best) { best = d; bx = cx; by = cy; snapped = true; }
-    }
-    return { x: bx, y: by, snapped: snapped };
-  }
-
   function onGaze(data) {
     if (!data) {
       real.gazeOk = false;
@@ -1811,16 +1705,9 @@ body.is-landing > .hud{
       real.gazeSmoothY = ry;
       real.gazeInit = true;
     }
-    // 两级平滑：先平滑逐帧注视预测，再做按钮磁吸
-    real.gazeSmoothX += (rx - real.gazeSmoothX) * REAL_SNAP.ema;
-    real.gazeSmoothY += (ry - real.gazeSmoothY) * REAL_SNAP.ema;
-    const s = snapGaze(real.gazeSmoothX, real.gazeSmoothY);
+    real.gazeSmoothX += (rx - real.gazeSmoothX) * gazeEma;
+    real.gazeSmoothY += (ry - real.gazeSmoothY) * gazeEma;
     writeGaze(real.gazeSmoothX, real.gazeSmoothY);
-    // 磁吸后的 UI 命中点单独写回（writeGaze 用的是未磁吸点）
-    const vw = Math.max(1, window.innerWidth);
-    const vh = Math.max(1, window.innerHeight);
-    raw.gazeX = 1 - clamp01(s.x / vw);
-    raw.gazeY = clamp01(s.y / vh);
   }
 
   async function createGestureRecognizer() {
@@ -1875,6 +1762,7 @@ body.is-landing > .hud{
     ];
     const KIT_GT = Object.freeze({
       enterFrames: 3,
+      releaseFrames: 1,
       cooldown: 900,
       scrollThrottle: 120,
       fingerRatio: 1.2,
@@ -1918,16 +1806,19 @@ body.is-landing > .hud{
     // fist/open 作为中性重置，不产生 discrete；scroll 只上报，不在此处执行。
     function createGestureGate(options) {
       const cfg = Object.assign({}, KIT_GT, options || {});
-      let cand = null, streak = 0, lastFire = -Infinity, lastScroll = -Infinity, armed = true;
-      function reset() { cand = null; streak = 0; armed = true; }
+      let cand = null, streak = 0, neutralFrames = 0;
+      let lastGesture = null, lastFire = -Infinity, lastScroll = -Infinity;
+      function reset() { cand = null; streak = 0; neutralFrames = 0; lastGesture = null; }
       function step(label, now) {
         const g = label || 'none';
         if (g === 'none' || g === 'fist' || g === 'open') {
-          reset();
+          streak = 0;
+          if (++neutralFrames >= cfg.releaseFrames) reset();
           return null;
         }
+        neutralFrames = 0;
         if (g === cand) streak++;
-        else { cand = g; streak = 1; armed = true; }
+        else { cand = g; streak = 1; }
         if (streak < cfg.enterFrames) return null;
 
         if (g === 'scroll-up' || g === 'scroll-down') {
@@ -1935,9 +1826,10 @@ body.is-landing > .hud{
           lastScroll = now;
           return { type: 'scroll', gesture: g };
         }
-        if (g === 'ILoveYou' || g === 'thumb' || g === 'point' || g === 'two') {
-          if (!armed) return null;
-          armed = false;                       // 一次连续手势只消费一次，按住不重复触发
+        if (g === 'Thumb_Up' || g === 'Thumb_Down' || g === 'thumb-left' || g === 'thumb-right' ||
+            g === 'ILoveYou' || g === 'Victory' || g === 'thumb' || g === 'point' || g === 'two') {
+          if (g === lastGesture) return null;
+          lastGesture = g;                     // 一次连续手势只消费一次，按住不重复触发
           if (now - lastFire < cfg.cooldown) return null;
           lastFire = now;
           return { type: 'discrete', gesture: g };
@@ -2045,59 +1937,9 @@ body.is-landing > .hud{
     };
   })();
   window.AirCanvasKit = AirCanvasKit;
-  real.thumbGate = AirCanvasKit.createGestureGate();
+  real.thumbGate = AirCanvasKit.createGestureGate({ cooldown: 0, releaseFrames: 3 });
   real.pointGate = AirCanvasKit.createGestureGate();
   const clearGate = AirCanvasKit.createGestureGate();
-
-  /* ---------------- 指尖 One Euro 滤波 ----------------
-   * 只作用于 draw 手的食指指尖 8 号点 → raw.handTargetX/Y；
-   * raw.handX/Y 仍保留 9 号点（手掌中心），左手平移仍用 9 号点。
-   * 时间戳统一使用 handLoop 的 now（毫秒），两个轴各自独立。
-   * ------------------------------------------------ */
-  const TIP_EURO = { minCutoff: 1.0, beta: 0.02, dCutoff: 1.0 };
-
-  function createOneEuro(minCutoff, beta, dCutoff) {
-    let xPrev = 0;
-    let dxPrev = 0;
-    let tPrev = 0;
-    let started = false;
-    return {
-      reset() {
-        started = false;
-        xPrev = 0;
-        dxPrev = 0;
-        tPrev = 0;
-      },
-      filter(value, nowMs) {
-        if (!started) {
-          started = true;
-          xPrev = value;
-          tPrev = nowMs / 1000;
-          return value;
-        }
-        const t = nowMs / 1000;
-        const dt = Math.max(1e-4, t - tPrev);
-        tPrev = t;
-        const dx = (value - xPrev) / dt;
-        const aD = 1 / (1 + (1 / (2 * Math.PI * dCutoff)) / dt);
-        const dxHat = aD * dx + (1 - aD) * dxPrev;
-        const cutoff = minCutoff + beta * Math.abs(dxHat);
-        const a = 1 / (1 + (1 / (2 * Math.PI * cutoff)) / dt);
-        const xHat = a * value + (1 - a) * xPrev;
-        xPrev = xHat;
-        dxPrev = dxHat;
-        return xHat;
-      }
-    };
-  }
-
-  const tipEuroX = createOneEuro(TIP_EURO.minCutoff, TIP_EURO.beta, TIP_EURO.dCutoff);
-  const tipEuroY = createOneEuro(TIP_EURO.minCutoff, TIP_EURO.beta, TIP_EURO.dCutoff);
-
-  function resetTipEuro() {
-    tipEuroX.reset();
-    tipEuroY.reset();
-  }
 
   function handLoop(now) {
     if (!real.running) return;
@@ -2123,13 +1965,12 @@ body.is-landing > .hud{
       real.handOk = false;
       real.fistFrames = 0;
       real.pinchOn = false;
-      resetTipEuro();
       real.gesture = '';
       real.side = '';
       real.lastLeftPalm = null;
       raw.down = false;
       raw.panDown = false;
-      resetGestureActions();
+      resetGestureActions(now);
       if (real.penKey !== '0--') {
         real.penKey = '0--';
         refreshRealStatus();
@@ -2141,20 +1982,18 @@ body.is-landing > .hud{
     for (let i = 0; i < n; i++) {
       const pts = res.landmarks[i];
       const lm = pts && pts[9];                             // 9 号点 ≈ 手掌中心，raw.handX/Y 与左手平移继续用它
-      const tip = pts && pts[8];                            // 8 号点 = 食指指尖，draw 手笔尖用它
-      if (!lm || !tip) continue;
+      if (!lm || !pts[8]) continue;
       const cat = (res.gestures && res.gestures[i] && res.gestures[i][0] && res.gestures[i][0].categoryName) || 'None';
-      const cls = AirCanvasKit.classifyHand(pts);           // dual-test 分类；thumb/point 已接离散动作
+      const cls = AirCanvasKit.classifyHand(pts);           // 食指撤销沿用 dual-test 的关键点分类
       let side = (res.handedness && res.handedness[i] && res.handedness[i][0] && res.handedness[i][0].categoryName) || '';
       if (HANDEDNESS_FLIP) side = side === 'Left' ? 'Right' : (side === 'Right' ? 'Left' : side);
-      hands.push({ lm: lm, tip: tip, pts: pts, cat: cat, cls: cls.gesture, feat: cls.feat, side: side, sx: 1 - lm.x, sy: lm.y });
+      hands.push({ lm: lm, pts: pts, cat: cat, cls: cls.gesture, feat: cls.feat, side: side, sx: 1 - lm.x, sy: lm.y });
     }
     if (!hands.length) {
       real.pinchOn = false;
-      resetTipEuro();
       raw.down = false;
       raw.panDown = false;
-      resetGestureActions();
+      resetGestureActions(now);
       return;
     }
 
@@ -2173,16 +2012,8 @@ body.is-landing > .hud{
     raw.inside = true;
 
     if (draw) {
-      // 笔尖：食指指尖 8 号点（镜像沿用 sx = 1 - x），One Euro 取代原 0.42 EMA
-      const tipX = 1 - draw.tip.x;
-      const tipY = draw.tip.y;
-      real.handSmoothX = tipEuroX.filter(tipX, now);
-      real.handSmoothY = tipEuroY.filter(tipY, now);
-      real.handSmoothReady = true;
       raw.handX = draw.lm.x;
       raw.handY = draw.lm.y;
-      raw.handTargetX = clamp01(real.handSmoothX);
-      raw.handTargetY = clamp01(real.handSmoothY);
       real.gesture = draw.cat;
       real.side = draw.side;
 
@@ -2190,36 +2021,31 @@ body.is-landing > .hud{
       const p0 = draw.pts[0], p4 = draw.pts[4], p8 = draw.pts[8], p9 = draw.pts[9];
       const handSize = Math.hypot(p0.x - p9.x, p0.y - p9.y) || 1e-6;
       const pinchRatio = Math.hypot(p4.x - p8.x, p4.y - p8.y) / handSize;
-      if (real.pinchOn) {
+      if (state.paletteOpen) {
+        real.pinchOn = false;
+      } else if (real.pinchOn) {
         if (pinchRatio > 0.60) real.pinchOn = false;
       } else if (pinchRatio < 0.45) {
         real.pinchOn = true;
       }
 
       // 握拳或捏合 → 落笔；张开 / 其他 → 抬笔。沿用两帧确认。
-      const wantDown = draw.cat === 'Closed_Fist' || real.pinchOn;
+      const wantDown = !state.paletteOpen && (draw.cat === 'Closed_Fist' || real.pinchOn);
       real.fistFrames = wantDown
         ? Math.min(3, real.fistFrames + 1)
         : Math.max(0, real.fistFrames - 1);
       raw.down = real.fistFrames >= 2;
 
-      const penKey = (raw.down ? '1' : '0') + (real.pinchOn ? '1' : '0') + Input.penSource;
+      const penKey = (raw.down ? '1' : '0') + (real.pinchOn ? '1' : '0');
       if (penKey !== real.penKey) {
         real.penKey = penKey;
         refreshRealStatus();
       }
-
-      // DB-10：纯手势模式下 Victory 切色（双条件模式不触发，避免误切）
-      if (draw.cat === 'Victory' && state.mode === 'gesture' && now - real.victoryAt > 1200) {
-        real.victoryAt = now;
-        cycleColorByGesture();
-      }
     } else {
       real.fistFrames = 0;
       real.pinchOn = false;
-      resetTipEuro();
       raw.down = false;
-      resetGestureActions();
+      resetGestureActions(now);
       real.gesture = pan ? pan.cat : '';
       real.side = pan ? pan.side : '';
       if (real.penKey !== '0--') {
@@ -2244,32 +2070,63 @@ body.is-landing > .hud{
       raw.panDown = false;
     }
 
-    // 拇指切工具，食指撤销，🤟 清空。
     if (draw) updateGestureActions(draw, now);
   }
 
-  function resetGestureActions() {
-    if (real.thumbGate) real.thumbGate.reset();
-    if (real.pointGate) real.pointGate.reset();
+  function resetGestureActions(now) {
+    real.thumbGate.step('none', now);
+    real.pointGate.reset();
     clearGate.reset();
     real.clearGestureAt = -Infinity;
   }
 
+  function thumbDirection(draw) {
+    if (draw.cat === 'Closed_Fist' || draw.cat === 'ILoveYou') return 'none';
+    if (draw.cls === 'thumb') {
+      const base = draw.pts[2], tip = draw.pts[4], wrist = draw.pts[0];
+      const dx = base.x - tip.x;  // 水平方向与镜像预览一致
+      const dy = tip.y - base.y;
+      const palmSize = Math.hypot(wrist.x - draw.lm.x, wrist.y - draw.lm.y);
+      if (Math.abs(dx) > Math.max(Math.abs(dy), palmSize * 0.25)) {
+        return dx < 0 ? 'thumb-left' : 'thumb-right';
+      }
+    }
+    return draw.cat === 'Thumb_Up' || draw.cat === 'Thumb_Down' ? draw.cat : 'none';
+  }
+
   function updateGestureActions(draw, now) {
-    if (!draw || real.calibrating || real.pinchOn || raw.down || raw.panDown) {
-      resetGestureActions();
+    if (!boardActive || real.calibrating || real.pinchOn || raw.down || raw.panDown) {
+      resetGestureActions(now);
       return;
     }
+
+    const direction = thumbDirection(draw);
+    const gesture = !state.paletteOpen && draw.cat === 'Victory' ? 'Victory' : direction;
+    const action = real.thumbGate.step(gesture, now);
+    if (action?.gesture === 'Victory') {
+      cycleCanvasTheme();
+    } else if (action?.gesture === 'Thumb_Down') {
+      toggleTool();
+    } else if (action?.gesture === 'Thumb_Up') {
+      if (state.paletteOpen) {
+        selectColor(state.highlightedIndex, true);
+        closePalette();
+      } else {
+        openPalette();
+      }
+    } else if (action && state.paletteOpen) {
+      const step = action.gesture === 'thumb-left' ? -1 : 1;
+      state.highlightedIndex = clamp(state.highlightedIndex + step, 0, PALETTE.length - 1);
+    }
+
     const isClearGesture = draw.cat === 'ILoveYou';
     const holdingClear = boardActive && !state.paletteOpen && isClearGesture;
     real.clearGestureAt = holdingClear ? now : -Infinity;
-    if (clearGate.step(holdingClear ? 'ILoveYou' : 'none', now)) requestHighCost('clear', 'gesture');
+    if (clearGate.step(holdingClear ? 'ILoveYou' : 'none', now)) requestClear('gesture');
 
-    const label = isClearGesture ? 'none' : draw.cls;
-    const thumb = real.thumbGate.step(label, now);
-    if (thumb && thumb.type === 'discrete' && thumb.gesture === 'thumb') toggleTool();
-    const point = real.pointGate.step(label, now);
-    if (point && point.type === 'discrete' && point.gesture === 'point') undoOnce();
+    const canUndo = !state.paletteOpen && gesture === 'none' && !isClearGesture && draw.cat !== 'Closed_Fist';
+    const point = real.pointGate.step(canUndo && draw.cls === 'point' ? 'point' : 'none', now);
+    if (point?.gesture === 'point') undoOnce();
   }
 
   function refreshRealStatus() {
@@ -2285,10 +2142,10 @@ body.is-landing > .hud{
     else if (!real.gazeOk) bits.push('等待人脸');
     bits.push('注视 ' + real.gazeFps + 'fps');
     bits.push('手势 ' + real.handFps + 'fps');
-    // 状态行保持原样式，补充笔尖来源与落笔信号（指尖/视线、捏合/握拳/抬笔）
+    // 状态行显示当前落笔信号（捏合 / 握拳 / 抬笔）
     if (real.handOk) {
       const penSignal = raw.down ? (real.pinchOn ? '捏合' : '握拳') : '抬笔';
-      bits.push((Input.penSource === 'hand' ? '指尖' : '视线') + '·' + penSignal);
+      bits.push('视线·' + penSignal);
     }
     if (real.gestureErr) bits.push('手势模型未就绪');
     else if (!real.handOk) bits.push('等待手势');
@@ -2572,7 +2429,6 @@ body.is-landing > .hud{
     // 修改6：points 一律存【世界坐标】（单位＝屏幕像素，原点＝画布左上角）；
     //        渲染时统一叠加 panOffset 后再绘制，因此平移只改 panOffset、不动任何 stroke 数据。
     strokes: [],
-    redo: [],           // 修改4：redo 栈
     live: null,         // 当前笔画
     liveDirty: false,
     smoothX: 0.5,
@@ -2581,23 +2437,16 @@ body.is-landing > .hud{
     penY: 0.5,
     penDown: false,
     penChangedAt: -1e9,
-    rawDown: false,
-    rawDownEdge: false,
     lastFrame: 0,
     fps: 0,
     frames: 0,
     fpsAt: 0,
     // 修改2：颜色条（默认收起）
     paletteOpen: false,
-    paletteOpenedAt: -1e9,
-    hoverIndex: -1,
-    dwellStart: 0,
-    dwellFired: false,
+    highlightedIndex: -1,
     // 模式与注视
     mode: 'idle',
     gazeDir: 'center',
-    gazeScreenX: 0,
-    gazeScreenY: 0,
     // 修改6：视图平移（panOffset，屏幕像素）与左手平移激活态
     panX: 0,
     panY: 0,
@@ -2611,22 +2460,14 @@ body.is-landing > .hud{
 
   let activeIndex = 0;
   const swatchEls = [];
-  const fillEls = [];
-  let lastHover = -2;
+  let lastHighlightedIndex = -2;
   let lastActiveIdx = -2;
   let lastCursorColor = '';
   let lastPanCursor = null;   // 修改6：缓存 stage 光标状态，避免逐帧写 canvas cursor
   let toastTimer = 0;
 
-  /* 每帧收集一次的 UI 命中矩形（避免逐按钮重复触发 layout） */
-  const rects = {
-    switcher: null, tool: null, undo: null, redo: null,
-    reset: null, source: null, canvas: null, clear: null, save: null,
-    swatches: []
-  };
-
   /* ============================================================
-   * 6. 调色板构建（修改2：色块含停留进度填充层）
+   * 6. 调色板构建
    * ============================================================ */
   function buildPalette() {
     PALETTE.forEach((item, i) => {
@@ -2642,11 +2483,7 @@ body.is-landing > .hud{
       tag.textContent = item.key + ' · ' + item.name;
       el.appendChild(tag);
 
-      const fill = document.createElement('span');
-      fill.className = 'fill';
-      el.appendChild(fill);
-
-      // 开发模拟：点击色块直接选色（真实场景＝注视停留 0.8 秒）
+      // 鼠标也可以直接确认色块。
       el.addEventListener('click', () => {
         if (!state.paletteOpen) return;
         selectColor(i, true);
@@ -2655,7 +2492,6 @@ body.is-landing > .hud{
 
       paletteEl.appendChild(el);
       swatchEls.push(el);
-      fillEls.push(fill);
     });
   }
 
@@ -2683,7 +2519,6 @@ body.is-landing > .hud{
     drawBackdrop();
     redrawStatic();
     redrawLive();
-    collectRects();
   }
 
   /* ---- 背景层：底色 + 径向渐变 + 网格线 + 暗角 ----
@@ -2799,7 +2634,7 @@ body.is-landing > .hud{
     ctx.restore();
   }
 
-  /** 修改3：画面 = 清空后按顺序重画全部 stroke（撤回 / 重做 / 上限裁剪都走这里） */
+  /** 修改3：画面 = 清空后按顺序重画全部 stroke（撤回 / 上限裁剪都走这里） */
   function redrawStatic() {
     ctxs.stat.clearRect(0, 0, state.cssW, state.cssH);
     for (let i = 0; i < state.strokes.length; i++) {
@@ -2836,8 +2671,7 @@ body.is-landing > .hud{
   function screenToWorldY(sy) { return sy * state.cssH - state.panY; }
 
   function beginStroke() {
-    // 颜色条展开且正在色块上停留时暂不落笔，避免与「停留选色」互相干扰
-    if (state.paletteOpen && state.hoverIndex >= 0) return;
+    if (state.paletteOpen) return;
     // 修改6：左手平移激活期间笔尖锁定 —— 不落笔（双保险，updateInput 处也会拦住）
     if (state.panActive || raw.panDown) return;
     state.live = {
@@ -2864,8 +2698,6 @@ body.is-landing > .hud{
         // 增量落到静态层（橡皮也是同层覆盖，顺序天然正确）
         paintStroke(ctxs.stat, stroke);
       }
-      // 修改4：一旦画了新的一笔，redo 栈立即清空
-      state.redo.length = 0;
     }
     state.liveDirty = true;
     updateHistoryUi();
@@ -2897,7 +2729,6 @@ body.is-landing > .hud{
       raw.down = false;
       raw.panDown = false;
       real.lastLeftPalm = null;
-      state.rawDownEdge = false;
     }
 
     // 指数平滑：按帧时长归一，保证不同刷新率下手感一致（防抖）
@@ -2915,25 +2746,16 @@ body.is-landing > .hud{
     Input.gazeTarget.y = raw.gazeTargetY;
     Input.gazeZone = zoneOf(Input.gazeTarget.x, Input.gazeTarget.y);
 
-    // 修改6：右手手掌目标点（笔尖来源可切换为它）、左手平移状态与位移增量，
-    //        全部经 Input 抽象层下发，渲染层不直接读鼠标。
-    Input.handTarget.x = raw.handTargetX;
-    Input.handTarget.y = raw.handTargetY;
     Input.panActive = raw.panDown;
     Input.panDelta.x = raw.panDX;
     Input.panDelta.y = raw.panDY;
     Input.pan.x = state.panX;
     Input.pan.y = state.panY;
 
-    // 握拳上升沿：用于"双条件"判定
-    if (raw.down && !state.rawDown) state.rawDownEdge = true;
-    state.rawDown = raw.down;
-
     // 落笔 / 抬笔：仅当手掌位于画布范围内才可落笔；切换带 300ms 冷却
     // 修改6：左手平移激活期间笔尖锁定 —— 右手握拳也不落笔
-    const tipAvailable = Input.penSource === 'hand' ? Input.signal.hand : Input.signal.face;
-    const wantDown = tipAvailable && raw.down && raw.inside && !raw.panDown;
-    if (wantDown !== state.penDown && (now - state.penChangedAt) >= CFG.penCooldown) {
+    const wantDown = !state.paletteOpen && Input.signal.face && raw.down && raw.inside && !raw.panDown;
+    if (wantDown !== state.penDown && (state.paletteOpen || now - state.penChangedAt >= CFG.penCooldown)) {
       const rising = wantDown && !state.penDown;
       state.penDown = wantDown;
       state.penChangedAt = now;
@@ -2948,14 +2770,11 @@ body.is-landing > .hud{
   /**
    * 修改1：笔尖位置 = 渲染层对「笔尖目标点」做 lerp 平滑。
    * 笔尖不瞬移，逐帧以 ≈0.15 的系数向目标滑动，观感上像连续跟随。
-   * 修改6：目标点由 Input.penSource 二选一 —— 'gaze' 视线九宫格（默认）/ 'hand' 右手手掌；
-   *        左手平移激活期间笔尖锁定（冻结不动）。
-   * TODO: gazeTarget 真实来源 = 虹膜相对位置分区（阶段2接入）；
-   *       handTarget 真实来源 = 右手手掌中心（HandLandmarker，阶段2接入）。
+   * 左手平移激活期间笔尖锁定（冻结不动）。
    */
   function updatePen(dt) {
     if (state.panActive) return;   // 修改6：左手平移期间笔尖锁定，不参与落笔
-    const target = Input.penSource === 'hand' ? Input.handTarget : Input.gazeTarget;
+    const target = Input.gazeTarget;
     const k = 1 - Math.pow(1 - CFG.penLerp, dt / 16.667);
     state.penX += (target.x - state.penX) * k;
     state.penY += (target.y - state.penY) * k;
@@ -3028,90 +2847,11 @@ body.is-landing > .hud{
     redrawLive();
   }
 
-  /** 修改6：复位视图 —— panOffset 归零（双条件触发，鼠标模拟：点击 或按 R） */
-  function resetView() {
-    if (state.panX === 0 && state.panY === 0) {
-      toast('视图已在原点 (0, 0)');
-      return;
-    }
-    applyPan(0, 0);
-    state.liveDirty = true;
-    toast('视图已复位 · 偏移 (0, 0)');
-  }
-
   /** 修改1：把画布内归一化坐标量化到九宫格区域 id */
   function zoneOf(nx, ny) {
     const col = nx < 1 / 3 ? 0 : (nx < 2 / 3 ? 1 : 2);
     const row = ny < 1 / 3 ? 0 : (ny < 2 / 3 ? 1 : 2);
     return ZONES[row][col];
-  }
-
-  function collectRects() {
-    // 按钮矩形取「布局盒」：offset* 不受 Floating Dock 的 transform 影响，
-    // 这样放大只改变视觉，注视命中区域保持恒定，相邻按钮不会互相抢判定。
-    const bar = btnPalette.offsetParent || document.querySelector('.toolbar');
-    const barBox = bar.getBoundingClientRect();
-    const layout = (el) => {
-      const left = barBox.left + el.offsetLeft;
-      const top = barBox.top + el.offsetTop;
-      return {
-        left,
-        top,
-        width: el.offsetWidth,
-        height: el.offsetHeight,
-        right: left + el.offsetWidth,
-        bottom: top + el.offsetHeight
-      };
-    };
-
-    rects.switcher = layout(btnPalette);
-    rects.tool = layout(btnTool);
-    rects.undo = layout(btnUndo);
-    rects.redo = layout(btnRedo);
-    rects.reset = layout(btnReset);
-    rects.source = layout(btnSource);
-    rects.canvas = layout(btnCanvas);
-    rects.clear = layout(btnClear);
-    rects.save = layout(btnSave);
-    if (state.paletteOpen) {
-      for (let i = 0; i < swatchEls.length; i++) {
-        rects.swatches[i] = swatchEls[i].getBoundingClientRect();
-      }
-      rects.swatches.length = swatchEls.length;
-    } else {
-      rects.swatches.length = 0;
-    }
-  }
-
-  /**
-   * 修改2：颜色条默认收起；只有在展开状态下，注视色块才进入「停留 0.8 秒」流程。
-   * 收起时无论注视何处都不会触发选色 —— 废除 v1「注视方向向上即选色」的误触逻辑。
-   */
-  function updateGazeSelect(now) {
-    if (!state.paletteOpen || real.calibrating) return;
-
-    const gx = state.gazeScreenX;
-    const gy = state.gazeScreenY;
-
-    let idx = -1;
-    for (let i = 0; i < rects.swatches.length; i++) {
-      if (hitRect(rects.swatches[i], gx, gy)) { idx = i; break; }
-    }
-
-    if (idx !== state.hoverIndex) {
-      state.hoverIndex = idx;
-      state.dwellStart = now;
-      state.dwellFired = false;
-    } else if (idx >= 0 && !state.dwellFired && (now - state.dwellStart) >= CFG.dwellMs) {
-      state.dwellFired = true;
-      selectColor(idx, true);
-      closePalette();          // 选中后自动收起
-    }
-
-    // 展开后 5 秒无操作自动收起（正在色块上停留计时时不打断）
-    if (now - state.paletteOpenedAt >= CFG.paletteIdleMs && state.hoverIndex < 0) {
-      closePalette();
-    }
   }
 
   function updateGazeDir() {
@@ -3121,8 +2861,6 @@ body.is-landing > .hud{
     // 注视点映射到屏幕坐标（同样按 X 轴镜像约定还原）
     const gx = clamp01(1 - Input.gaze.x) * vw;
     const gy = clamp01(Input.gaze.y) * vh;
-    state.gazeScreenX = gx;
-    state.gazeScreenY = gy;
 
     // 方向量化（带死区，防抖）——仅用于 Input 接口约定，不再驱动选色
     const dx = gx - vw * 0.5;
@@ -3149,137 +2887,64 @@ body.is-landing > .hud{
     }
   }
 
-  function gazeActive() {
-    return Input.signal.face && (state.mode === 'dual' || state.mode === 'gaze');
-  }
-
-  function hitRect(rect, x, y) {
-    if (!rect) return false;
-    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
-  }
-
-  /**
-   * 双条件（注视 ＋ 握拳）目标分发：
-   *   调色板开门 / 工具切换 / 撤回 / 下一步 / 复位视图 / 笔尖来源 / 画布颜色 → 上升沿直接执行
-   *   清空 / 保存 → 上升沿触发 + 450ms 二次视觉确认（沿袭 v1 防误触策略）
-   * 修改6/7 的三个新按钮一律走"注视 ＋ 握拳"双条件，不使用低代价的停留选择。
-   */
-  function updateUiTargets(now) {
-    const canGaze = gazeActive();
-    const gx = state.gazeScreenX;
-    const gy = state.gazeScreenY;
-    const busy = state.armed !== null;
-
-    const onSwitcher = canGaze && hitRect(rects.switcher, gx, gy);
-    const onTool = canGaze && !busy && hitRect(rects.tool, gx, gy);
-    const onUndo = canGaze && !busy && state.strokes.length > 0 && hitRect(rects.undo, gx, gy);
-    const onRedo = canGaze && !busy && state.redo.length > 0 && hitRect(rects.redo, gx, gy);
-    const onReset = canGaze && !busy && hitRect(rects.reset, gx, gy);
-    const onSource = canGaze && !busy && hitRect(rects.source, gx, gy);
-    const onCanvas = canGaze && !busy && hitRect(rects.canvas, gx, gy);
-    const onClear = canGaze && hitRect(rects.clear, gx, gy);
-    const onSave = canGaze && hitRect(rects.save, gx, gy);
-
-    btnPalette.classList.toggle('is-gazed', onSwitcher && !busy);
-    btnTool.classList.toggle('is-gazed', onTool);
-    btnUndo.classList.toggle('is-gazed', onUndo);
-    btnRedo.classList.toggle('is-gazed', onRedo);
-    btnReset.classList.toggle('is-gazed', onReset);
-    btnSource.classList.toggle('is-gazed', onSource);
-    btnCanvas.classList.toggle('is-gazed', onCanvas);
-    btnClear.classList.toggle('is-gazed', onClear && !busy);
-    btnSave.classList.toggle('is-gazed', onSave && !busy);
-
-    if (state.rawDownEdge && !busy) {
-      if (onSwitcher) togglePalette(now);
-      else if (onTool) toggleTool();
-      else if (onUndo) undoOnce();
-      else if (onRedo) redoOnce();
-      else if (onReset) resetView();
-      else if (onSource) togglePenSource();
-      else if (onCanvas) cycleCanvasTheme();
-      else if (onClear) requestHighCost('clear', 'gaze');
-      else if (onSave) requestHighCost('save', 'gaze');
-    }
-
-    if (state.armed) {
-      const a = state.armed;
-      const byGesture = a.source === 'gesture';
-      const stillOn = byGesture
-        ? boardActive && !state.paletteOpen && !real.calibrating && now - real.clearGestureAt < CFG.armMs
-        : a.source === 'keyboard' || (a.type === 'clear' ? onClear : onSave);
-      // 手势必须在确认时间结束后再次被检测到，避免用停滞的摄像头帧确认。
-      if (!stillOn) cancelArmed();
-      else if ((byGesture ? real.clearGestureAt : now) >= a.until) finishArmed();
-    }
-
-    state.rawDownEdge = false;
-  }
-
-  function requestHighCost(type, source) {
-    if (state.armed) return;
-    state.armed = { type: type, until: performance.now() + CFG.armMs, source: source };
-    (type === 'clear' ? btnClear : btnSave).classList.add('is-armed');
-  }
-
-  function cancelArmed() {
+  function updateClear(now) {
     if (!state.armed) return;
-    (state.armed.type === 'clear' ? btnClear : btnSave).classList.remove('is-armed');
-    state.armed = null;
-  }
-
-  function finishArmed() {
-    const a = state.armed;
-    if (!a) return;
-    (a.type === 'clear' ? btnClear : btnSave).classList.remove('is-armed');
-    state.armed = null;
-    if (a.type === 'clear') {
-      clearCanvas();
-      toast('画布已清空');
-    } else {
-      savePNG();
-      toast('已保存 PNG');
+    const { until, source } = state.armed;
+    const byGesture = source === 'gesture';
+    const stillOn = !byGesture || (boardActive && !state.paletteOpen && !real.calibrating &&
+      now - real.clearGestureAt < CFG.armMs);
+    // 手势必须在确认时间结束后再次被检测到，避免用停滞的摄像头帧确认。
+    const confirmedAt = byGesture ? real.clearGestureAt : now;
+    if (!stillOn || confirmedAt >= until) {
+      btnClear.classList.remove('is-armed');
+      state.armed = null;
+      if (stillOn) {
+        clearCanvas();
+        toast('画布已清空');
+      }
     }
   }
 
-  /* ============================================================
-   * 11. 颜色条：开门 / 收起（修改2）
-   * ============================================================ */
-  function openPalette(now) {
+  function requestClear(source) {
+    if (state.armed) return;
+    state.armed = { until: performance.now() + CFG.armMs, source };
+    btnClear.classList.add('is-armed');
+  }
+
+  function openPalette() {
     state.paletteOpen = true;
-    state.paletteOpenedAt = now;
-    state.hoverIndex = -1;
-    state.dwellStart = now;
-    state.dwellFired = false;
+    state.highlightedIndex = activeIndex;
     paletteEl.classList.add('is-open');
     btnPalette.classList.add('is-active');
     btnPalette.setAttribute('aria-expanded', 'true');
-    // 展开动画结束后刷新命中矩形，避免过渡期间命中区不准
-    setTimeout(collectRects, 240);
+    toast('拇指朝左 / 右选色 · 朝上确认');
   }
 
   function closePalette() {
     state.paletteOpen = false;
-    state.hoverIndex = -1;
-    state.dwellFired = false;
+    state.highlightedIndex = -1;
     paletteEl.classList.remove('is-open');
     btnPalette.classList.remove('is-active');
     btnPalette.setAttribute('aria-expanded', 'false');
-    rects.swatches.length = 0;
   }
 
-  function togglePalette(now) {
+  function togglePalette() {
     if (state.paletteOpen) {
       closePalette();
       toast('颜色条已收起');
     } else {
-      openPalette(now);
-      toast('颜色条已展开 · 注视色块停留 0.8 秒');
+      openPalette();
     }
   }
 
+  btnPalette.addEventListener('click', togglePalette);
+  btnTool.addEventListener('click', toggleTool);
+  btnUndo.addEventListener('click', undoOnce);
+  btnCanvas.addEventListener('click', cycleCanvasTheme);
+  btnClear.addEventListener('click', () => requestClear('button'));
+
   /* ============================================================
-   * 12. 颜色 / 工具 / 撤回 / 重做 / 清空 / 保存
+   * 12. 颜色 / 工具 / 撤回 / 清空
    * ============================================================ */
   function selectColor(index, force) {
     const item = PALETTE[index];
@@ -3291,10 +2956,6 @@ body.is-landing > .hud{
     switcherDot.style.color = item.hex;
     hudColorDot.style.background = item.hex;
     if (changed || force) toast('已切换为' + item.name + '色');
-  }
-
-  function cycleColorByGesture() {
-    selectColor((activeIndex + 1) % PALETTE.length, true);
   }
 
   function toggleTool() {
@@ -3310,22 +2971,7 @@ body.is-landing > .hud{
     setText(hudTool, isEraser ? '橡皮 · 20px' : '画笔 · 7px');
   }
 
-  /* 修改6：笔尖来源切换（视线九宫格 / 右手手掌）。
-     双条件触发（注视按钮 ＋ 握拳）；鼠标模拟：点击按钮 或按 T。 */
-  function togglePenSource() {
-    Input.penSource = Input.penSource === 'gaze' ? 'hand' : 'gaze';
-    updateSourceUi();
-    toast(Input.penSource === 'hand' ? '笔尖来源：右手手掌' : '笔尖来源：GazeFollower 视线');
-  }
-
-  function updateSourceUi() {
-    const isHand = Input.penSource === 'hand';
-    setText(btnSourceLabel, isHand ? '笔尖·右手' : '笔尖·视线');
-    setText(hudPenSource, isHand ? '右手 · RIGHT-HAND' : '视线 · GAZE');
-  }
-
-  /* 修改7：画布颜色切换（黑 / 白）。
-     双条件触发（注视按钮 ＋ 握拳）；鼠标模拟：点击按钮 或按 B。 */
+  /* 画布颜色切换（黑 / 白）：点击按钮或按 B。 */
   function cycleCanvasTheme() {
     state.themeIndex = (state.themeIndex + 1) % CANVAS_THEMES.length;
     applyCanvasTheme();
@@ -3359,10 +3005,8 @@ body.is-landing > .hud{
 
   function updateHistoryUi() {
     const n = state.strokes.length;
-    const r = state.redo.length;
     btnUndo.classList.toggle('is-disabled', n === 0);
-    btnRedo.classList.toggle('is-disabled', r === 0);
-    setText(hudHistory, '笔画 ' + n + ' · 撤回 ' + n + ' · 恢复 ' + r);
+    setText(hudHistory, '笔画 ' + n);
   }
 
   /** 修改3：撤回 = 移除最后一个 stroke 并重绘 */
@@ -3372,30 +3016,16 @@ body.is-landing > .hud{
       toast('没有可撤回的笔画');
       return;
     }
-    state.redo.push(state.strokes.pop());
+    state.strokes.pop();
     redrawStatic();
     state.liveDirty = true;
     updateHistoryUi();
     toast('已撤回 · 剩余 ' + state.strokes.length + ' 笔');
   }
 
-  /** 修改4：重做 = 恢复最近一次被撤回的 stroke 并重绘 */
-  function redoOnce() {
-    if (!state.redo.length) {
-      toast('没有可恢复的笔画');
-      return;
-    }
-    state.strokes.push(state.redo.pop());
-    redrawStatic();
-    state.liveDirty = true;
-    updateHistoryUi();
-    toast('已恢复 · 当前 ' + state.strokes.length + ' 笔');
-  }
-
   function clearCanvas() {
     // 修改3：清空视为新画布，历史栈一并清空（清空本身不可被撤回）
     state.strokes.length = 0;
-    state.redo.length = 0;
     state.live = null;
     redrawStatic();
     state.liveDirty = true;
@@ -3403,72 +3033,18 @@ body.is-landing > .hud{
     updateHistoryUi();
   }
 
-  function savePNG() {
-    const ratio = Math.min(window.devicePixelRatio || 1, CFG.maxDpr);
-    const out = document.createElement('canvas');
-    out.width = Math.max(1, Math.round(state.cssW * ratio));
-    out.height = Math.max(1, Math.round(state.cssH * ratio));
-
-    const ctx = out.getContext('2d');
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-
-    // 修改5（修正）：导出必须分两层合成，否则橡皮的 destination-out 会把背景一起挖掉。
-    // 第 1 层：在透明离屏画布上回放全部 stroke（橡皮在此层真正挖空）。
-    const layer = document.createElement('canvas');
-    layer.width = out.width;
-    layer.height = out.height;
-    const lctx = layer.getContext('2d');
-    lctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-    for (let i = 0; i < state.strokes.length; i++) {
-      paintStroke(lctx, state.strokes[i]);
-    }
-    if (state.live) paintStroke(lctx, state.live);
-
-    // 第 2 层：底色 + 背景层视觉（径向渐变 / 网格 / 暗角），与画布所见一致。
-    // 背景层自身不透明，因此 PNG 必然无透明窟窿；被橡皮挖空的区域正好露出它。
-    // 修改7：底色取「当前」画布主题色（背景层已在切色时重绘，PNG 自动跟随）。
-    // 修改6：笔迹层回放同样叠加 panOffset，因此导出的是当前视口（含当前平移）。
-    ctx.fillStyle = state.theme.hex;
-    ctx.fillRect(0, 0, state.cssW, state.cssH);
-    ctx.drawImage(canvases.bg, 0, 0, state.cssW, state.cssH);
-    // 最后把笔迹层整体叠上去
-    ctx.drawImage(layer, 0, 0, state.cssW, state.cssH);
-
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    out.toBlob((blob) => {
-      if (!blob) {
-        toast('保存失败，请重试');
-        return;
-      }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'air-canvas-' + stamp + '.png';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
-    }, 'image/png');
-  }
-
   /* ============================================================
    * 13. 视图刷新
    * ============================================================ */
-  function renderPalette(now) {
-    if (state.hoverIndex !== lastHover || activeIndex !== lastActiveIdx) {
-      lastHover = state.hoverIndex;
-      lastActiveIdx = activeIndex;
-      for (let i = 0; i < swatchEls.length; i++) {
-        swatchEls[i].classList.toggle('is-gazed', i === state.hoverIndex);
-        swatchEls[i].classList.toggle('is-active', i === activeIndex);
-      }
-    }
-    const p = state.hoverIndex >= 0
-      ? (state.dwellFired ? 1 : clamp((now - state.dwellStart) / CFG.dwellMs, 0, 1))
-      : 0;
-    for (let i = 0; i < fillEls.length; i++) {
-      const v = i === state.hoverIndex ? p : 0;
-      fillEls[i].style.transform = 'scaleY(' + v.toFixed(3) + ')';
+  function renderPalette() {
+    if (state.highlightedIndex === lastHighlightedIndex && activeIndex === lastActiveIdx) return;
+    lastHighlightedIndex = state.highlightedIndex;
+    lastActiveIdx = activeIndex;
+    for (let i = 0; i < swatchEls.length; i++) {
+      const el = swatchEls[i];
+      el.classList.toggle('is-highlighted', i === state.highlightedIndex);
+      el.classList.toggle('is-active', i === activeIndex);
+      el.setAttribute('aria-selected', String(i === activeIndex));
     }
   }
 
@@ -3485,7 +3061,7 @@ body.is-landing > .hud{
       penCursor.style.color = c;
     }
     // 修改6：平移期间笔尖锁定 → 隐藏笔尖光标，改用「抓手」系统光标提示正在拖动
-    const tipAvailable = Input.penSource === 'hand' || !real.running ? Input.signal.hand : Input.signal.face;
+    const tipAvailable = real.running ? Input.signal.face : Input.signal.hand;
     const showCursor = !real.calibrating && !locked;
     penCursor.style.opacity = showCursor ? (tipAvailable ? '1' : '.4') : '0';
     penCursor.classList.toggle('is-down', state.penDown);
@@ -3561,11 +3137,9 @@ body.is-landing > .hud{
     updatePan();           // 修改6：消费左手位移增量 → 更新 panOffset（重绘笔迹层）
     updatePen(dt);
     updateMode();
-    collectRects();        // 先收集矩形，再执行任何 DOM 写入
     updateGazeDir();
-    updateGazeSelect(now);
-    updateUiTargets(now);
-    if (updateDockFx) updateDockFx();   // Floating Dock：注视/鼠标驱动工具栏联动放大
+    updateClear(now);
+    if (updateDockFx) updateDockFx();
 
     if (state.liveDirty) {
       redrawLive();
@@ -3573,7 +3147,7 @@ body.is-landing > .hud{
     }
 
     updateCursor();
-    renderPalette(now);
+    renderPalette();
     updateHud();
   }
 
@@ -3581,8 +3155,8 @@ body.is-landing > .hud{
    * 14.5 Floating Dock（Aceternity 同款距离映射）
    *   以按钮中心为原点：|dx| ≥ radius 时不放大，中心处放大到 1.42 倍，
    *   中间按距离线性衰减（对应原版 40 → 70 的图标放大逻辑）。
-   *   驱动源优先用注视点，没开摄像头时用鼠标。
-   *   基准盒尺寸（100×64）不变，只写 --dock-scale / --dock-lift。
+   *   由鼠标位置驱动。
+   *   基准盒尺寸不变，只写 --dock-scale / --dock-lift。
    * ============================================================ */
   let updateDockFx = null;
 
@@ -3600,10 +3174,10 @@ body.is-landing > .hud{
 
     const DOCK = {
       radius: 170,      // 联动半径（px）
-      maxGrowth: 0.42,  // 中心处放大 42%（100 → 142），对齐原版 40 → 70 的比例
+      maxGrowth: 0.42,  // 中心处放大 42%
       maxLift: 14,      // 中心处上浮（px）
       rowTol: 90,       // 换行保护：纵向超过该距离的按钮不参与联动
-      ease: 0.24        // 每帧插值系数：注视点抖动时仍保持顺滑
+      ease: 0.24        // 每帧插值系数
     };
 
     const mouse = { x: 0, y: 0, has: false };
@@ -3620,10 +3194,8 @@ body.is-landing > .hud{
     window.addEventListener('blur', () => { mouse.has = false; });
 
     function paint() {
-      // 注视优先：隔空画板的主交互是眼睛，鼠标只是兜底
-      const useGaze = gazeActive();
-      const px = useGaze ? state.gazeScreenX : (mouse.has ? mouse.x : null);
-      const py = useGaze ? state.gazeScreenY : (mouse.has ? mouse.y : null);
+      const px = mouse.has ? mouse.x : null;
+      const py = mouse.has ? mouse.y : null;
       const box = toolbarEl.getBoundingClientRect();
       const x = px === null ? -1e4 : px - box.left;
       const y = py === null ? -1e4 : py - box.top;
@@ -3768,7 +3340,6 @@ body.is-landing > .hud{
   buildPalette();
   selectColor(0, false);
   updateToolUi();
-  updateSourceUi();
   applyCanvasTheme(true);   // 修改7：初始化画布主题（黑），静默不弹 toast
   syncSize();
   updateHistoryUi();
