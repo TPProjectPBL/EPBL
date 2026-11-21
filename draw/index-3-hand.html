@@ -2610,7 +2610,8 @@ body.is-landing > .hud{
       let stream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+          // 与融合标定 / Alexia 1080p 基线一致，避免共享模型 aspect 与输入画面不匹配。
+          video: { width: { ideal: 1920 }, height: { ideal: 1080 }, facingMode: 'user' },
           audio: false
         });
       } catch (e) {

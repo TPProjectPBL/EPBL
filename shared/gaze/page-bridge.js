@@ -154,7 +154,8 @@ export async function startSharedGaze(opts = {}) {
     onFrame,
     pollMs = 66,
     constraints = {
-      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+      // 与工作台宿主 / Alexia 1080p 基线一致，保证共享模型的 aspect 与输入画面同源。
+      video: { width: { ideal: 1920 }, height: { ideal: 1080 }, facingMode: 'user' },
       audio: false,
     },
   } = opts;

@@ -21,7 +21,7 @@ say() { printf '%s\n' "$*"; }
 
 start_server() {
   if curl -sf -o /dev/null "$BASE/workbench/"; then
-    say "[server] 已在运行：$BASE（root=$ROOT）"
+    say "[server] 已在运行：${BASE}（root=${ROOT}）"
     return 0
   fi
   say "[server] 启动 python3 -m http.server $PORT --directory $ROOT"

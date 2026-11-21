@@ -277,7 +277,9 @@ export class Calibrator {
       if (s) {
         this.samples.push(s);
         // 逐点记录头位，最后取中位数作为标定基准
-        const heads = this.frames.map((fr) => headPose(fr.lm)).filter((h) => h && Number.isFinite(h.cx) && Number.isFinite(h.faceH));
+        const heads = this.frames
+          .map((fr) => headPose(fr.lm, { aspect: this.aspect() }))
+          .filter((h) => h && Number.isFinite(h.cx) && Number.isFinite(h.faceH));
         if (heads.length) this.heads.push(...heads);
       }
       else

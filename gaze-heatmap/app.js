@@ -686,7 +686,8 @@
   /* GAZE-LANDMARKS：宿主托管时用共享 landmarks 计算头位，口径与旧 WebGazer 版一致 */
   function readHeadFromLandmarks(lm) {
     if (!hostedHead || !lm || lm.length < 468) return null;
-    const h = hostedHead.headPose(lm);
+    const asp = hostedRaw && Number(hostedRaw.aspect) > 0 ? Number(hostedRaw.aspect) : 16 / 9;
+    const h = hostedHead.headPose(lm, { aspect: asp });
     if (!h) return null;
     const d = hostedHead.headDelta(S.headRef, h);
     const refDist = Math.hypot(d.dx, d.dy * 1.1, d.dh * 0.8);

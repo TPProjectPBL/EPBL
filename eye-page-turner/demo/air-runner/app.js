@@ -435,8 +435,9 @@ async function startCamera() {
     let busy = false;
     let tick = 0;
     camera = new CameraModule(video, {
-      width: 640,
-      height: 480,
+      // 与融合标定 / Alexia 1080p 基线一致：跑酷页也用共享模型，aspect 必须同源。
+      width: 1920,
+      height: 1080,
       onFrame: async () => {
         if (busy || !video || video.readyState < 2) return;
         busy = true;

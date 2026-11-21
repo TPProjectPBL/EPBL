@@ -149,11 +149,11 @@ export function createOverlay(options = {}) {
   ].join(';');
 
   const camWrap = doc.createElement('div');
-  camWrap.style.cssText = 'position:relative;width:236px;height:177px;background:#0b1512';
+  camWrap.style.cssText = 'position:relative;width:236px;height:133px;background:#0b1512';
   const camCanvas = doc.createElement('canvas');
   camCanvas.width = 236;
-  camCanvas.height = 177;
-  camCanvas.style.cssText = 'display:block;width:236px;height:177px';
+  camCanvas.height = 133;
+  camCanvas.style.cssText = 'display:block;width:236px;height:133px';
   camWrap.appendChild(camCanvas);
 
   const camBadge = doc.createElement('div');
@@ -255,7 +255,22 @@ export function createOverlay(options = {}) {
   };
   const TONE_COLOR = CAM_TONE;
 
+  /** 预览画布按真实取流宽高比伸缩；1080p 摄像头是 16:9，不能硬塞进 4:3 框。 */
+  function fitCamToVideo(video) {
+    const asp =
+      video && video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : 16 / 9;
+    const key = String(Math.round(asp * 1000));
+    if (camCanvas.dataset.asp === key) return;
+    camCanvas.dataset.asp = key;
+    const w = camCanvas.width || (prepOn ? 320 : 236);
+    const h = Math.max(1, Math.round(w / asp));
+    camCanvas.height = h;
+    camCanvas.style.height = h + 'px';
+    camWrap.style.height = h + 'px';
+  }
+
   function drawCam(info) {
+    fitCamToVideo(info && info.video);
     const w = camCanvas.width;
     const h = camCanvas.height;
     const ctx = camCanvas.getContext('2d');
@@ -365,7 +380,8 @@ export function createOverlay(options = {}) {
     if (data.blink) {
       text = '眨眼 · 请睁眼';
     } else if (!data.distanceOk) {
-      text = data.faceH < 0.22 ? '太远 · 请靠近一点' : '太近 · 请稍微离远一点';
+      const distMin = Number.isFinite(data.distMin) ? data.distMin : 0.22;
+      text = data.faceH < distMin ? '太远 · 请靠近一点' : '太近 · 请稍微离远一点';
     } else if (!data.centerOk) {
       text = '请回到画面中央';
     } else if (Math.abs(Number(data.roll)) > 12) {
@@ -424,11 +440,8 @@ export function createOverlay(options = {}) {
       camBox.style.width = '320px';
       camBox.style.borderRadius = '16px';
       camWrap.style.width = '320px';
-      camWrap.style.height = '240px';
       camCanvas.width = 320;
-      camCanvas.height = 240;
       camCanvas.style.width = '320px';
-      camCanvas.style.height = '240px';
       prepTtl.style.display = 'block';
     } else {
       camBox.style.left = '';
@@ -439,13 +452,12 @@ export function createOverlay(options = {}) {
       camBox.style.width = '236px';
       camBox.style.borderRadius = '12px';
       camWrap.style.width = '236px';
-      camWrap.style.height = '177px';
       camCanvas.width = 236;
-      camCanvas.height = 177;
       camCanvas.style.width = '236px';
-      camCanvas.style.height = '177px';
       prepTtl.style.display = 'none';
     }
+    camCanvas.dataset.asp = '';
+    fitCamToVideo(lastHead && lastHead.video);
     drawCam(lastHead);
   }
 

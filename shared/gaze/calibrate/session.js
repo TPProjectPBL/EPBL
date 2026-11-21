@@ -101,6 +101,8 @@ function headInfo(head, ref) {
     cy: head.cy,
     faceW: head.faceW,
     faceH: head.faceH,
+    distMin: head.distMin,
+    distMax: head.distMax,
     distanceOk: !!head.distanceOk,
     centerOk: !!head.centerOk,
     poseOk: !!head.poseOk,
@@ -354,7 +356,7 @@ export function createSession(opts = {}) {
 
     const raw = getLandmarks();
     const lm = raw ? mirrorLandmarks(raw) : null;
-    const head = lm ? headPose(lm) : null;
+    const head = lm ? headPose(lm, { aspect: getAspect() }) : null;
     const usable = head && (!faceGate || (head.distanceOk && head.centerOk)) ? head : null;
     const blink = !!(head && Number.isFinite(head.ear) && head.ear < EAR_MIN);
     const ok = !!(usable && usable.ok && !blink);
@@ -437,7 +439,7 @@ export function createSession(opts = {}) {
 
     const raw = getLandmarks();
     const lm = raw ? mirrorLandmarks(raw) : null;
-    const head = lm ? headPose(lm) : null;
+    const head = lm ? headPose(lm, { aspect: getAspect() }) : null;
     S.head = headInfo(head, S.ref);
 
     // 测试：时间到就结算，不管这一刻稳不稳

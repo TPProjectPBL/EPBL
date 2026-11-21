@@ -109,7 +109,7 @@
 
   function currentEnv() {
     const v = S.video;
-    // 没有打开的摄像头时不猜分辨率：否则「标定 1280×720 → 释放摄像头 → 回落 640×480」
+    // 没有打开的摄像头时不猜分辨率：否则「标定 1920×1080 → 释放摄像头 → 回落 1280×720」
     // 会被判成硬不兼容，模型一用完就显示过期。
     const cam = v && v.videoWidth ? { w: v.videoWidth, h: v.videoHeight } : null;
     return {
@@ -149,12 +149,22 @@
     // 环境比对只做提示，不改模型本身：协议要求每次进入都重新标定
     const env = raw.env || null;
     const now = currentEnv();
-    const envDiff =
-      env &&
-      env.viewport &&
-      (env.viewport.w !== now.viewport.w || env.viewport.h !== now.viewport.h);
+    const viewDiff =
+      !!(env && env.viewport && now.viewport &&
+        (env.viewport.w !== now.viewport.w || env.viewport.h !== now.viewport.h));
+    // 换摄像头 / 分辨率变化必须判过期：模型里的 aspect 绑定了标定时的采集画面。
+    const camDiff =
+      !!(env && env.camera && now.camera &&
+        (env.camera.w !== now.camera.w || env.camera.h !== now.camera.h));
+    const envDiff = viewDiff || camDiff;
     S.status = raw.skipped || envDiff ? 'stale' : 'ok';
-    S.reason = raw.skipped ? 'validation-skipped' : envDiff ? 'env-changed' : 'exact';
+    S.reason = raw.skipped
+      ? 'validation-skipped'
+      : camDiff
+        ? 'camera-changed'
+        : viewDiff
+          ? 'env-changed'
+          : 'exact';
     paintDot();
     return S.status;
   }
@@ -260,8 +270,11 @@
     }
     let stream;
     try {
+      // Alexia 1080p 基线：双模态测试台 / 控制前端统一用 1920×1080。
+      // 融合标定必须沿用同一采集分辨率，新摄像头接上后才能达到同样效果。
+      // 设备不支持时 ideal 会让浏览器退到最接近档位（如 1280×720）。
       stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 } },
+        video: { width: { ideal: 1920 }, height: { ideal: 1080 }, facingMode: 'user' },
         audio: false,
       });
     } catch (e) {

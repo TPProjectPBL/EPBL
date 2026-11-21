@@ -31,7 +31,7 @@ function copyAsMjs(srcDir, dstDir, rename) {
 
 fs.rmSync(tmp, { recursive: true, force: true });
 copyAsMjs(path.join(gazeRoot, 'core'), path.join(tmp, 'core'));
-copyAsMjs(gazeRoot, tmp, (f) => (f === 'contract.js' ? 'contract.mjs' : f));
+copyAsMjs(gazeRoot, tmp);
 copyAsMjs(path.join(gazeRoot, 'calibrate'), path.join(tmp, 'calibrate'));
 
 const { Calibrator } = await import(pathToFileURL(path.join(tmp, 'calibrate', 'calibrator.mjs')).href);
