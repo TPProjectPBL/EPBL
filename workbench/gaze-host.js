@@ -1235,6 +1235,9 @@
     const cam = await ensureCamera();
     const video = cam && cam.video;
     if (!video) return null;
+    // 与广播 landmarks / model 同口径：先取 bus 模块，循环里直接用。
+    // 之前这里漏取，导致 bus.broadcastHands 抛 ReferenceError 被 catch 吞掉，手势永远广播不出去。
+    const bus = await busMod();
     S.gestureRunning = true;
     S.lastHandCount = -1;
 
@@ -1257,7 +1260,7 @@
           const hands = toHandsPayload(res);
           // 手数从 0 → 0 时不重复广播，省掉大量空消息；出现/消失时必须广播
           if (hands.length || S.lastHandCount !== 0) {
-            bus.broadcastHands(hands, { ts: Date.now() });
+            bus.broadcastHands(hands, { root: stageEl(), ts: Date.now() });
             S.lastHandCount = hands.length;
           }
           S.gestureErr = '';

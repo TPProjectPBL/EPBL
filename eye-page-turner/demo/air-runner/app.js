@@ -34,6 +34,7 @@ import {
   hello as gazeBusHello,
   onModel as onGazeBusModel,
   onLandmarks,
+  onHands,
 } from '../../../shared/gaze/bus.js';
 import { containerFromPage } from '../../../shared/gaze/frame.js';
 import {
@@ -291,6 +292,7 @@ function synthHand(cx, cy, k = 0.5, fist = false) {
 /* ------------------------------------------------------------------ 摄像头链路 */
 
 let hostedLmOff = null;
+let hostedHandsOff = null;
 
 /** 订阅宿主广播的 landmarks，喂进原有的 onFaceResults 统一入口（下游逻辑零改动） */
 function startHostedLandmarks() {
@@ -299,6 +301,44 @@ function startHostedLandmarks() {
     const ok = !!(f && f.landmarks && f.landmarks.length);
     onFaceResults({ multiFaceLandmarks: ok ? [f.landmarks] : [] });
   });
+}
+
+/**
+ * 订阅宿主广播的手部结果，喂进原有的 state.handResults（下游手势原语零改动）。
+ * 宿主广播的 points 已是 [{x,y,z}]，正好是 currentHand() 需要的 multiHandLandmarks 结构。
+ * 手势分类由本页 classifyHand 从点坐标自算，不依赖宿主的分类名。
+ */
+function startHostedHands() {
+  if (hostedHandsOff) return;
+  hostedHandsOff = onHands((f) => {
+    const list = (f && f.hands) || [];
+    const marks = list.map((h) => (h && h.points) || []).filter((pts) => pts.length >= 21);
+    state.handResults = { multiHandLandmarks: marks };
+    const lm = marks[0] || null;
+    updateCalib('hand', !!lm);
+    drawBox('boxHand', lm);
+  });
+  // 请宿主开始手部推理（宿主收到才懒加载 GestureRecognizer 并开始广播）
+  try {
+    window.parent.postMessage(
+      { type: 'epbl:gaze-gesture-request', version: 1, on: true },
+      window.location.origin
+    );
+  } catch (e) {}
+}
+
+/** 离开页面时退订手势并请宿主停掉手部推理，避免空转占摄像头 */
+function stopHostedHands() {
+  if (hostedHandsOff) {
+    hostedHandsOff();
+    hostedHandsOff = null;
+  }
+  try {
+    window.parent.postMessage(
+      { type: 'epbl:gaze-gesture-request', version: 1, on: false },
+      window.location.origin
+    );
+  } catch (e) {}
 }
 
 function currentHand() {
@@ -419,6 +459,8 @@ async function startCamera() {
     camChipMemo = '';
     chip('chipCam', '摄像头：宿主推理 · 等待人脸', 'warn');
     startHostedLandmarks();
+    // 手势同样走宿主：订阅广播并请求宿主开手部推理（本地不再开第二路摄像头）
+    startHostedHands();
     return true;
   }
 
@@ -2236,6 +2278,7 @@ if (typeof window !== 'undefined') {
       hostedLmOff();
       hostedLmOff = null;
     }
+    stopHostedHands();
   });
 
   window.__airRunner = {
