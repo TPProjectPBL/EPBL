@@ -1,12 +1,12 @@
 # 隔空控制器（Air Controller）· 交接文档
 
-> 最后更新：2026-11-21 ｜ HEAD：`5e81f55`（与本地 `origin/main` 引用一致，工作台接入和 BlazeFace 本地化仍在工作区）
+> 最后更新：2026-11-22 ｜ 画板与工作台版本：`00c6fd8`
 > 团队仓库：`origin = TPProjectPBL/EPBL` ｜ 本机克隆**只配了 origin**（旧文档里的个人 fork `jarvis` 已移除）
 > 分工（按提交历史）：AlexiaWHsu = 眼动 / dual-test / 控制后端 ｜ Evelyn = 文档 / fruit-slice ｜ **Thriving-r = 隔空画板 `draw/`**
 
 ---
 
-## 0. 2026-11-21 工作台与隔空画板
+## 0. 工作台与隔空画板
 
 ### 启动与复测
 
@@ -23,7 +23,24 @@ draw/.venv/bin/python draw/gazefollower_server.py
 - 工作台画板入口为 `http://127.0.0.1:8125/workbench/index.html#/draw`，也可直开 `http://127.0.0.1:8789/index-3-hand-gazefollower.html`。后启动 8789 时，点工作台工具栏的「重载」。进入画板后点「开启摄像头」，依次点击并注视 9 个标定点。画板重载或视口尺寸变化后需要重新标定。
 - 本机 `draw/.venv` 使用 Python 3.12，已安装 `gazefollower==1.1.0`。虚拟环境在 Git 忽略范围内，换机器需要重新安装依赖。服务正常时，`http://127.0.0.1:8789/gaze/health` 返回 `{"model":"GazeFollower"}`。
 - 测试台、热力图和跑酷仍由工作台宿主统一标定并提供推理。首次在工作台运行这条链路时，用 `bash scripts/fetch-gaze-model.sh` 准备本地 Face Landmarker 模型，再在工作台完成 9 点标定和 5 点验证。
-- 真机复测项包括画板 9 点标定、视线笔尖、捏合落笔，以及从跑酷切入画板、再切回跑酷后摄像头和手势是否恢复。进入画板后可在工作台顶层控制台查看 `__epblGazeHost.getStatus()`，预期 `exclusive: true`、`camera: false`、`hands: false`。
+- 真机复测项包括画板 9 点标定、视线笔尖、捏合落笔、调色板手势，以及从跑酷切入画板再切回后摄像头和手势是否恢复。进入画板后可在工作台顶层控制台查看 `__epblGazeHost.getStatus()`，预期 `exclusive: true`、`camera: false`、`hands: false`。
+
+### 两版画板的手势
+
+GazeFollower 与独立 WebGazer 画板使用相同映射。视线负责移动笔尖，调色板和工具栏由手势操作，也支持鼠标点击和键盘快捷键。
+
+| 手势 | 动作 |
+|---|---|
+| 👍 拇指朝上 | 打开调色板并高亮当前颜色。展开后再次朝上，应用高亮颜色并收起 |
+| 👎 拇指朝下 | 切换画笔 / 橡皮 |
+| 拇指朝左 / 右 | 调色板展开时，按镜像预览方向移动高亮一格。到两端停住 |
+| ✊ 握拳 | 调色板展开时暂停落笔，握拳后可再次向同一方向移动。收起时可握拳落笔 |
+| ☝️ 食指朝上 | 撤回一笔 |
+| ✌️ V 手势 | 调色板收起时，切换黑 / 白画布 |
+| 🤟 我爱你 | 调色板收起时，保持约半秒清空画布。提前松手取消 |
+
+- 拇指手势连续识别 3 帧后执行一次。持续保持朝上不会打开后立刻确认，持续朝左或右只移一格。调色板展开期间暂停绘画，颜色在确认时生效。
+- 两版的手势映射、调色预览与确认、握拳暂停落笔均通过模拟输入验证。`node --test scripts/test-draw-clear-gesture.mjs` 可复测清空手势。实际摄像头识别和左右方向仍待真机复测。
 
 ### 已提交的改动
 
@@ -31,11 +48,11 @@ draw/.venv/bin/python draw/gazefollower_server.py
 - `57077e1` 修复工作台宿主漏取 `bus` 导致手势广播失效的问题。跑酷进入时订阅 `onHands` 并请求宿主启动手部推理，离开时退订并请求停止。
 - `6bdf3ca`、`0384b98`、`f98e729` 更新宿主统一标定：摄像头弹窗与头位引导、1080p 理想采集分辨率、百分制验证结果与内置诊断。实现入口见 `workbench/gaze-host.js` 和 `shared/gaze/calibrate/`。
 
-### 工作区尚未提交
+### 工作台接入与本地模型
 
 - `workbench/modules.json` 将 `draw` 切到 8789 的 `standaloneUrl`。`workbench/app.js` 对该路由直接加载独立 iframe，授予 `camera` 权限并隐藏宿主标定按钮和状态点。「重载」和「新标签打开」都使用同一个独立地址。
 - `workbench/gaze-host.js` 在进入画板时停止手部推理并释放宿主摄像头，独立画板打开期间阻止宿主重新取流。`cameraEpoch` 用来作废已发出但迟到的取流请求，返回的媒体轨道会被关闭。离开画板后，宿主可按订阅重新取流。`workbench/index.html` 的 CSP 放行 8789 iframe，前端版本号更新为 `20261121f`。
-- 保留 `draw/index-3-hand.html` 作为独立 WebGazer 版。该版使用的 `draw/vendor/webgazer/webgazer.js` 把 BlazeFace 从 TF Hub 改为本地模型并设置 `fromTFHub: false`。目前 `draw/vendor/webgazer/blazeface_model/model.json` 和 `group1-shard1of1.bin` 都是未跟踪文件，提交这项修复时要随 vendor 补丁一并纳入。
+- 独立 WebGazer 版加载 `draw/vendor/webgazer/blazeface_model/` 中已入库的 `model.json` 和 `group1-shard1of1.bin`，并设置 `fromTFHub: false`。工作台接入、本地模型和两版画板的手势改动一同收入 `00c6fd8`。
 
 ---
 
@@ -109,31 +126,20 @@ draw/.venv/bin/python draw/gazefollower_server.py
 
 | 文件 | 形态 | 落笔方式 | 适用 |
 |---|---|---|---|
-| `draw/index-3-hand.html` | 手势优先版（含原 v3.0 眼动标定 + 视线九宫格 + 全套工具层） | 拇指+食指**捏合**落笔（<0.45 落 / >0.60 抬），握拳也可落笔；**默认笔尖 = 视线九宫格**，按 `T` 可切 **食指指尖（landmark 8）**（One Euro 平滑） | 独立访问 |
+| `draw/index-3-hand.html` | WebGazer 9 点标定、视线笔尖和手势工具栏 | 拇指与食指捏合落笔（<0.45 落 / >0.60 抬）。调色板收起时也可握拳落笔 | 独立访问 |
 
 它支持：
 
-- **画布交互**：6 色调色板（`1`–`6`，注视色块停留 0.8s 选中并自动收起，默认收起防误触）；画笔 / 橡皮（20px，`destination-out` 真擦除，**不是**用底色涂）；撤回 / 重做（最多保留最近 50 笔）；画布黑 / 白切换（擦痕随主题正确显示）；清空 / 另存 PNG；笔尖来源切换（视线 / 指尖）；左手张开拖动**平移画布内容**（世界坐标 + `panOffset`，平移期间笔尖锁定不落笔）；复位视图。
-- **双条件防误触**：清空 / 保存这类高代价操作（真实手势路径）必须「注视目标 + 握拳/捏合」，并带 450ms 二次视觉确认（`armMs`）；键盘 `C` / `S` 走 `bypass`，只延时 450ms，不需要双条件（开发旁路）。
+- **画布交互**：6 色调色板、画笔 / 橡皮（20px，`destination-out`）、撤回（最多保留最近 50 笔）、黑 / 白画布、清空。双手入镜时，左手张开拖动平移画布，平移期间暂停落笔。调色板及工具手势见第 0 节。
 - **降级**：无摄像头时可全鼠标 + 键盘操作（移动＝注视、按住＝落笔、`空格`+拖动＝左手平移）。
-- **HUD**：模式 / 视线九宫格区 / 笔尖来源 / 平移偏移 / 笔画·撤回·恢复计数 / FPS。
-- **键盘**：`1`–`6` 选色、`E` 画笔/橡皮、`T` 笔尖来源、`B` 画布色、`R` 复位、`P` 调色板、`C` 清空、`S` 保存、`G` 模拟丢视线、`V` Victory、`H` 交换左右手、`Ctrl+Z` 撤回、`Ctrl+Y` 重做。
-- **URL 参数**：`?ema=0.18&gravity=82`（视线平滑 / 磁吸半径），`?fliphand=1`（左右手互换，等价按 `H`）。
-
-`index-3-hand.html` 额外接入的离散动作（复用 dual-test 的分类器与边沿状态机）：
-
-| 手势 | 动作 | 约束 |
-|---|---|---|
-| 👍 拇指朝上 | 切换画笔 / 橡皮 | 3 帧确认；一次连续手势只触发一次；900ms 冷却 |
-| ☝️ 食指朝上 | 撤回一笔（等价 Ctrl+Z） | 同上 |
-| ✊ 握拳 | 落笔（与捏合并存，`wantDown = Closed_Fist \|\| pinchOn`） | 捏合 / 落笔 / 平移 / 标定期间均不触发离散动作 |
-| 🖐 张开手掌 | 抬笔（语义姿态；松开捏合、换非握拳姿态、丢手也会抬笔） | — |
-
-- 关键参数（见 `draw/index-3-hand-测试记录.md`）：One Euro `minCutoff 1.0 / beta 0.02 / dCutoff 1.0`；捏合 0.45 / 0.60；落笔确认 `fistFrames >= 2`；检测节流 34ms；`numHands = 2`。
+- **HUD**：模式 / 视线九宫格区 / 笔尖来源 / 平移偏移 / 笔画数 / FPS。
+- **键盘**：`1`–`6` 选色、`E` 画笔/橡皮、`B` 画布色、`P` 调色板、`C` 清空、`G` 模拟丢视线、`V` 模拟 V 手势、`H` 交换左右手、`Ctrl+Z` 或 `Cmd+Z` 撤回。
+- **URL 参数**：`?ema=0.18`（视线预测平滑），`?fliphand=1`（左右手互换，等价按 `H`）。
+- 关键参数：捏合 0.45 / 0.60，落笔确认 `fistFrames >= 2`，检测节流 34ms，`numHands = 2`。
 - 抽出 `window.AirCanvasKit`（版本 `dual-test-port-2`）：`classifyHand` / `createGestureGate` / `isBlackFrame` / `summarizeGaze` / `summarizeJoint` / `buildTestReport`（schema `air-canvas-test/v1`）/ `downloadJSON`，调试桥 `AirCanvasBridge.kit`。移植分两批：第一批纯工具，第二批接 thumb/point 动作。
 - 验证状态：`draw/index-3-hand-测试记录.md` 记录了 headless Chrome + CDP 注入假 landmark 的 7 项合成验证：**6 项通过**（镜像、慢线平滑、捏合起止、左右手不串、9 点标定回归 / 鼠标与键盘兜底、零新增依赖），第 3 项「快线断点」**未单独压测**——**只证明逻辑正确，不等于真实摄像头手感**。
 - ⚠️ 取流基线偏差：画板当前用 `recognizeForVideo(getVideoElementCanvas())`（WebGazer 默认约 640×480 缓冲），与第 5.2 节「手势一律喂 1280×720 `<video>`、不要传 canvas」不一致。这是真机手势不稳的优先排查项，详见 4.6。
-- 真机手感还欠四项：指尖方向是否反、慢线是否抖、快甩是否断点、捏合 0.45/0.60 是否灵敏/误触；取流基线另见 4.6 第 5 项。
+- 真机复测包括视线笔尖和拇指左右方向、慢线抖动、快甩断点、捏合灵敏度和取流基线，见第 4.6 节。
 - 依赖体积：`draw/vendor/webgazer/`（patched WebGazer 2.1.2 + 本地 facemesh 模型）、`draw/vendor/vision/`（MediaPipe Vision wasm）、`draw/models/gesture_recognizer.task`（约 8.4MB）。
   ⚠️ `.gitignore` 已加 `*.task` / `*.tflite`（老师要求大模型文件不入库）。`draw/models/gesture_recognizer.task` 是**历史已跟踪**文件，仍会随提交走；**新增**模型文件默认不入库，需 `git add -f` 或改成首次运行自动下载（参考 `outputs/fruit-slice/`）。
 - **契约**：`dual-test/` 与 `gesture-test/` 的模型和 wasm **都指向 `draw/`**（`../draw/models/gesture_recognizer.task`、`../draw/vendor/vision/`），**别删、别挪**这两个目录。
@@ -258,8 +264,8 @@ draw/.venv/bin/python draw/gazefollower_server.py
 
 `draw/index-3-hand.html` 只做过合成 landmark 验证，真实摄像头还欠五项：
 
-1. 切到指尖笔尖后（按 `T`），食指指尖右移 → 屏幕笔尖是否右移；若反，先按 `H` 或加 `?fliphand=1`，**不要改镜像公式**。视线笔尖模式只需确认九宫格方向不反。
-2. 慢速横 / 竖 / 圆是否还有可见抖动；滞后就先把 One Euro `beta` 从 0.02 调到 0.05。
+1. 确认视线向左右移动时笔尖方向正确，并验证拇指横向手势与镜像预览和色块移动方向一致。
+2. 慢速横 / 竖 / 圆是否还有可见抖动或滞后。
 3. 快速甩线是否断点 / 折角；必要时在相邻采样点之间补点（≤8px）。
 4. 捏合阈值 0.45 / 0.60 是否灵敏、是否误触；实测后回写 `draw/index-3-hand-测试记录.md`。
 5. **取流基线**：当前画板把 WebGazer 的 `getVideoElementCanvas()`（默认约 640×480）喂给手势模型，而 gesture-test 的黄金基线是 1280×720 自有 `<video>`。若上面几项怎么调都不稳，优先按 5.2 第 7/8 条改造取流，再谈阈值与平滑。
@@ -377,7 +383,8 @@ openssl verify -CAfile ca.crt server.crt
 | `controller-demo/webgazer-gaze.html` | 眼动对照页，调 EMA / 磁吸参数用 |
 | `controller-demo/hero.html` | 协作者 hero 视觉页（`?mode=hero`），保留 |
 | `draw/index-3-hand-gazefollower.html`、`draw/gazefollower_server.py` | 工作台隔空画板页面和 8789 本机服务 |
-| **`draw/index-3-hand.html`** | **独立 WebGazer 画板（Thriving-r）**：含 v3.0 眼动标定 + 默认视线九宫格笔尖（按 `T` 切食指指尖）+ 捏合 / 握拳落笔 + 拇指切工具 / 食指撤回，`AirCanvasKit` 移植自 dual-test |
+| **`draw/index-3-hand.html`** | **独立 WebGazer 画板（Thriving-r）**，使用视线笔尖与第 0 节的手势调色板，`AirCanvasKit` 移植自 dual-test |
+| `scripts/test-draw-clear-gesture.mjs` | 两版画板的 🤟 清空手势回归测试 |
 | **`draw/index-3-hand-测试记录.md`** | 画板手势版的参数、7 项合成验证（6 通过 / 快线断点未压测）、回归红线与待真机复测清单 |
 | **`draw/models/` + `draw/vendor/vision/`** | **共用资源**：`gesture_recognizer.task` + MediaPipe Vision wasm；gesture-test / dual-test 均以 `../draw/...` 引用，**别删别挪** |
 | `control-backend/` | 控制后端（FastAPI + Playwright），`launcher.command` 一键起停；含 `test_control.py` 真实 Chrome 回读验证 |
@@ -403,7 +410,9 @@ openssl verify -CAfile ca.crt server.crt
 ### 最近提交链（倒序）
 
 ```
-5e81f55 feat(draw): add standalone GazeFollower canvas              ← 当前 HEAD
+00c6fd8 Integrate GazeFollower workbench and gesture palette
+9df559a feat(draw): map I love you gesture to clear canvas
+5e81f55 feat(draw): add standalone GazeFollower canvas
 57077e1 fix(gesture): 恢复工作台内手势识别
 f98e729 fix(gaze): 撤掉错误的距离阈值缩放 + 标定结果内置诊断
 0384b98 feat(gaze): 融合标定对齐 Alexia 1080p 采集基线
