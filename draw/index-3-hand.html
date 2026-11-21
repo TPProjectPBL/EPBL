@@ -1217,6 +1217,7 @@ body.is-landing > .hud{
           <li><span class="k">张开手掌</span><span class="v">抬笔 · 只移动笔尖不画线</span></li>
           <li><span class="k">拇指朝上</span><span class="v">切换画笔 / 橡皮；按住不重复</span></li>
           <li><span class="k">食指朝上</span><span class="v">撤回一笔（等价 Ctrl+Z）；按住不重复</span></li>
+          <li><span class="k">🤟 我爱你</span><span class="v">调色板收起时，保持约半秒清空画布；提前松手取消</span></li>
           <li><span class="k">调色板＋捏合</span><span class="v">展开颜色条（默认收起，防误触）</span></li>
           <li><span class="k">注视色块 0.8s</span><span class="v">停留选中并自动收起</span></li>
           <li><span class="k">注视＋捏合</span><span class="v">撤回 / 下一步 / 复位 / 笔尖来源 / 画布色 / 工具 / 清空 / 保存</span></li>
@@ -1670,10 +1671,10 @@ body.is-landing > .hud{
       selectColor(Number(k) - 1, true);
       e.preventDefault();
     } else if (k === 'c' || k === 'C') {
-      requestHighCost('clear', true);
+      requestHighCost('clear', 'keyboard');
       e.preventDefault();
     } else if (k === 's' || k === 'S') {
-      requestHighCost('save', true);
+      requestHighCost('save', 'keyboard');
       e.preventDefault();
     } else if (k === 'e' || k === 'E') {
       // 修改5：画笔 / 橡皮切换（真实场景＝注视工具按钮 ＋ 握拳，双条件）
@@ -1766,6 +1767,7 @@ body.is-landing > .hud{
     pinchOn: false,
     thumbGate: null,
     pointGate: null,
+    clearGestureAt: -Infinity,
     lastLeftPalm: null,
     handSmoothX: 0.5,
     handSmoothY: 0.5,
@@ -2020,7 +2022,7 @@ body.is-landing > .hud{
           lastScroll = now;
           return { type: 'scroll', gesture: g };
         }
-        if (g === 'thumb' || g === 'point' || g === 'two') {
+        if (g === 'ILoveYou' || g === 'thumb' || g === 'point' || g === 'two') {
           if (!armed) return null;
           armed = false;                       // 一次连续手势只消费一次，按住不重复触发
           if (now - lastFire < cfg.cooldown) return null;
@@ -2132,6 +2134,7 @@ body.is-landing > .hud{
   window.AirCanvasKit = AirCanvasKit;
   real.thumbGate = AirCanvasKit.createGestureGate();
   real.pointGate = AirCanvasKit.createGestureGate();
+  const clearGate = AirCanvasKit.createGestureGate();
 
   /* ---------------- 指尖 One Euro 滤波 ----------------
    * 只作用于 draw 手的食指指尖 8 号点 → raw.handTargetX/Y；
@@ -2330,14 +2333,15 @@ body.is-landing > .hud{
       raw.panDown = false;
     }
 
-    // 第二批动作：拇指朝上切工具、食指朝上撤销。
-    // 用独立 gate，避免两个动作共享冷却；捏合/落笔/平移/标定期间一律不触发。
+    // 拇指切工具，食指撤销，🤟 清空。
     if (draw) updateGestureActions(draw, now);
   }
 
   function resetGestureActions() {
     if (real.thumbGate) real.thumbGate.reset();
     if (real.pointGate) real.pointGate.reset();
+    clearGate.reset();
+    real.clearGestureAt = -Infinity;
   }
 
   function updateGestureActions(draw, now) {
@@ -2345,9 +2349,15 @@ body.is-landing > .hud{
       resetGestureActions();
       return;
     }
-    const thumb = real.thumbGate.step(draw.cls, now);
+    const isClearGesture = draw.cat === 'ILoveYou';
+    const holdingClear = boardActive && !state.paletteOpen && isClearGesture;
+    real.clearGestureAt = holdingClear ? now : -Infinity;
+    if (clearGate.step(holdingClear ? 'ILoveYou' : 'none', now)) requestHighCost('clear', 'gesture');
+
+    const label = isClearGesture ? 'none' : draw.cls;
+    const thumb = real.thumbGate.step(label, now);
     if (thumb && thumb.type === 'discrete' && thumb.gesture === 'thumb') toggleTool();
-    const point = real.pointGate.step(draw.cls, now);
+    const point = real.pointGate.step(label, now);
     if (point && point.type === 'discrete' && point.gesture === 'point') undoOnce();
   }
 
@@ -3631,23 +3641,27 @@ body.is-landing > .hud{
       else if (onReset) resetView();
       else if (onSource) togglePenSource();
       else if (onCanvas) cycleCanvasTheme();
-      else if (onClear) requestHighCost('clear', false);
-      else if (onSave) requestHighCost('save', false);
+      else if (onClear) requestHighCost('clear', 'gaze');
+      else if (onSave) requestHighCost('save', 'gaze');
     }
 
     if (state.armed) {
       const a = state.armed;
-      const stillOn = a.bypass || (a.type === 'clear' ? onClear : onSave);
+      const byGesture = a.source === 'gesture';
+      const stillOn = byGesture
+        ? boardActive && !state.paletteOpen && !real.calibrating && now - real.clearGestureAt < CFG.armMs
+        : a.source === 'keyboard' || (a.type === 'clear' ? onClear : onSave);
+      // 手势必须在确认时间结束后再次被检测到，避免用停滞的摄像头帧确认。
       if (!stillOn) cancelArmed();
-      else if (now >= a.until) finishArmed();
+      else if ((byGesture ? real.clearGestureAt : now) >= a.until) finishArmed();
     }
 
     state.rawDownEdge = false;
   }
 
-  function requestHighCost(type, bypass) {
+  function requestHighCost(type, source) {
     if (state.armed) return;
-    state.armed = { type: type, until: performance.now() + CFG.armMs, bypass: bypass };
+    state.armed = { type: type, until: performance.now() + CFG.armMs, source: source };
     (type === 'clear' ? btnClear : btnSave).classList.add('is-armed');
   }
 
