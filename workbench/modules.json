@@ -29,12 +29,10 @@
       "id": "draw",
       "group": "create",
       "name": "隔空画板",
-      "path": "../draw/index-3-hand-gazefollower.html",
-      "standaloneUrl": "http://127.0.0.1:8789/index-3-hand-gazefollower.html",
+      "path": "../draw/index-3-hand.html",
       "capabilities": ["camera"],
       "requires": ["local"],
-      "desc": "GazeFollower 9 点标定 / 捏合落笔 / 画布工具",
-      "note": "向下滚动进入画板，再开启摄像头并完成 9 点标定。若本机服务未启动，从仓库根目录运行 draw/.venv/bin/python draw/gazefollower_server.py，再点「重载」。"
+      "desc": "眼控 + 手势画板 · 共享视线模型，跟随工作台统一标定"
     },
     {
       "id": "air-runner",

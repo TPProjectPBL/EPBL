@@ -7,46 +7,19 @@
 <meta name="description" content="隔空控制器工作台：眼动与手势测试台、视线热力图、GazeFollower 隔空画板和星际跑酷。">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' http://127.0.0.1:8899 ws://127.0.0.1:8899; frame-src 'self' http://127.0.0.1:8789; object-src 'none'; base-uri 'none'">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230c1410'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23a9db7b'/%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23a9db7b' stroke-opacity='.55' stroke-width='1.6'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=20261122c">
 </head>
 <body>
 <div class="app">
 
-  <aside class="sidebar" id="sidebar">
-    <div class="brand">
-      <div class="logo" aria-hidden="true">
-        <span class="ring"></span><span class="dot"></span>
-      </div>
-      <div class="brand-txt">
-        <b>隔空控制器</b>
-        <span>workbench</span>
-      </div>
-    </div>
-
-    <nav class="nav" id="nav" aria-label="模块导航"></nav>
-
-    <div class="side-foot">
-      <div class="foot-row">
-        <span class="foot-k">服务</span>
-        <span class="pill" id="sideBackend">检测中</span>
-      </div>
-      <div class="foot-row">
-        <span class="foot-k">地址</span>
-        <code class="foot-v">127.0.0.1:8125</code>
-      </div>
-    </div>
-  </aside>
-
-  <div class="mask" id="mask"></div>
-
   <main class="main">
     <header class="topbar">
-      <button class="icon-btn only-mobile" id="menuBtn" aria-label="打开导航">☰</button>
-      <div class="crumbs">
-        <span class="crumb-home">工作台</span>
-        <span class="sep">/</span>
-        <span id="crumb">加载中…</span>
-      </div>
+      <button class="brand-mini" id="homeBtn" title="回到空间导航" aria-label="回到空间导航">
+        <span class="logo" aria-hidden="true"><span class="ring"></span><span class="dot"></span></span>
+        <b>隔空控制器</b>
+      </button>
+      <nav class="topnav" id="topnav" aria-label="模块导航"></nav>
+      <span id="crumb" hidden></span>
       <div class="top-actions">
         <button class="btn ghost" id="gazeCalibBtn" title="用摄像头标定视线模型">标定视线</button>
         <span class="gaze-dot none" id="gazeModelDot" title="未标定" aria-label="未标定"></span>
@@ -80,7 +53,7 @@
 </div>
 
 <script src="../shared/gaze/audit-probe.js"></script>
-<script src="app.js?v=20261121f"></script>
+<script src="app.js?v=20261122c"></script>
 <script src="gaze-host.js?v=20261121f"></script>
 </body>
 </html>

@@ -24,9 +24,10 @@ import { WipeDetector, SwipeLaneDetector, classifyHand } from './lib/gesture.js'
 import { RunnerGame } from './lib/runner.js';
 import { AbsoluteGazeSource, diagnoseText, isFaceUsable, medianSample, simLandmarksFor } from './lib/gaze-calib.js';
 import { KalmanPoint, rFromAvgErr } from './lib/kalman.js';
-import { GazeOnlineTrainer, LEGACY_SAMPLES_KEY } from '../../../../shared/gaze/online.js';
-import { centerPageNorm, installCompatGuard } from '../../../../shared/gaze/attach.js';
-import { createTwoPoint } from '../../../../shared/gaze/calibrate/two-point.js';
+import { GazeOnlineTrainer, LEGACY_SAMPLES_KEY } from '../../../shared/gaze/online.js';
+import { centerPageNorm } from '../../../shared/gaze/attach.js';
+import { installCompatGuard } from '../../../shared/gaze/resize.js';
+import { createTwoPoint } from '../../../shared/gaze/calibrate/two-point.js';
 import { createFaceEngine, FACE_ENGINE } from '../../../shared/gaze/engine/face-engine.js';
 import { Calibrator } from '../../../shared/gaze/calibrate/calibrator.js';
 import { loadModel, saveModel, clearModel, STORE_KEYS } from '../../../shared/gaze/store.js';

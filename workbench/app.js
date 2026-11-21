@@ -8,6 +8,15 @@ const REGISTRY_URL = 'modules.json';
 const RELEASES_URL = 'releases.json';
 const HEALTH_URL = 'http://127.0.0.1:8899/health';
 const LS = { theme: 'ac.workbench.theme', last: 'ac.workbench.last' };
+
+/** 顶栏导航用的短名，完整名称仍保留在 title 与模块注册表里。 */
+const NAV_LABELS = {
+  'dual-test': '测试台',
+  'gaze-heatmap': '热力图',
+  draw: '画板',
+  'air-runner': '跑酷',
+  releases: '下载',
+};
 const FRAME_ALLOW = 'camera; microphone; fullscreen; autoplay; clipboard-write; display-capture';
 
 const state = {
@@ -49,8 +58,9 @@ async function init() {
 
 /* ---------------- 外壳交互 ---------------- */
 function bindShell() {
-  byId('menuBtn').addEventListener('click', () => document.body.classList.toggle('nav-open'));
-  byId('mask').addEventListener('click', closeNav);
+  byId('homeBtn').addEventListener('click', () => {
+    location.hash = '#/home';
+  });
   byId('themeBtn').addEventListener('click', () => {
     const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
     applyTheme(next);
@@ -99,46 +109,23 @@ function applyTheme(theme) {
   if (btn) btn.textContent = theme === 'dark' ? '☀' : '☾';
 }
 
-function closeNav() {
-  document.body.classList.remove('nav-open');
-}
-
 function currentModule() {
   return state.modules.find((m) => m.id === state.active) || null;
 }
 
-/* ---------------- 侧栏 ---------------- */
+/* ---------------- 顶栏导航（不分组，全部压在顶栏一条） ---------------- */
 function renderNav() {
-  const nav = byId('nav');
+  const nav = byId('topnav');
   nav.textContent = '';
 
-  state.groups.forEach((group) => {
-    const items = state.modules.filter((m) => m.group === group.id);
-    if (!items.length) return;
-    const box = document.createElement('div');
-    box.className = 'nav-group';
-
-    const head = document.createElement('h2');
-    head.textContent = group.name;
-    box.appendChild(head);
-
-    items.forEach((mod) => box.appendChild(navItem(mod)));
-    nav.appendChild(box);
-  });
-
-  const dist = document.createElement('div');
-  dist.className = 'nav-group';
-  const h = document.createElement('h2');
-  h.textContent = '分发';
-  dist.appendChild(h);
-  dist.appendChild(navItem({
+  state.modules.forEach((mod) => nav.appendChild(navItem(mod)));
+  nav.appendChild(navItem({
     id: 'releases',
     name: '下载控制小窗',
     desc: 'DMG 安装包与安装指引',
     capabilities: [],
     requires: [],
   }, true));
-  nav.appendChild(dist);
 }
 
 function navItem(mod, isReleases = false) {
@@ -147,11 +134,11 @@ function navItem(mod, isReleases = false) {
   btn.className = 'nav-item';
   btn.dataset.id = mod.id;
   if ((mod.capabilities || []).includes('camera')) btn.dataset.cap = 'camera';
-  btn.title = mod.desc || mod.name;
+  btn.title = mod.desc ? mod.name + ' — ' + mod.desc : mod.name;
 
   const text = document.createElement('span');
   text.className = 't';
-  text.textContent = mod.name;
+  text.textContent = NAV_LABELS[mod.id] || mod.name;
   btn.appendChild(text);
 
   if ((mod.requires || []).includes('cdn')) btn.appendChild(tag('CDN', 'cdn'));
@@ -162,7 +149,6 @@ function navItem(mod, isReleases = false) {
   btn.appendChild(dot);
 
   btn.addEventListener('click', () => {
-    closeNav();
     const target = '#/' + mod.id;
     if (location.hash === target) route();
     else location.hash = target;
@@ -908,12 +894,10 @@ async function checkBackend() {
   }
 
   const text = ok ? '后端在线' : '后端未启动';
-  [byId('backendPill'), byId('sideBackend')].forEach((el) => {
-    if (!el) return;
-    el.textContent = text;
-    el.className = 'pill ' + (ok ? 'ok' : 'off');
-  });
-  byId('backendPill').title = ok
+  const pill = byId('backendPill');
+  pill.textContent = text;
+  pill.className = 'pill ' + (ok ? 'ok' : 'off');
+  pill.title = ok
     ? '控制后端 127.0.0.1:8899 可用'
     : '控制后端未运行：需要远程控制/受控浏览器时请启动 control-backend';
 }
