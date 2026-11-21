@@ -38,6 +38,14 @@ export const VALIDATE_POINTS = Object.freeze([
 /** 单点固定采样窗口（ms）。不稳定只丢帧，进度不会回落。 */
 export const SAMPLE_MS = 1000;
 
+/**
+ * 验证点采样窗口自动延长（heatmap 口径）：时间到但有效帧不足 MIN_FRAMES 时，
+ * 每次延长 VALIDATE_EXTEND_MS，累计不超过 VALIDATE_EXTEND_MAX，避免「0 帧 0 分」。
+ * 标定阶段走的是「有效帧累计满 1 秒」的口径，天生会等，无需此兜底。
+ */
+export const VALIDATE_EXTEND_MS = 400;
+export const VALIDATE_EXTEND_MAX = 1200;
+
 /** 采样期间期望的最短有效帧数；低于此值该点标记为 weak，但仍然入样。 */
 export const MIN_FRAMES = 8;
 
@@ -111,6 +119,50 @@ export const COUNTDOWN_FROM = 3;
  */
 export const READY_REF_STREAK = 6;
 export const READY_STABLE_STREAK = 12;
+
+/**
+ * 标定前的标准头位：画面正中、脸高约 0.48（最容易测准的距离）。
+ *
+ * 虚线标准框是**固定靶子**，用户要主动把脸调进来；只有对齐后才锁定基准头位。
+ * 绝不拿「第一个头位」当标准——那样框会跟着第一个坐姿跑，用户无从对齐，
+ * 而且会把偏左/偏近等次优头位固化成全程基准，直接拉低精度。
+ */
+export const STD_HEAD = Object.freeze({
+  cx: 0.5,
+  cy: 0.5,
+  /** 标准脸高（占画面高度）。越大表示脸越贴近摄像头；0.56 仍在距离门控 0.22~0.8 内。 */
+  faceH: 0.56,
+  /** 人脸框的物理宽高比（像素宽/像素高）。真实脸是竖高的，不是宽扁的。 */
+  faceAspect: 0.78,
+});
+
+/**
+ * 对齐标准框的「范围」（heatmap 口径）：落进区间 + 稳定若干帧即算就位。
+ * 不是一个必须精确重合的点：cx/cy 用对称容差，faceH 用可接受闭区间
+ * （0.42~0.72，覆盖比标准脸高 0.56 略远/略近的坐姿），配合 READY 稳定帧门槛。
+ */
+export const STD_ALIGN = Object.freeze({
+  cx: 0.13,
+  cy: 0.16,
+  faceHMin: 0.42,
+  faceHMax: 0.72,
+});
+
+/**
+ * 固定标准框（归一化坐标）。x/y 分别按画面宽/高归一化，所以宽度必须除以取流宽高比：
+ *   faceW = faceH * faceAspect / aspect
+ * 16:9 下约 0.211（竖高脸形），4:3 下约 0.281；物理宽高比恒为 faceAspect。
+ */
+export function stdBoxOf(aspect) {
+  const a = Number.isFinite(aspect) && aspect > 0 ? aspect : 16 / 9;
+  const w = (STD_HEAD.faceH * STD_HEAD.faceAspect) / a;
+  return {
+    x: STD_HEAD.cx - w / 2,
+    y: STD_HEAD.cy - STD_HEAD.faceH / 2,
+    w,
+    h: STD_HEAD.faceH,
+  };
+}
 
 /** 训练使用的原始特征（眼球 4 维）。二阶展开见 poly2.js。 */
 export const FEATURE_KEYS = Object.freeze(['dLx', 'dLy', 'dRx', 'dRy']);

@@ -82,6 +82,25 @@ export const HEAD = Object.freeze({
 });
 
 /**
+ * 验证阶段专用的头位门控：硬门控（距离/居中/姿态角）与标定一致，
+ * 只放宽「相对标定基准的偏移」这一组阈值。
+ *
+ * 原因：验证要用户主动看左上/右下等边缘靶点，头必然会朝靶点转动；
+ * 若沿用标定的严格基准（yaw±7°、dx±0.055），看边缘点时会整秒判 head 丢弃，
+ * 出现「0 有效帧 / 满丢弃 / 0 分」的假象，反映的是门控而非真实精度。
+ * 标定阶段仍用严格 HEAD，保证进模型的样本头位稳定。
+ */
+export const HEAD_VALIDATE = Object.freeze({
+  ...HEAD,
+  refDx: 0.14,
+  refDy: 0.16,
+  refDh: 0.2,
+  refRoll: 12,
+  refYaw: 18,
+  refPitch: 20,
+});
+
+/**
  * 9 点标定的点阵与时间参数。
  * 坐标均为 PAGE_NORM。
  * @constant {{cols: readonly number[], rows: readonly number[], settleMs: number, collectMs: number, minFrames: number}}

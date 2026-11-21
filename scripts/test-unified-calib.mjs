@@ -56,6 +56,23 @@ function bigFace(lm) {
   return lm.map((p) => ({ x: 0.5 + (p.x - 0.5) * 3.2, y: 0.5 + (p.y - 0.5) * 3.2 }));
 }
 
+/**
+ * 精确对齐到标定标准框的合成脸：先放大到 faceH≈0.48，再整体平移使 cx/cy=0.5。
+ * 用于验证「用户先把脸调进固定虚线框」这一新门槛。
+ */
+function stdFaceAt(lm, k) {
+  const scaled = lm.map((p) => ({ x: 0.5 + (p.x - 0.5) * k, y: 0.5 + (p.y - 0.5) * k }));
+  const h = headPose(scaled, { aspect: 4 / 3 });
+  const dx = 0.5 - h.cx;
+  const dy = 0.5 - h.cy;
+  return scaled.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+}
+
+/** 对齐到标准框的合成脸：k=5.6 → faceH≈0.56，落在 STD_ALIGN 的 0.42~0.72 范围内。 */
+function stdFace(lm) {
+  return stdFaceAt(lm, 5.6);
+}
+
 // ---- 1. 镜像一致性 ----
 {
   const raw = simLandmarksFor(0.3, 0.4, 4 / 3, { noise: 0 });
@@ -355,6 +372,52 @@ function bigFace(lm) {
   ok(!!report && report.score === 0, `一帧都没采到时正确率为 0（实际 ${report && report.score}）`);
 }
 
+// ---- 9b. 验证阶段放宽相对头位门控：看边缘靶点的转头不再是整秒 head 丢弃 ----
+{
+  let now = 0;
+  let frameId = 0;
+  let target = CALIB_POINTS[0];
+  let phase = '';
+  let turn = 0;
+  let report = null;
+  let last = null;
+  const s = createSession({
+    getLandmarks: () => {
+      const lm = bigFace(openEyes(simLandmarksFor(target.tx, target.ty, 4 / 3, { noise: 0 })));
+      // 鼻尖平移 0.08 → dYaw≈7.1°：超过标定阈值 7°，低于验证阈值 18°
+      lm[1].x += turn;
+      return lm;
+    },
+    getAspect: () => 4 / 3,
+    faceGate: false,
+    getFrameId: () => frameId,
+    onUpdate: (st) => {
+      last = st;
+      phase = st.phase;
+      if (st.phase === 'calib' && st.idx < CALIB_POINTS.length) target = CALIB_POINTS[st.idx];
+      if (st.phase === 'validate' && st.idx < VALIDATE_POINTS.length) target = VALIDATE_POINTS[st.idx];
+    },
+    onDone: (m, r) => { report = r; },
+    onReview: (r) => { report = r; },
+  });
+  s.start();
+  for (let i = 0; i < 6000 && !report; i += 1) {
+    now += 16;
+    frameId += 1;
+    if (s.state().phase === 'ready') s.go(now);
+    // 标定阶段摆正（turn=0），验证阶段转头看靶点（turn=0.08）
+    turn = s.state().phase === 'validate' ? 0.08 : 0;
+    s.update(now);
+  }
+  ok(!!report && report.points.length === 5, '放宽门控后验证走完 5 点');
+  // 验证点应采到有效帧（不再因转头整秒丢弃）
+  ok(!!report && report.points.slice(1).some((p) => p.frames > 0),
+    `验证阶段转头仍能采到有效帧（frames=${report ? report.points.map((p) => p.frames).join(',') : '—'}）`);
+  // 每点都带丢弃原因细分
+  ok(!!report && report.points.every((p) => p.dropReasons && typeof p.dropReasons === 'object'),
+    '验证报告每点带丢弃原因细分 dropReasons');
+}
+
 // ---- 9b. 标定前的摄像头弹窗：头稳了 ready 才为 true，且不采样 ----
 {
   let now = 0;
@@ -363,9 +426,9 @@ function bigFace(lm) {
   let last = null;
   const s = createSession({
     getLandmarks: () => {
-      const lm = bigFace(openEyes(simLandmarksFor(0.5, 0.5, 4 / 3, { noise: 0 })));
-      lm[1].x += shiftX; // 平移鼻尖 = 转头
-      return lm;
+      const lm = stdFace(openEyes(simLandmarksFor(0.5, 0.5, 4 / 3, { noise: 0 })));
+      // 整体横移：离开固定标准框（cx 偏出容差），但仍过宽松的 centerOk 门控
+      return lm.map((p) => ({ x: p.x + shiftX, y: p.y }));
     },
     getAspect: () => 4 / 3,
     getFrameId: () => frameId,
@@ -392,6 +455,129 @@ function bigFace(lm) {
   ok(last && last.ready === false && last.reason === '', '转头后 ready 归 false（继续等，不报错）');
   ok(last && last.head && last.head.refBox && refBefore &&
     Math.abs(last.head.refBox.x - refBefore.x) < 1e-6, '标准框不随头移动（基准固定）');
+  // 标准框必须是竖高脸形：物理宽高比 = (w*画面宽)/(h*画面高) = faceAspect
+  const box = last.head.refBox;
+  const physAspect = (box.w * (4 / 3)) / (box.h * 1);
+  ok(Math.abs(physAspect - 0.78) < 1e-6, '标准框是竖高脸形（物理宽高比 0.78，不宽扁）');
+}
+
+// ---- 9c. 标定前必须先把脸调进固定标准框：未对齐不锁基准、不倒计时 ----
+{
+  let now = 0;
+  let frameId = 0;
+  let aligned = false;
+  let last = null;
+  const s = createSession({
+    getLandmarks: () => {
+      // 未对齐时用 bigFace（faceH≈0.32、cy≈0.34，偏离标准框）；对齐后换成 stdFace
+      const base = simLandmarksFor(0.5, 0.5, 4 / 3, { noise: 0 });
+      return aligned ? stdFace(openEyes(base)) : bigFace(openEyes(base));
+    },
+    getAspect: () => 4 / 3,
+    getFrameId: () => frameId,
+    onUpdate: (st) => { last = st; },
+  });
+  s.start();
+  for (let i = 0; i < 30; i += 1) {
+    now += 16;
+    frameId += 1;
+    s.update(now);
+  }
+  ok(last && last.phase === 'ready' && last.ready === false, '没对准标准框时 ready 一直为 false');
+  ok(last && last.head && last.head.stdOk === false, '未对齐时 stdOk=false（徽标显示红）');
+  ok(last && last.note.indexOf('虚线框') >= 0, '未对齐时提示用户把脸移进虚线框');
+  ok(last && last.head && last.head.hasRef === false, '未对齐时不锁基准头位（不会拿第一个头位当标准）');
+  const fixedX = last && last.head && last.head.refBox && last.head.refBox.x;
+
+  aligned = true;
+  for (let i = 0; i < 30; i += 1) {
+    now += 16;
+    frameId += 1;
+    s.update(now);
+  }
+  ok(last && last.head && last.head.stdOk === true, '对齐标准框后 stdOk=true');
+  ok(last && last.head && last.head.hasRef === true, '对齐后才锁定基准头位');
+  ok(last && last.ready === true, '对齐并稳定后 ready=true（允许倒计时）');
+  ok(last && last.head && Math.abs(last.head.refBox.x - fixedX) < 1e-6,
+    '虚线框全程固定，对齐前后位置不变（靶子不随头跑）');
+}
+
+// ---- 9d. 标准框是「范围 + 稳定」：faceH 落在 0.42~0.72 内即可对齐，越界不 ready ----
+{
+  const runFace = (k) => {
+    let now = 0;
+    let frameId = 0;
+    let last = null;
+    const s = createSession({
+      getLandmarks: () => stdFaceAt(openEyes(simLandmarksFor(0.5, 0.5, 4 / 3, { noise: 0 })), k),
+      getAspect: () => 4 / 3,
+      getFrameId: () => frameId,
+      onUpdate: (st) => { last = st; },
+    });
+    s.start();
+    for (let i = 0; i < 30; i += 1) { now += 16; frameId += 1; s.update(now); }
+    return last;
+  };
+  // k=5.0 → faceH≈0.50，比标准 0.56 略远，但仍在范围内 → 应可对齐
+  const farther = runFace(5.0);
+  ok(farther && farther.head && farther.head.stdOk === true && farther.ready === true,
+    'faceH≈0.50（略远）仍在范围内，stdOk=true 且可 ready');
+  // k=6.8 → faceH≈0.68，比标准略近，仍在范围内
+  const nearer = runFace(6.8);
+  ok(nearer && nearer.head && nearer.head.stdOk === true && nearer.ready === true,
+    'faceH≈0.68（略近）仍在范围内，stdOk=true 且可 ready');
+  // k=7.6 → faceH≈0.76，超出上界但 distanceOk 仍 true → 应被范围拦住
+  const tooNear = runFace(7.6);
+  ok(tooNear && tooNear.head && tooNear.head.stdOk === false && tooNear.ready === false,
+    'faceH≈0.76 超出范围上界，stdOk=false 且不可 ready（虽过 distanceOk）');
+  // k=4.0 → faceH≈0.40，超出下界
+  const tooFar = runFace(4.0);
+  ok(tooFar && tooFar.head && tooFar.head.stdOk === false && tooFar.ready === false,
+    'faceH≈0.40 超出范围下界，stdOk=false 且不可 ready');
+}
+
+// ---- 9e. 验证点帧数不足时自动延长采样窗口（有上限），带 windowMs ----
+{
+  let now = 0;
+  let frameId = 0;
+  let tick = 0;
+  let target = CALIB_POINTS[0];
+  let phase = '';
+  let valIdx = 0;
+  let report = null;
+  const s = createSession({
+    getLandmarks: () => {
+      tick += 1;
+      // 标定阶段每帧都给脸（顺利过标定）；验证阶段每 12 帧只给 1 帧 → 1 秒约 5 帧，低于 MIN_FRAMES
+      if (phase === 'validate' && tick % 12 !== 0) return null;
+      return bigFace(openEyes(simLandmarksFor(target.tx, target.ty, 4 / 3, { noise: 0 })));
+    },
+    getAspect: () => 4 / 3,
+    faceGate: false,
+    getFrameId: () => frameId,
+    onUpdate: (st) => {
+      phase = st.phase;
+      valIdx = st.valIdx;
+      if (st.phase === 'calib' && st.idx < CALIB_POINTS.length) target = CALIB_POINTS[st.idx];
+      if (st.phase === 'validate' && st.valIdx < VALIDATE_POINTS.length) target = VALIDATE_POINTS[st.valIdx];
+    },
+    onDone: (m, r) => { report = r; },
+    onReview: (r) => { report = r; },
+  });
+  s.start();
+  for (let i = 0; i < 12000 && !report; i += 1) {
+    now += 16;
+    frameId += 1;
+    if (s.state().phase === 'ready') s.go(now);
+    s.update(now);
+  }
+  ok(!!report && report.points.length === 5, '帧不足场景仍能走完 5 个验证点');
+  ok(!!report && report.points.some((p) => p.windowMs > 1000),
+    `帧不足的验证点窗口被延长（windowMs=${report ? report.points.map((p) => p.windowMs).join(',') : '—'}）`);
+  ok(!!report && report.points.every((p) => p.windowMs <= 2200),
+    '延长不超过上限（1000ms + 1200ms）');
+  ok(!!report && report.points.every((p) => Number.isInteger(p.windowMs) || Number.isFinite(p.windowMs)),
+    '每个验证点都带 windowMs 字段');
 }
 
 // ---- 10. 正确率与误差同源：0.16 = 60 分通过线 ----

@@ -57,6 +57,7 @@
     ovBox: null,         // 整屏覆盖层容器（保证靶点坐标 = PAGE_NORM）
     calDone: null,       // 标定等待方（Promise resolve）
     gaze: null,          // {x,y,conf,ts} 页面归一化
+    userReady: false,    // 对位弹窗里用户点了「开始标定」；倒计时前必须为真
   };
 
   const INFER_MS = 40;                    // ~25fps
@@ -517,6 +518,7 @@
       points,
       label,
       onCancel: () => backHome(),
+      onStart: () => { S.userReady = true; },
     });
     ov.mount();
     S.overlay = ov;
@@ -538,6 +540,7 @@
 
     S.busy = true;
     S.cancelled = false;
+    S.userReady = false;
     hidePanel();
     stopInference();
 
@@ -581,6 +584,10 @@
             );
           }
           if (!S.overlay) return;
+          // 对位弹窗：头位对齐后才点亮「开始标定」按钮；用户已点则锁定禁用，避免重复触发
+          if (typeof S.overlay.setStart === 'function') {
+            S.overlay.setStart(st.phase === 'ready' && want !== 'validate' && !!st.ready && !S.userReady);
+          }
           // 小窗里直接画摄像头画面：虚线标准框 + 实时头框
           S.overlay.setHead(st.head ? { ...st.head, video: S.video } : null);
           S.overlay.update({
@@ -654,6 +661,8 @@
       }
       if (!S.cal || S.cal.phase !== 'ready') return;
       if (!testing && !S.cal.state().ready) return;
+      // 首次标定：头位对齐后还要用户点「开始标定」才倒计时；测试阶段保持自动
+      if (!testing && !S.userReady) return;
       if (S.counting) return;
 
       S.counting = true;
@@ -742,6 +751,10 @@
       '点   有效帧  丢弃  误差    分数',
     ];
     const pad = (v, n) => String(v == null ? '—' : v).padStart(n);
+    const REASON_LABEL = {
+      head: '头位', noFace: '无人脸', blink: '眨眼',
+      stale: '停帧', outlier: '跳变', jitter: '晃动',
+    };
     for (let i = 0; i < report.points.length; i += 1) {
       const p = report.points[i];
       head.push(
@@ -749,6 +762,17 @@
           `${pad(Number.isFinite(p.avg) ? p.avg.toFixed(3) : '—', 5)}  ` +
           `${pad(Number.isFinite(p.score) ? Math.round(p.score) : '—', 3)}`,
       );
+      // 丢弃原因细分：只在有丢弃时显示，方便定位是哪种门控拦掉的
+      const r = p.dropReasons || {};
+      const parts = Object.keys(r)
+        .filter((k) => r[k] > 0)
+        .sort((a, b) => r[b] - r[a])
+        .map((k) => `${REASON_LABEL[k] || k} ${r[k]}`);
+      if (parts.length) head.push(`       └ 丢弃原因：${parts.join(' · ')}`);
+      // 采样窗口被延长过的点：标出实际窗口，便于确认「帧不够自动再等」
+      if (Number.isFinite(p.windowMs) && p.windowMs > 1000) {
+        head.push(`       └ 采样窗口已延长：${(p.windowMs / 1000).toFixed(1)}s`);
+      }
     }
     return head.join('\n');
   }

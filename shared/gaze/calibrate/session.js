@@ -18,6 +18,7 @@
  */
 
 import { headGate, headPose, toHeadRef } from '../head.js';
+import { HEAD_VALIDATE } from '../contract.js';
 import { extractFeatures } from '../core/index.js';
 import { mirrorLandmarks } from '../core/mirror.js';
 import {
@@ -40,6 +41,11 @@ import {
   RIDGE_ALPHA,
   SAMPLE_MS,
   SCORE_SPAN,
+  STD_ALIGN,
+  STD_HEAD,
+  stdBoxOf,
+  VALIDATE_EXTEND_MAX,
+  VALIDATE_EXTEND_MS,
   VALIDATE_POINTS,
   scoreOf,
   toPoints,
@@ -82,10 +88,23 @@ function boxOf(head) {
 }
 
 /**
+ * 当前头位是否对准了固定标准框（画面居中 + 脸高接近 STD_HEAD.faceH）。
+ * 这是标定前的对齐门槛：用户先把脸调进来，才允许锁定基准、开始倒计时。
+ */
+export function alignedToStd(head) {
+  if (!head || !Number.isFinite(head.cx) || !Number.isFinite(head.cy) || !Number.isFinite(head.faceH)) {
+    return false;
+  }
+  return Math.abs(head.cx - STD_HEAD.cx) <= STD_ALIGN.cx &&
+    Math.abs(head.cy - STD_HEAD.cy) <= STD_ALIGN.cy &&
+    head.faceH >= STD_ALIGN.faceHMin && head.faceH <= STD_ALIGN.faceHMax;
+}
+
+/**
  * 头控 HUD 用的实时头位信息：
  * 绝对头位 + 相对基准的位移/角度 + 标准框与当前框，UI 直接照着画。
  */
-function headInfo(head, ref) {
+function headInfo(head, ref, aspect) {
   if (!head) return null;
   const gate = headGate(head, ref);
   const d = gate.delta || {};
@@ -113,15 +132,10 @@ function headInfo(head, ref) {
     dYaw: d.dYaw || 0,
     dPitch: d.dPitch || 0,
     hasRef: !!ref,
+    stdOk: alignedToStd(head),
     box: boxOf(head),
-    refBox: ref
-      ? {
-        x: ref.cx - (ref.faceW || head.faceW) / 2,
-        y: ref.cy - ref.faceH / 2,
-        w: ref.faceW || head.faceW,
-        h: ref.faceH,
-      }
-      : null,
+    // 虚线框永远是固定标准框，不再取第一个头位当靶子（那样框跟着人跑，无从对齐）
+    refBox: stdBoxOf(aspect),
   };
 }
 
@@ -143,8 +157,9 @@ export function createSession(opts = {}) {
   const minFrames = Number(opts.minFrames) || MIN_FRAMES;
   const getLandmarks = opts.getLandmarks || (() => null);
   const getAspect = opts.getAspect || (() => 4 / 3);
-  // 离线合成脸测试可关掉「人脸尺寸/居中」门控；真实运行始终开启
+  // 离线合成脸测试可关掉「人脸尺寸/居中/标准框对齐」门控；真实运行始终开启
   const faceGate = opts.faceGate !== false;
+  const stdGate = opts.stdGate !== false;
 
   const S = {
     phase: PHASE.IDLE,
@@ -172,6 +187,9 @@ export function createSession(opts = {}) {
     valPointsResult: [],
     valStart: 0,
     valDropped: 0,
+    valDropReasons: {},
+    /** 当前验证点已延长的时间（帧数不足时最多累计到 VALIDATE_EXTEND_MAX） */
+    valExtra: 0,
     startedAt: 0,
     /** READY 阶段已消费到的帧序号（去重用） */
     readyFrameId: -1,
@@ -220,7 +238,8 @@ export function createSession(opts = {}) {
     }
     if (S.phase === PHASE.VALIDATE) {
       if (!S.valStart || !S.lastNow) return 0;
-      return Math.min(1, (S.lastNow - S.valStart) / sampleMs);
+      // 窗口可能被延长：进度条跟着「当前总窗口」走，延长后不会瞬间冲到 100%
+      return Math.min(1, (S.lastNow - S.valStart) / (sampleMs + S.valExtra));
     }
     return 0;
   }
@@ -268,6 +287,8 @@ export function createSession(opts = {}) {
     S.valPointsResult = [];
     S.valStart = 0;
     S.valDropped = 0;
+    S.valDropReasons = {};
+    S.valExtra = 0;
     S.startedAt = Date.now();
     S.readyStreak = 0;
     S.ready = false;
@@ -292,6 +313,7 @@ export function createSession(opts = {}) {
     S.ready = false;
     if (S.phase === PHASE.VALIDATE) {
       S.valStart = S.lastNow;
+      S.valExtra = 0;
       S.note = '测试 5 个点 · 每个 1 秒';
     } else {
       S.pointStart = S.lastNow;
@@ -317,8 +339,10 @@ export function createSession(opts = {}) {
     S.gapUntil = 0;
     S.reason = '';
     S.ready = false;
-    if (S.phase === PHASE.VALIDATE) S.valStart = S.lastNow;
-    else if (S.phase === PHASE.READY) {
+    if (S.phase === PHASE.VALIDATE) {
+      S.valStart = S.lastNow;
+      S.valExtra = 0;
+    } else if (S.phase === PHASE.READY) {
       S.readyStreak = 0;
       S.readyFrameId = -1;
     }
@@ -342,11 +366,12 @@ export function createSession(opts = {}) {
   }
 
   /**
-   * READY（摄像头弹窗）阶段：只判断「头稳不稳」，不采样。
+   * READY（摄像头弹窗）阶段：只判断「头对准标准框且稳不稳」，不采样。
    *
-   * 口径与 gaze-heatmap 融合前版本一致：绝对头位门控（head.ok）+ 相对基准的
-   * headGate().strictOk。连续 READY_REF_STREAK 帧合格后记录基准头位（虚线标准框
-   * 从此固定），再连续到 READY_STABLE_STREAK 帧才允许倒计时开始。
+   * 固定标准框（STD_HEAD：居中 + 脸高约 0.48）是**靶子**，用户要主动把脸调进去。
+   * 只有对齐 + 姿态合格 + 不眨眼，才累计稳定帧；连续 READY_REF_STREAK 帧后锁定
+   * 基准头位（此时取的是「对齐后」的头位，不是第一个坐姿），再连续到
+   * READY_STABLE_STREAK 帧才允许倒计时。虚线框全程画固定 STD_HEAD，不随头移动。
    */
   function updateReady() {
     // 同一帧被 rAF 和兜底定时器重复调用时不能重复累计「稳定帧数」
@@ -359,20 +384,24 @@ export function createSession(opts = {}) {
     const head = lm ? headPose(lm, { aspect: getAspect() }) : null;
     const usable = head && (!faceGate || (head.distanceOk && head.centerOk)) ? head : null;
     const blink = !!(head && Number.isFinite(head.ear) && head.ear < EAR_MIN);
-    const ok = !!(usable && usable.ok && !blink);
+    const stdOk = !stdGate || alignedToStd(usable);
+    const ok = !!(usable && usable.ok && !blink && stdOk);
 
     S.readyStreak = ok ? S.readyStreak + 1 : 0;
     if (ok && !S.ref && S.readyStreak >= READY_REF_STREAK) S.ref = toHeadRef(usable);
 
     const gate = usable ? headGate(usable, S.ref) : null;
-    S.head = usable ? headInfo(usable, S.ref) : null;
+    S.head = usable ? headInfo(usable, S.ref, getAspect()) : null;
     S.ready = !!(ok && S.ref && gate && gate.strictOk && S.readyStreak >= READY_STABLE_STREAK);
-    if (!ok) {
+    if (!stdOk) {
       S.reason = '';
-      S.note = '请把脸放进虚线框，保持不动';
+      S.note = '请把脸移进虚线框：居中，调整远近让脸框贴住虚线框';
+    } else if (!ok) {
+      S.reason = '';
+      S.note = '脸已进框 · 请正对屏幕、睁眼保持不动';
     } else if (S.ready) {
       S.reason = '';
-      S.note = '头位已稳定 · 马上开始';
+      S.note = '头位已对齐标准框 · 马上开始';
     } else {
       S.reason = '';
       S.note = '保持住，正在确认头位';
@@ -407,8 +436,10 @@ export function createSession(opts = {}) {
       S.gapUntil = 0;
       S.prevFrameAt = now;
       S.lastFrameId = -1;
-      if (S.phase === PHASE.VALIDATE) S.valStart = now;
-      else if (!S.pointStart) S.pointStart = now;
+      if (S.phase === PHASE.VALIDATE) {
+        S.valStart = now;
+        S.valExtra = 0;
+      } else if (!S.pointStart) S.pointStart = now;
     }
 
     // 摄像头是否还在出新画面：必须在帧去重之前判断。
@@ -417,7 +448,10 @@ export function createSession(opts = {}) {
     if (Number.isFinite(age) && age > FRAME_STALE_MS) {
       S.reason = 'stale';
       S.note = RESET_REASON.stale;
-      if (S.phase === PHASE.VALIDATE) S.valDropped += 1;
+      if (S.phase === PHASE.VALIDATE) {
+        S.valDropped += 1;
+        S.valDropReasons.stale = (S.valDropReasons.stale || 0) + 1;
+      }
       emit();
       return state();
     }
@@ -440,11 +474,20 @@ export function createSession(opts = {}) {
     const raw = getLandmarks();
     const lm = raw ? mirrorLandmarks(raw) : null;
     const head = lm ? headPose(lm, { aspect: getAspect() }) : null;
-    S.head = headInfo(head, S.ref);
+    S.head = headInfo(head, S.ref, getAspect());
 
-    // 测试：时间到就结算，不管这一刻稳不稳
-    if (S.phase === PHASE.VALIDATE && S.valStart && now - S.valStart >= sampleMs) {
-      finishValidatePoint();
+    // 测试：时间到就结算；但有效帧太少时先延长窗口（有上限），避免「0 帧 0 分」的假象
+    if (S.phase === PHASE.VALIDATE && S.valStart && now - S.valStart >= sampleMs + S.valExtra) {
+      // 正常 1 秒约 60 帧；不足 MIN_FRAMES 帧说明门控拦掉太多，值得再等
+      const enough = S.frames.length >= MIN_FRAMES;
+      if (enough || S.valExtra >= VALIDATE_EXTEND_MAX) {
+        finishValidatePoint();
+        emit();
+        return state();
+      }
+      // 帧不够：再给一段时间，进度条按新窗口计算，最多累计到上限
+      S.valExtra = Math.min(VALIDATE_EXTEND_MAX, S.valExtra + VALIDATE_EXTEND_MS);
+      S.note = `有效帧偏少 · 采样延长至 ${((sampleMs + S.valExtra) / 1000).toFixed(1)}s`;
       emit();
       return state();
     }
@@ -453,7 +496,10 @@ export function createSession(opts = {}) {
     const drop = (reason) => {
       S.reason = reason;
       S.note = RESET_REASON[reason] || '';
-      if (S.phase === PHASE.VALIDATE) S.valDropped += 1;
+      if (S.phase === PHASE.VALIDATE) {
+        S.valDropped += 1;
+        S.valDropReasons[reason] = (S.valDropReasons[reason] || 0) + 1;
+      }
       emit();
       return state();
     };
@@ -467,9 +513,11 @@ export function createSession(opts = {}) {
 
     // 基准头位：全程固定一个（READY 弹窗里已定；这里兜底），标准框不漂
     if (!S.ref) S.ref = toHeadRef(head);
-    S.head = headInfo(head, S.ref);
+    S.head = headInfo(head, S.ref, getAspect());
 
-    const gate = headGate(head, S.ref);
+    // 验证阶段放宽「相对基准」偏移：看边缘靶点头会自然转动，不该整秒判 head 丢弃
+    const headLimits = S.phase === PHASE.VALIDATE ? HEAD_VALIDATE : undefined;
+    const gate = headGate(head, S.ref, headLimits);
     if (!gate.strictOk) return drop('head');
 
     const aspect = getAspect();
@@ -480,6 +528,7 @@ export function createSession(opts = {}) {
     const mean = S.frames.length >= 4 ? averageFeatures(S.frames) : null;
     if (mean && Math.hypot(f.dLx - mean.dLx, f.dLy - mean.dLy) > FRAME_OUTLIER_MAX) {
       S.note = '视线跳变 · 该帧已丢弃';
+      if (S.phase === PHASE.VALIDATE) S.valDropReasons.outlier = (S.valDropReasons.outlier || 0) + 1;
       emit();
       return state();
     }
@@ -487,6 +536,7 @@ export function createSession(opts = {}) {
       const jitter = Math.hypot(stdOf(S.frames, 'dLx'), stdOf(S.frames, 'dLy'));
       if (jitter > GAZE_JITTER_MAX) {
         S.note = '视线晃动 · 该帧已丢弃';
+        if (S.phase === PHASE.VALIDATE) S.valDropReasons.jitter = (S.valDropReasons.jitter || 0) + 1;
         emit();
         return state();
       }
@@ -589,6 +639,8 @@ export function createSession(opts = {}) {
     S.pointStart = 0;
     S.valStart = 0;
     S.valDropped = 0;
+    S.valDropReasons = {};
+    S.valExtra = 0;
     S.note = '标定完成，准备开始测试';
     S.reason = '';
     emit();
@@ -615,11 +667,15 @@ export function createSession(opts = {}) {
       score: scoreOf(avg),
       frames: n,
       dropped: S.valDropped,
+      dropReasons: { ...S.valDropReasons },
+      windowMs: sampleMs + S.valExtra,
     });
     if (Number.isFinite(avg)) S.valErrors.push(avg);
     S.frames = [];
     S.acc = 0;
     S.valDropped = 0;
+    S.valDropReasons = {};
+    S.valExtra = 0;
     S.valIdx += 1;
     S.valStart = 0;
     S.reason = '';

@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GazeFollower 精度评分 · 融合版同款口径</title>
+<style>
+/* 独立评分页：不改动 index-3-hand-gazefollower.html / gazefollower_server.py。
+ * 通过本地代理服务复用 8789 上的 GazeFollower 推理，评分口径与融合版完全一致：
+ * 9 点标定（她引擎原生点阵） + 5 点验证（四角+中心） + (1 - err/0.4)*100，60 分通过。 */
+:root{
+  --bg:#0a0e17; --panel:#111827; --line:#1f2b45;
+  --accent:#4cc9f0; --ok:#4ade80; --danger:#ff4d6d; --warn:#ffd166;
+  --text:#e6edf7; --muted:#7d8da8;
+}
+*,*::before,*::after{ box-sizing:border-box; }
+html,body{ margin:0; min-height:100%; }
+body{
+  background:var(--bg); color:var(--text);
+  font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  padding:24px;
+}
+.wrap{ max-width:1180px; margin:0 auto; }
+header h1{ margin:0 0 4px; font-size:22px; letter-spacing:.02em; }
+header p{ margin:0 0 18px; color:var(--muted); font-size:13px; }
+.badge{ display:inline-block; padding:2px 10px; border:1px solid var(--accent);
+  border-radius:999px; color:var(--accent); font-size:12px; margin-left:10px; vertical-align:2px; }
+.layout{ display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:18px; }
+@media (max-width:900px){ .layout{ grid-template-columns:1fr; } }
+.panel{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; }
+.stage{ position:relative; width:100%; aspect-ratio:16/9; background:#05080f;
+  border-radius:12px; overflow:hidden; }
+#view{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+.hint{ position:absolute; left:14px; bottom:12px; padding:6px 12px; border-radius:8px;
+  background:rgba(6,10,18,.72); color:var(--text); font-size:13px; pointer-events:none; }
+/* 标定圆点（点击采集） */
+.dot{ position:absolute; width:42px; height:42px; margin:-21px 0 0 -21px; border-radius:50%;
+  border:2px solid #fff; background:rgba(76,201,240,.22); color:#fff; font:600 13px/1 sans-serif;
+  cursor:pointer; transition:transform .15s ease,background .15s ease; }
+.dot:hover{ transform:scale(1.12); }
+.dot.done{ background:rgba(74,222,128,.32); border-color:var(--ok); cursor:default; }
+.dot:disabled:not(.done){ border-color:var(--warn); background:rgba(255,209,102,.2); }
+/* 验证靶点 */
+.target{ position:absolute; width:34px; height:34px; margin:-17px 0 0 -17px; border-radius:50%;
+  border:2px solid var(--warn); background:rgba(255,209,102,.28); pointer-events:none;
+  box-shadow:0 0 0 0 rgba(255,209,102,.5); transition:box-shadow .25s ease; }
+.target.pulse{ box-shadow:0 0 0 14px rgba(255,209,102,0); }
+.pred{ position:absolute; width:12px; height:12px; margin:-6px 0 0 -6px; border-radius:50%;
+  background:var(--accent); box-shadow:0 0 10px var(--accent); pointer-events:none; }
+.side h2{ font-size:15px; margin:0 0 10px; }
+.row{ display:flex; justify-content:space-between; gap:10px; padding:5px 0;
+  border-bottom:1px solid rgba(255,255,255,.05); font-size:13px; }
+.row .k{ color:var(--muted); }
+.row .v{ text-align:right; font-variant-numeric:tabular-nums; }
+.btns{ display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+button{ font:inherit; cursor:pointer; border-radius:8px; padding:8px 14px;
+  border:1px solid var(--line); background:#172033; color:var(--text); transition:.15s ease; }
+button:hover:not(:disabled){ border-color:var(--accent); }
+button:disabled{ opacity:.45; cursor:not-allowed; }
+button.primary{ background:var(--accent); color:#04121b; border-color:var(--accent); font-weight:600; }
+.err{ color:var(--danger); font-size:12px; margin-top:10px; min-height:18px; }
+/* 结果卡片 */
+.result{ margin-top:18px; display:none; }
+.result.show{ display:block; }
+.scoreline{ display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
+.score{ font:700 52px/1 ui-rounded,"SF Pro Rounded",system-ui,sans-serif; color:var(--accent); }
+.score.pass{ color:var(--ok); }
+.score.fail{ color:var(--danger); }
+.verdict{ font-size:15px; }
+table{ width:100%; border-collapse:collapse; margin-top:14px; font-size:13px; }
+th,td{ text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); font-variant-numeric:tabular-nums; }
+th{ color:var(--muted); font-weight:500; }
+details{ margin-top:14px; }
+summary{ cursor:pointer; color:var(--accent); font-size:13px; }
+.diag{ margin:10px 0 0; padding:12px; background:#080d17; border:1px solid var(--line);
+  border-radius:8px; font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;
+  color:#b9c6da; white-space:pre-wrap; word-break:break-all; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>GazeFollower 精度评分 <span class="badge">融合版同款口径</span></h1>
+    <p>9 点标定用她引擎的原生点阵；5 点验证与评分公式与工作台 8125 完全一致，分数可直接对比。此页独立运行，不改动她的任何文件。</p>
+  </header>
+
+  <div class="layout">
+    <section class="panel">
+      <div class="stage" id="stage">
+        <canvas id="view" width="960" height="540"></canvas>
+        <div class="hint" id="hint">点击「启动摄像头」开始</div>
+      </div>
+      <div class="err" id="err"></div>
+    </section>
+
+    <aside class="panel side">
+      <h2>操作流程</h2>
+      <div class="row"><span class="k">引擎</span><span class="v">GazeFollower（8789 代理）</span></div>
+      <div class="row"><span class="k">阶段</span><span class="v" id="phase">未启动</span></div>
+      <div class="row"><span class="k">摄像头</span><span class="v" id="cam">—</span></div>
+      <div class="row"><span class="k">抓帧</span><span class="v" id="frame">—</span></div>
+      <div class="row"><span class="k">验证进度</span><span class="v" id="progress">0 / 5</span></div>
+      <div class="row"><span class="k">通过线</span><span class="v">60 分（平均误差 ≤ 0.16）</span></div>
+      <div class="btns">
+        <button class="primary" id="btnStart">启动摄像头</button>
+        <button id="btnCalib" disabled>9 点标定</button>
+        <button id="btnValidate" disabled>开始 5 点验证</button>
+        <button id="btnAgain" disabled>重新测试</button>
+      </div>
+      <div class="err" id="srv"></div>
+    </aside>
+  </div>
+
+  <section class="panel result" id="result">
+    <h2 style="margin:0 0 8px;font-size:16px;">验证结果</h2>
+    <div class="scoreline">
+      <span class="score" id="score">—</span>
+      <span class="verdict" id="verdict"></span>
+    </div>
+    <table>
+      <thead><tr><th>靶点</th><th>预测点</th><th>平均误差</th><th>有效帧</th><th>分数</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <details>
+      <summary>诊断信息（对比时请核对两侧条件一致）</summary>
+      <pre class="diag" id="diag"></pre>
+    </details>
+    <div class="btns" style="margin-top:16px;"><button id="btnClose">知道了</button></div>
+  </section>
+</div>
+
+<video id="camEl" playsinline muted style="display:none;"></video>
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const view = $('view'), ctx = view.getContext('2d');
+  const cam = $('camEl'), stage = $('stage');
+  const hint = $('hint'), errEl = $('err'), srvEl = $('srv');
+
+  // —— 与融合版完全一致的评分口径 ——
+  const SCORE_SPAN = 0.4;
+  const PASS_SCORE = 60;
+  const SAMPLE_MS = 1000;
+  const GAP_MS = 1000;
+  const VALIDATE_POINTS = [
+    { tx:0.06, ty:0.06 }, { tx:0.94, ty:0.06 }, { tx:0.5, ty:0.5 },
+    { tx:0.06, ty:0.94 }, { tx:0.94, ty:0.94 }
+  ];
+  // —— 她引擎原生的 9 点标定阵 ——
+  const CALIB_POINTS = [
+    { x:0.10, y:0.16 }, { x:0.50, y:0.16 }, { x:0.90, y:0.16 },
+    { x:0.10, y:0.50 }, { x:0.50, y:0.50 }, { x:0.90, y:0.50 },
+    { x:0.10, y:0.84 }, { x:0.50, y:0.84 }, { x:0.90, y:0.84 }
+  ];
+
+  const S = {
+    stream:null, running:false, weights:null,
+    phase:'idle', calib:null, validation:null,
+    lastVideoTime:-1, diagCamera:'—', diagFrame:'—'
+  };
+
+  const scoreOf = (e) => Number.isFinite(e) ? Math.max(0, Math.min(1, 1 - e / SCORE_SPAN)) * 100 : 0;
+  const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+  const setPhase = (p) => { S.phase = p; $('phase').textContent = p; };
+  const say = (text) => { hint.textContent = text; };
+  const fail = (text) => { errEl.textContent = text || ''; };
+
+  async function requestGaze(path, options) {
+    const res = await fetch('/gaze/' + path, { signal: AbortSignal.timeout(6000), ...options });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    return data;
+  }
+
+  async function checkService() {
+    try {
+      const res = await fetch('/health', { signal: AbortSignal.timeout(3000) });
+      const data = await res.json();
+      const up = data.upstream;
+      srvEl.textContent = (res.ok && up && up.model === 'GazeFollower')
+        ? '后端就绪：' + up.model : '后端未连接：请先在 8789 启动她的服务';
+      srvEl.style.color = (res.ok && up && up.model === 'GazeFollower') ? 'var(--ok)' : 'var(--danger)';
+    } catch (e) {
+      srvEl.textContent = '评分服务未启动'; srvEl.style.color = 'var(--danger)';
+    }
+  }
+
+  // —— 摄像头 ——
+  async function startCamera() {
+    fail('');
+    if (!navigator.mediaDevices?.getUserMedia) { fail('当前环境不支持摄像头（需 localhost 或 https）'); return; }
+    try {
+      // 与她画板一致的约束，保证后端拿到同分布的特征
+      S.stream = await navigator.mediaDevices.getUserMedia({
+        audio:false, video:{ width:{ideal:960}, height:{ideal:720}, facingMode:'user' }
+      });
+      cam.srcObject = S.stream;
+      await cam.play();
+      S.diagCamera = cam.videoWidth + '×' + cam.videoHeight +
+        '（aspect ' + (cam.videoWidth / cam.videoHeight).toFixed(3) + '）';
+      $('cam').textContent = S.diagCamera;
+      S.running = true;
+      setPhase('运行中 · 待标定');
+      say('点击「9 点标定」，依次注视并点击每个圆点');
+      $('btnStart').disabled = true; $('btnCalib').disabled = false;
+      gazeLoop();
+    } catch (e) {
+      fail('摄像头启动失败：' + e.message);
+    }
+  }
+
+  function makeFrame() {
+    // 与她页面一致：最长边缩到 960，JPEG 0.88
+    const c = document.createElement('canvas');
+    const scale = Math.min(1, 960 / Math.max(cam.videoWidth, cam.videoHeight));
+    c.width = Math.round(cam.videoWidth * scale);
+    c.height = Math.round(cam.videoHeight * scale);
+    c.getContext('2d').drawImage(cam, 0, 0, c.width, c.height);
+    S.diagFrame = c.width + '×' + c.height;
+    $('frame').textContent = S.diagFrame;
+    return new Promise((resolve) => c.toBlob(resolve, 'image/jpeg', 0.88));
+  }
+
+  async function gazeLoop() {
+    if (!S.running) return;
+    const t0 = performance.now();
+    try {
+      if (cam.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || cam.currentTime === S.lastVideoTime) return;
+      S.lastVideoTime = cam.currentTime;
+      // 背景预览：镜像摄像头
+      ctx.save();
+      ctx.translate(view.width, 0); ctx.scale(-1, 1);
+      ctx.globalAlpha = 0.55;
+      ctx.drawImage(cam, 0, 0, view.width, view.height);
+      ctx.restore();
+      ctx.fillStyle = 'rgba(5,8,15,.35)'; ctx.fillRect(0,0,view.width,view.height);
+
+      const frame = await makeFrame();
+      if (!frame) return;
+      const { features } = await requestGaze('features', { method:'POST', body:frame });
+      if (!features) { onGaze(null); return; }
+
+      if (S.calib?.capture && t0 >= S.calib.capture.after) S.calib.capture.frames.push(features);
+
+      if (S.weights && S.validation?.active) {
+        const pred = predict(features, S.weights);
+        onGaze(pred);
+        const v = S.validation;
+        const err = Math.hypot(pred.x - v.point.tx, pred.y - v.point.ty);
+        if (Number.isFinite(err)) { v.errors.push(err); if (v.preds.length < 40) v.preds.push(pred); }
+      } else onGaze(null);
+    } catch (e) {
+      fail('GazeFollower 请求失败：' + e.message);
+      onGaze(null);
+    } finally {
+      setTimeout(gazeLoop, Math.max(0, 34 - (performance.now() - t0)));
+    }
+  }
+
+  function predict(features, weights) {
+    let x = weights[0][0], y = weights[0][1];
+    for (let i = 0; i < features.length; i++) {
+      x += features[i] * weights[i + 1][0];
+      y += features[i] * weights[i + 1][1];
+    }
+    return { x, y };
+  }
+
+  let predDot = null;
+  function onGaze(pred) {
+    if (predDot) { predDot.remove(); predDot = null; }
+    if (!pred || S.phase === '标定中') return;
+    predDot = document.createElement('div');
+    predDot.className = 'pred';
+    predDot.style.left = (clamp(pred.x,0,1) * 100) + '%';
+    predDot.style.top = (clamp(pred.y,0,1) * 100) + '%';
+    stage.appendChild(predDot);
+  }
+
+  function clearDots() { stage.querySelectorAll('.dot,.target,.pred').forEach((n) => n.remove()); predDot = null; }
+
+  // —— 9 点标定（流程与她画板一致：点击圆点 → 采集 1 秒） ——
+  function openCalib() {
+    if (!S.running || S.calib) return;
+    fail('');
+    clearDots();
+    S.weights = null;
+    S.calib = { width:view.width, height:view.height, features:[], targets:[], capture:null };
+    setPhase('标定中');
+    say('依次注视并点击 9 个圆点（每点采集约 1 秒）');
+    CALIB_POINTS.forEach((p, i) => {
+      const dot = document.createElement('button');
+      dot.type = 'button'; dot.className = 'dot';
+      dot.textContent = String(i + 1);
+      dot.style.left = (p.x * 100) + '%'; dot.style.top = (p.y * 100) + '%';
+      dot.addEventListener('click', () => captureCalib(dot, p, i + 1));
+      stage.appendChild(dot);
+    });
+    $('btnCalib').disabled = true;
+  }
+
+  function medianFeatures(frames) {
+    const mid = Math.floor(frames.length / 2);
+    return frames[0].map((_, i) => {
+      const v = frames.map((f) => f[i]).sort((a,b) => a - b);
+      return (v[mid] + v[Math.floor((frames.length - 1) / 2)]) / 2;
+    });
+  }
+
+  async function captureCalib(dot, point, n) {
+    const round = S.calib;
+    if (!round || round.capture || dot.disabled) return;
+    round.capture = { after:performance.now() + 180, frames:[] };
+    dot.disabled = true;
+    say('采集第 ' + n + ' 点 · 请继续注视圆点');
+    try {
+      await new Promise((r) => setTimeout(r, 1050));
+      if (S.calib !== round) return;
+      const frames = round.capture.frames;
+      if (frames.length < 4) throw new Error('有效帧不足（' + frames.length + '），请让脸完整入镜后重试该点');
+      const features = medianFeatures(frames);
+      if (round.features.length + 1 === CALIB_POINTS.length) {
+        say('正在拟合 GazeFollower 标定…');
+        const { weights } = await requestGaze('calibrate', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            features:[...round.features, features],
+            targets:[...round.targets, [point.x, point.y]]
+          })
+        });
+        if (S.calib !== round) return;
+        S.weights = weights;
+      }
+      round.features.push(features);
+      round.targets.push([point.x, point.y]);
+      dot.classList.add('done');
+      say(n === CALIB_POINTS.length ? '9 点标定完成 · 可以开始 5 点验证' : '已标定 ' + round.features.length + ' / 9');
+      if (n === CALIB_POINTS.length) {
+        S.calib = null;
+        setPhase('标定完成 · 待验证');
+        $('btnValidate').disabled = false;
+      }
+    } catch (e) {
+      fail('第 ' + n + ' 点采集失败：' + e.message);
+      dot.disabled = false;
+    } finally {
+      if (round) round.capture = null;
+    }
+  }
+
+  // —— 5 点验证（与融合版一致：每点 1 秒窗口，间隔 1 秒） ——
+  function startValidate() {
+    if (!S.weights || S.validation) return;
+    fail('');
+    $('result').classList.remove('show');
+    $('btnValidate').disabled = true;
+    clearDots();
+    setPhase('验证中');
+    S.validation = { index:0, active:false, results:[], point:null, errors:[], preds:[] };
+    nextPoint();
+  }
+
+  function nextPoint() {
+    const v = S.validation;
+    if (!v) return;
+    if (v.index >= VALIDATE_POINTS.length) { finishValidate(); return; }
+    clearDots();
+    v.point = VALIDATE_POINTS[v.index];
+    v.errors = []; v.preds = []; v.active = false;
+    const t = document.createElement('div');
+    t.className = 'target pulse';
+    t.style.left = (v.point.tx * 100) + '%';
+    t.style.top = (v.point.ty * 100) + '%';
+    stage.appendChild(t);
+    requestAnimationFrame(() => t.classList.remove('pulse'));
+    say('注视圆点：第 ' + (v.index + 1) + ' / 5 点 · 1 秒后开始采样');
+    $('progress').textContent = v.index + ' / 5';
+    setTimeout(() => {
+      if (S.validation !== v) return;
+      v.active = true;
+      say('采样中 · 请持续注视第 ' + (v.index + 1) + ' 点');
+      setTimeout(() => {
+        if (S.validation !== v) return;
+        v.active = false;
+        const n = v.errors.length;
+        const avg = n ? v.errors.reduce((a,b) => a+b, 0) / n : SCORE_SPAN;
+        v.results.push({
+          tx:v.point.tx, ty:v.point.ty, avg, score:scoreOf(avg),
+          frames:n, preds:v.preds.slice()
+        });
+        v.index += 1;
+        setTimeout(nextPoint, GAP_MS);
+      }, SAMPLE_MS);
+    }, GAP_MS);
+  }
+
+  function finishValidate() {
+    const v = S.validation;
+    const score = v.results.length
+      ? v.results.reduce((a,b) => a + b.score, 0) / v.results.length : 0;
+    const ok = score >= PASS_SCORE;
+    setPhase('验证完成');
+    say('验证完成 · 分数已生成');
+    $('progress').textContent = '5 / 5';
+
+    const sc = $('score');
+    sc.textContent = score.toFixed(1);
+    sc.className = 'score ' + (ok ? 'pass' : 'fail');
+    $('verdict').textContent = (ok ? '通过' : '未通过') + ' · 通过线 ' + PASS_SCORE + ' 分';
+    $('verdict').style.color = ok ? 'var(--ok)' : 'var(--danger)';
+
+    const tbody = $('rows');
+    tbody.innerHTML = '';
+    v.results.forEach((r, i) => {
+      const tr = document.createElement('tr');
+      const pred = r.preds.length
+        ? r.preds.reduce((a,b) => ({ x:a.x + b.x/r.preds.length, y:a.y + b.y/r.preds.length }), {x:0,y:0})
+        : null;
+      tr.innerHTML =
+        '<td>' + r.tx.toFixed(2) + ', ' + r.ty.toFixed(2) + '</td>' +
+        '<td>' + (pred ? pred.x.toFixed(3) + ', ' + pred.y.toFixed(3) : '无有效帧') + '</td>' +
+        '<td>' + r.avg.toFixed(4) + '</td>' +
+        '<td>' + r.frames + '</td>' +
+        '<td>' + r.score.toFixed(1) + '</td>';
+      tbody.appendChild(tr);
+    });
+
+    const avgAll = v.results.length
+      ? v.results.reduce((a,b) => a + b.avg, 0) / v.results.length : NaN;
+    $('diag').textContent = [
+      '引擎           : GazeFollower（gazefollower 1.1.0，经本地代理复用 8789 后端）',
+      '评分口径       : 5 点 = (0.06,0.06) (0.94,0.06) (0.5,0.5) (0.06,0.94) (0.94,0.94)',
+      '              单点 = clamp(1 - 平均误差/0.4, 0, 1) × 100；总分 = 5 点平均',
+      '              每点采样 1000ms、点间隔 1000ms；0 有效帧按满误差 0.4 记 0 分',
+      '摄像头         : ' + S.diagCamera,
+      '送推理帧       : ' + S.diagFrame + '（最长边 960，JPEG 0.88，与她画板一致）',
+      '浏览器视口     : ' + innerWidth + '×' + innerHeight + '（评分用归一化坐标，与像素尺寸无关）',
+      '特征维度       : 258（GazeFollower 原生）',
+      '平均误差       : ' + (Number.isFinite(avgAll) ? avgAll.toFixed(4) : '—') + '（通过线 0.16）',
+      '总分           : ' + score.toFixed(1) + ' / 100（通过线 ' + PASS_SCORE + '）',
+      '时间           : ' + new Date().toLocaleString('zh-CN'),
+      '注意           : 与 8125 分数对比时，请确认同一摄像头、同一距离、同一光照。'
+    ].join('\n');
+
+    $('result').classList.add('show');
+    $('btnAgain').disabled = false;
+    S.validation = null;
+  }
+
+  function resetAll() {
+    clearDots();
+    S.weights = null; S.calib = null; S.validation = null;
+    $('result').classList.remove('show');
+    $('progress').textContent = '0 / 5';
+    $('btnCalib').disabled = false; $('btnValidate').disabled = true;
+    $('btnAgain').disabled = true;
+    setPhase('运行中 · 待标定');
+    say('点击「9 点标定」重新开始');
+  }
+
+  $('btnStart').addEventListener('click', startCamera);
+  $('btnCalib').addEventListener('click', openCalib);
+  $('btnValidate').addEventListener('click', startValidate);
+  $('btnAgain').addEventListener('click', resetAll);
+  $('btnClose').addEventListener('click', () => $('result').classList.remove('show'));
+  checkService();
+})();
+</script>
+</body>
+</html>

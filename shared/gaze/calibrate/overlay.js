@@ -29,6 +29,7 @@ export function createOverlay(options = {}) {
     container,
     points = DEFAULT_POINTS,
     onCancel,
+    onStart = null,
     onPointClick = null,
     label = '眼动标定',
     zIndex = 2147483000,
@@ -234,14 +235,25 @@ export function createOverlay(options = {}) {
   camBox.appendChild(tiltWrap);
   root.appendChild(camBox);
 
-  /** 还没有基准头位时的通用标准框（脸高约 0.48，居中）。 */
-  const STD_BOX = { x: 0.30, y: 0.26, w: 0.40, h: 0.48 };
+  /** 固定标准框（靶子）：与 session 的 STD_HEAD 一致，宽度按取流宽高比换算成竖高脸形。 */
+  const STD_HEAD = { cx: 0.5, cy: 0.5, faceH: 0.56, faceAspect: 0.78 };
+  function stdBox(aspect) {
+    const a = Number.isFinite(aspect) && aspect > 0 ? aspect : 16 / 9;
+    const w = (STD_HEAD.faceH * STD_HEAD.faceAspect) / a;
+    return {
+      x: STD_HEAD.cx - w / 2,
+      y: STD_HEAD.cy - STD_HEAD.faceH / 2,
+      w,
+      h: STD_HEAD.faceH,
+    };
+  }
 
   /** 只有两态：合格=绿，不合格=红（不留黄/黑/灰的中间态）。 */
   function toneOf(info) {
     if (!info) return 'bad';
     if (info.blink) return 'bad';
     if (!info.distanceOk || !info.centerOk) return 'bad';
+    if (info.stdOk === false) return 'bad';
     if (!info.strictOk) return 'bad';
     if (!info.poseOk) return 'bad';
     if (Math.abs(Number(info.roll)) > 12) return 'bad';
@@ -293,8 +305,8 @@ export function createOverlay(options = {}) {
       ctx.fillRect(0, 0, w, h);
     }
 
-    // 虚线标准框 = 标定开始时的头部位置（还没建立基准时用通用框）
-    const rb = (info && info.refBox) || STD_BOX;
+    // 虚线标准框 = 固定靶子（状态机已给就直接用；未给时按当前画布比例兜底）
+    const rb = (info && info.refBox) || stdBox(w / h);
     ctx.save();
     ctx.setLineDash([5, 4]);
     ctx.lineWidth = 1.4;
@@ -388,6 +400,8 @@ export function createOverlay(options = {}) {
       text = '头歪了 · 请回正';
     } else if (!data.poseOk) {
       text = '请正对屏幕（别仰头/低头）';
+    } else if (data.stdOk === false) {
+      text = '把脸移进虚线框 · 居中并调好远近';
     } else if (!data.strictOk) {
       text = '头位偏了 · 请对准虚线框';
     } else {
@@ -402,7 +416,7 @@ export function createOverlay(options = {}) {
   /* ---------------- 标定前的摄像头弹窗（居中放大，头稳了才倒计时） ---------------- */
 
   const prepTtl = doc.createElement('div');
-  prepTtl.textContent = '对准摄像头 · 把脸放进虚线框';
+  prepTtl.textContent = '把脸调进固定虚线框 · 居中且贴住框大小';
   prepTtl.style.cssText = [
     'position:absolute',
     'left:50%',
@@ -431,6 +445,8 @@ export function createOverlay(options = {}) {
     const want = !!on;
     if (want === prepOn) return;
     prepOn = want;
+    // 开始按钮只对标定前的对位弹窗可见；切到小窗/测试时隐藏
+    startBtn.style.display = want ? 'block' : 'none';
     if (want) {
       camBox.style.left = '50%';
       camBox.style.top = '50%';
@@ -486,6 +502,46 @@ export function createOverlay(options = {}) {
     if (onCancel) onCancel();
   });
   root.appendChild(close);
+
+  // 开始按钮：仅标定前的对位弹窗显示；头位对齐后才可点，避免用户没摆好就倒计时。
+  const startBtn = doc.createElement('button');
+  startBtn.type = 'button';
+  startBtn.textContent = '对准好了 · 开始标定';
+  startBtn.style.cssText = [
+    'position:absolute',
+    'left:50%',
+    'top:calc(50% + 152px)',
+    'transform:translateX(-50%)',
+    'height:40px',
+    'padding:0 26px',
+    'border-radius:999px',
+    'border:1px solid var(--gaze-cal-accent)',
+    'background:var(--gaze-cal-accent)',
+    'color:var(--gaze-cal-bg)',
+    'font:600 14px/1 system-ui,sans-serif',
+    'letter-spacing:.03em',
+    'cursor:pointer',
+    'pointer-events:auto',
+    'white-space:nowrap',
+    'display:none',
+    'opacity:.45',
+    'transition:opacity .16s ease',
+  ].join(';');
+  startBtn.disabled = true;
+  startBtn.addEventListener('click', () => {
+    if (startBtn.disabled) return;
+    if (onStart) onStart();
+  });
+  root.appendChild(startBtn);
+
+  /** prep 弹窗里开启/关闭「开始标定」按钮，并按头位对齐状态切换可否点击。 */
+  function setStart(enabled) {
+    if (!mounted || destroyed) return;
+    const on = !!enabled;
+    startBtn.disabled = !on;
+    startBtn.style.opacity = on ? '1' : '.45';
+    startBtn.textContent = on ? '对准好了 · 开始标定' : '请先把脸移进虚线框';
+  }
 
   const dots = pts.map((p, i) => {
     const dot = doc.createElement('div');
@@ -712,6 +768,8 @@ export function createOverlay(options = {}) {
       }
       counting = true;
       cdResolvers.add(resolve);
+      // 开始倒计时 = 用户已确认，收起「开始标定」按钮
+      if (prepOn) startBtn.style.display = 'none';
       // 摄像头弹窗居中时，倒计时放在弹窗下方，不压住人脸预览
       cd.style.top = prepOn ? 'calc(50% + 212px)' : '50%';
       cdHint.style.top = prepOn ? 'calc(50% + 328px)' : 'calc(50% + 116px)';
@@ -991,6 +1049,7 @@ export function createOverlay(options = {}) {
     setEyeStatus,
     setHead,
     setPrep,
+    setStart,
     destroy,
   };
 }
