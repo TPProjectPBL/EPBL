@@ -58,7 +58,7 @@ export function drawFrame(args) {
     for (const lm of faces) {
       hasFace = true;
       if (faceTesselation && faceTesselation.length) {
-        drawConnectors(ctx, lm, faceTesselation, 'rgba(80,170,255,0.55)', 1, w, h);
+        drawConnectors(ctx, lm, faceTesselation, 'rgba(169,219,123,0.55)', 1, w, h);
       }
       if (lm.length >= 478) {
         hasIris = true;

@@ -63,7 +63,7 @@ export class BrushEngine {
     this.width = options.width || 6;
     this.alpha = options.alpha ?? 1;
     this.glow = options.glow ?? true;
-    this.background = options.background || '#0b1020';
+    this.background = options.background || '#0b100b';
 
     this.strokes = []; // 已完成的笔画（用于撤销 / 重绘）
     this.live = null; // 当前笔画

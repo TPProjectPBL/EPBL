@@ -172,16 +172,16 @@
                     <svg viewBox="0 0 320 78" fill="none" preserveAspectRatio="none">
                       <defs>
                         <linearGradient id="lwArea" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stop-color="#3b82f6" stop-opacity=".38"/>
-                          <stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/>
+                          <stop offset="0%" stop-color="#4d8046" stop-opacity=".38"/>
+                          <stop offset="100%" stop-color="#4d8046" stop-opacity="0"/>
                         </linearGradient>
                       </defs>
-                      <g stroke="#2a3242" stroke-width=".6">
+                      <g stroke="#2a3230" stroke-width=".6">
                         <path d="M0 20h320M0 40h320M0 60h320"/>
                       </g>
                       <path d="M0 62 32 54 64 57 96 40 128 44 160 30 192 34 224 20 256 24 288 12 320 16V78H0Z" fill="url(#lwArea)"/>
-                      <path d="M0 62 32 54 64 57 96 40 128 44 160 30 192 34 224 20 256 24 288 12 320 16" stroke="#60a5fa" stroke-width="1.6"/>
-                      <path d="M0 70 32 66 64 68 96 58 128 62 160 52 192 56 224 48 256 50 288 42 320 46" stroke="#64748b" stroke-width="1" stroke-dasharray="3 3"/>
+                      <path d="M0 62 32 54 64 57 96 40 128 44 160 30 192 34 224 20 256 24 288 12 320 16" stroke="#a9db7b" stroke-width="1.6"/>
+                      <path d="M0 70 32 66 64 68 96 58 128 62 160 52 192 56 224 48 256 50 288 42 320 46" stroke="#779549" stroke-width="1" stroke-dasharray="3 3"/>
                     </svg>
                   </div>
                   <div class="l-wfoot"><span>近 12 周推进趋势</span><span>更新于 2 分钟前</span></div>
@@ -282,23 +282,23 @@
               <div class="d-card" data-aoi="趋势图表">
                 <div class="d-card-h">
                   <h3>活跃与留存趋势</h3>
-                  <div class="d-leg"><span><i style="background:#6366f1"></i>活跃</span><span><i style="background:#22d3ee"></i>留存</span></div>
+                  <div class="d-leg"><span><i style="background:#4d8046"></i>活跃</span><span><i style="background:#a9db7b"></i>留存</span></div>
                 </div>
                 <div class="d-chart">
                   <svg viewBox="0 0 560 220" fill="none" preserveAspectRatio="none">
                     <defs>
                       <linearGradient id="dArea" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stop-color="#6366f1" stop-opacity=".22"/>
-                        <stop offset="100%" stop-color="#6366f1" stop-opacity="0"/>
+                        <stop offset="0%" stop-color="#4d8046" stop-opacity=".22"/>
+                        <stop offset="100%" stop-color="#4d8046" stop-opacity="0"/>
                       </linearGradient>
                     </defs>
                     <g stroke="#e5e9f2" stroke-width="1">
                       <path d="M0 40h560M0 80h560M0 120h560M0 160h560M0 200h560"/>
                     </g>
                     <path d="M0 156 56 146 112 150 168 120 224 128 280 98 336 104 392 72 448 80 504 54 560 60V220H0Z" fill="url(#dArea)"/>
-                    <path d="M0 156 56 146 112 150 168 120 224 128 280 98 336 104 392 72 448 80 504 54 560 60" stroke="#6366f1" stroke-width="2.2"/>
-                    <path d="M0 182 56 176 112 178 168 160 224 166 280 146 336 150 392 132 448 138 504 120 560 126" stroke="#22d3ee" stroke-width="1.8" stroke-dasharray="5 4"/>
-                    <g fill="#6366f1">
+                    <path d="M0 156 56 146 112 150 168 120 224 128 280 98 336 104 392 72 448 80 504 54 560 60" stroke="#4d8046" stroke-width="2.2"/>
+                    <path d="M0 182 56 176 112 178 168 160 224 166 280 146 336 150 392 132 448 138 504 120 560 126" stroke="#a9db7b" stroke-width="1.8" stroke-dasharray="5 4"/>
+                    <g fill="#4d8046">
                       <circle cx="168" cy="120" r="3"/><circle cx="392" cy="72" r="3"/><circle cx="504" cy="54" r="3"/>
                     </g>
                     <g font-family="monospace" font-size="8" fill="#9aa1b1">
@@ -319,17 +319,17 @@
                   <div class="d-donut">
                     <svg viewBox="0 0 42 42">
                       <circle cx="21" cy="21" r="15.9" stroke="#eef1f7" stroke-width="6" fill="none"/>
-                      <circle cx="21" cy="21" r="15.9" stroke="#6366f1" stroke-width="6" fill="none" stroke-dasharray="42 58" stroke-dashoffset="0"/>
-                      <circle cx="21" cy="21" r="15.9" stroke="#22d3ee" stroke-width="6" fill="none" stroke-dasharray="27 73" stroke-dashoffset="-42"/>
-                      <circle cx="21" cy="21" r="15.9" stroke="#a78bfa" stroke-width="6" fill="none" stroke-dasharray="17 83" stroke-dashoffset="-69"/>
+                      <circle cx="21" cy="21" r="15.9" stroke="#4d8046" stroke-width="6" fill="none" stroke-dasharray="42 58" stroke-dashoffset="0"/>
+                      <circle cx="21" cy="21" r="15.9" stroke="#a9db7b" stroke-width="6" fill="none" stroke-dasharray="27 73" stroke-dashoffset="-42"/>
+                      <circle cx="21" cy="21" r="15.9" stroke="#68955d" stroke-width="6" fill="none" stroke-dasharray="17 83" stroke-dashoffset="-69"/>
                       <circle cx="21" cy="21" r="15.9" stroke="#fbbf24" stroke-width="6" fill="none" stroke-dasharray="14 86" stroke-dashoffset="-86"/>
                     </svg>
                     <div class="d-donut-c"><div><b>48.2k</b><span>总访问</span></div></div>
                   </div>
                   <div class="d-donut-legend">
-                    <div><i style="background:#6366f1"></i>自然搜索 42%</div>
-                    <div><i style="background:#22d3ee"></i>直接访问 27%</div>
-                    <div><i style="background:#a78bfa"></i>社交推荐 17%</div>
+                    <div><i style="background:#4d8046"></i>自然搜索 42%</div>
+                    <div><i style="background:#a9db7b"></i>直接访问 27%</div>
+                    <div><i style="background:#68955d"></i>社交推荐 17%</div>
                     <div><i style="background:#fbbf24"></i>付费投放 14%</div>
                   </div>
                 </div>
@@ -683,7 +683,34 @@
    * 直接复用 WebGazer 自己的 facemesh 关键点，不额外跑模型。
    * 返回归一化的人脸框、头部姿态和眨眼状态，供小窗和采样过滤使用。
    */
+  /* GAZE-LANDMARKS：宿主托管时用共享 landmarks 计算头位，口径与旧 WebGazer 版一致 */
+  function readHeadFromLandmarks(lm) {
+    if (!hostedHead || !lm || lm.length < 468) return null;
+    const h = hostedHead.headPose(lm);
+    if (!h) return null;
+    const d = hostedHead.headDelta(S.headRef, h);
+    const refDist = Math.hypot(d.dx, d.dy * 1.1, d.dh * 0.8);
+    const l = lm[33];
+    const r = lm[263];
+    return {
+      faceW: h.faceW, faceH: h.faceH, cx: h.cx, cy: h.cy,
+      roll: h.roll, yaw: h.yaw, pitch: h.pitch,
+      dRoll: d.dRoll, dYaw: d.dYaw, dPitch: d.dPitch,
+      eyes: l && r ? { lx: l.x, ly: l.y, rx: r.x, ry: r.y } : null,
+      earL: h.earL, earR: h.earR, ear: h.ear,
+      blink: h.blink,
+      distanceOk: h.distanceOk, centerOk: h.centerOk, poseOk: h.poseOk,
+      refOk: d.refOk, refDist,
+      ok: h.ok,
+      box: { x: h.cx - h.faceW / 2, y: h.cy - h.faceH / 2, w: h.faceW, h: h.faceH },
+    };
+  }
+
   function readHead() {
+    if (GAZE_SHARED && latestLm && latestLm.length >= 468) {
+      const h = readHeadFromLandmarks(latestLm);
+      if (h) return h;
+    }
     const wg = window.webgazer;
     if (!wg || typeof wg.getTracker !== 'function') return null;
     let tracker = null;
@@ -1121,7 +1148,7 @@
         trackCtx.stroke();
       }
       if (i % 10 === 0) {
-        trackCtx.fillStyle = 'rgba(15, 23, 42, .45)';
+        trackCtx.fillStyle = 'rgba(15, 23, 15, .45)';
         trackCtx.beginPath();
         trackCtx.arc(p.x, p.y, 1.35, 0, Math.PI * 2);
         trackCtx.fill();
@@ -1199,7 +1226,11 @@
       el.pillFps.classList.remove('on');
     }
     el.btnRecord.disabled = !S.tracking;
-    el.btnCalib.disabled = engine !== 'webgazer';
+    // 宿主托管时标定由工作台执行，按钮保持可用
+    const inHostFrame = (() => {
+      try { return !!(window.parent && window.parent !== window); } catch (e) { return false; }
+    })();
+    el.btnCalib.disabled = engine !== 'webgazer' && !inHostFrame;
   }
 
   function startTracking() {
@@ -1215,6 +1246,10 @@
       el.btnStart.textContent = '重新标定';
       toast('已恢复摄像头追踪，先确认头部位置。', 'ok');
       openGuide();
+      return;
+    }
+    if (GAZE_SHARED) {
+      toast('共享模式：视线来自工作台，本页不再打开自己的摄像头', 'ok');
       return;
     }
     if (!window.webgazer) {
@@ -1893,6 +1928,15 @@
 
   function openCalibration() {
     if (S.engine !== 'webgazer') {
+      if (GAZE_SHARED) {
+        // 宿主托管：标定统一在工作台做，三页共用同一个模型
+        S.calibrating = false;
+        try {
+          window.parent.postMessage({ type: 'epbl:gaze-calib-request' }, location.origin);
+        } catch (e) {}
+        toast('已请求工作台开始 9 点标定，请跟随整屏靶点；完成后回到本页点「校验」。', 'ok');
+        return;
+      }
       toast('标定只对真实摄像头追踪可用；演示模式无需标定。', 'err');
       return;
     }
@@ -2107,7 +2151,8 @@
   }
 
   function startValidation() {
-    if (S.engine !== 'webgazer' || !S.tracking) {
+    const hosted = GAZE_SHARED && !!latestLm;
+    if ((S.engine !== 'webgazer' || !S.tracking) && !hosted) {
       toast('校验需要先启动摄像头追踪。', 'err');
       return;
     }
@@ -2185,6 +2230,18 @@
       } else if (head && (!head.ok || (S.headRef && !head.refOk))) {
         headOff++;
       }
+      // 模拟模式用：把当前靶点告诉宿主，让合成视线跟着靶点走（真实摄像头下无副作用）
+      try {
+        if (window.parent && window.parent !== window && window.frameElement) {
+          const fr = window.frameElement.getBoundingClientRect();
+          const pw = window.parent.innerWidth || 1;
+          const ph = window.parent.innerHeight || 1;
+          window.parent.postMessage(
+            { type: 'epbl:gaze-sim-look', x: (fr.left + pt.sx) / pw, y: (fr.top + pt.sy) / ph },
+            location.origin,
+          );
+        }
+      } catch (e) {}
       if (head && S.headRef && !head.refOk) {
         setCalibStatus('校验点 ' + (index + 1) + '/5 · 头位偏了，请回正');
       } else if (head && head.ok) {
@@ -2478,16 +2535,16 @@
     c.height = H;
     const ctx = c.getContext('2d');
 
-    ctx.fillStyle = '#0a0c11';
+    ctx.fillStyle = '#080d09';
     ctx.fillRect(0, 0, W, H);
     const grad = ctx.createLinearGradient(0, 0, W, H);
-    grad.addColorStop(0, 'rgba(116,240,206,.10)');
-    grad.addColorStop(0.45, 'rgba(116,240,206,0)');
-    grad.addColorStop(1, 'rgba(255,98,133,.06)');
+    grad.addColorStop(0, 'rgba(169,219,123,.10)');
+    grad.addColorStop(0.45, 'rgba(169,219,123,0)');
+    grad.addColorStop(1, 'rgba(104,149,93,.08)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
 
-    ctx.fillStyle = '#74f0ce';
+    ctx.fillStyle = '#a9db7b';
     ctx.fillRect(48, 42, 26, 2);
 
     ctx.fillStyle = '#e9ecf4';
@@ -2579,7 +2636,7 @@
       ctx.textAlign = 'left';
       ctx.fillStyle = 'rgba(255,255,255,.07)';
       ctx.fillRect(rx, ry + 6, 408, 3);
-      ctx.fillStyle = name === '背景' ? 'rgba(255,255,255,.2)' : '#74f0ce';
+      ctx.fillStyle = name === '背景' ? 'rgba(255,255,255,.2)' : '#a9db7b';
       ctx.fillRect(rx, ry + 6, 408 * Math.max(0.01, count / n), 3);
       ry += 25;
     });
@@ -2715,7 +2772,14 @@
      ============================================================ */
   el.btnStart.addEventListener('click', startTracking);
   el.btnRecord.addEventListener('click', toggleRecording);
-  el.btnCalib.addEventListener('click', openGuide);
+  el.btnCalib.addEventListener('click', () => {
+    // 宿主托管：直接请求工作台标定，跳过本页的就位检查（预览依赖 WebGazer 摄像头）
+    if (S.engine !== 'webgazer' && GAZE_SHARED) {
+      openCalibration();
+      return;
+    }
+    openGuide();
+  });
   el.miniClose.addEventListener('click', () => {
     S.miniHidden = true;
     el.miniCam.classList.remove('show');
@@ -2826,6 +2890,263 @@
   resetQuality('未标定');
   renderContent('article', { silent: true });
   setView('heat');
+  /* GAZE-AUDIT-PROBE：只读；window.__GAZE_AUDIT_OFF 可整体关闭 */
+  if (!window.__GAZE_AUDIT_OFF && window.__makeGazeAudit) {
+    window.__gazeAudit = window.__makeGazeAudit({
+      page: 'gaze-heatmap',
+      engine: () => S.engine,
+      model: () => null,
+      points: () => (calibPoints.length || 9),
+      coord: 'screen-px',
+      lastGaze: () => S.gaze,
+      quality: () => S.validationResults
+    });
+  }
+
+  /* FRAME-SHARED：可选共享坐标系适配器（默认关闭，?frame=shared 开启） */
+  const FRAME_SHARED = (() => {
+    try {
+      return new URLSearchParams(location.search).get('frame') === 'shared';
+    } catch (e) {
+      return false;
+    }
+  })();
+
+  /**
+   * 外部 gaze → 本页 client 坐标。
+   * 输入默认按 PAGE_NORM（整窗 0..1）解释；也接受 {space:'client'} 与 {space:'container', el}。
+   * 模块缺失 / 跨域 / 数值非法时返回 null，调用方保持原逻辑。
+   */
+  function sharedGazeToClient(g) {
+    if (!FRAME_SHARED || !g) return null;
+    const F = window.__epblGazeFrame;
+    if (!F || typeof F.clientFromPage !== 'function') return null;
+    try {
+      let p = g;
+      if (g.space === 'client') p = F.pageFromClient(g.x, g.y);
+      else if (g.space === 'container' && g.el) p = F.pageFromContainer({ x: g.x, y: g.y }, g.el);
+      if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
+      return F.clientFromPage(p);
+    } catch (e) {
+      // CROSS_ORIGIN 等：交给宿主的 postMessage 兜底
+      return null;
+    }
+  }
+
+  /**
+   * 外部注入入口：true = 已消费；false = 未启用 / 不适用（调用方走原逻辑）。
+   * 只在 onGaze 之前做坐标换算，不触碰任何误差统计口径。
+   */
+  function ingestSharedGaze(g, t) {
+    const c = sharedGazeToClient(g);
+    if (!c) return false;
+    onGaze(c.x, c.y, Number.isFinite(t) ? t : now(), 'external');
+    return true;
+  }
+
+  window.__epblGazeSink = ingestSharedGaze;
+  window.__epblGazeFrameEnabled = FRAME_SHARED;
+
+  /* GAZE-BUS：workbench 下发的模型更新 / 视线点（接收端，默认不影响 WebGazer 路径） */
+  const GAZE_SHARED = (() => {
+    try {
+      const q = new URLSearchParams(location.search);
+      if (q.get('gaze') === 'legacy') return false;
+      if (q.get('gaze') === 'shared') return true;
+      // 工作台 iframe 内默认共享：摄像头与推理归宿主
+      return !!(window.parent && window.parent !== window);
+    } catch (e) {
+      return false;
+    }
+  })();
+
+  async function applySharedModel(msg) {
+    try {
+      const PB = await import('../shared/gaze/page-bridge.js');
+      const model = await PB.primeSharedModel();
+      const sig = (model && (model.sig || model.createdAt)) || (msg && msg.sig) || '—';
+      window.__epblSharedModel = { ok: !!model, sig, at: Date.now() };
+      if (hostedSource && model) {
+        try {
+          hostedSource.setModel(model);
+        } catch (e) {}
+      }
+      if (model && model.headRef) {
+        const hr = model.headRef;
+        const fw = Number.isFinite(hr.faceW) ? hr.faceW : hr.faceH * 0.75;
+        S.headRef = {
+          cx: hr.cx, cy: hr.cy, faceW: fw, faceH: hr.faceH,
+          roll: hr.roll, yaw: hr.yaw, pitch: hr.pitch,
+          box: { x: hr.cx - fw / 2, y: hr.cy - hr.faceH / 2, w: fw, h: hr.faceH },
+        };
+      }
+      if (model) {
+        // 宿主完成统一标定后，本页立刻变成「可校验」
+        el.qualityTag.className = 'tag';
+        el.qualityTag.textContent = '待校验';
+        el.calibScore.textContent = '--';
+        el.calibGrade.textContent = '共享模型已就绪';
+        el.calibSummary.textContent = '宿主完成 9 点标定与 5 点验证，点「校验准确度」测 5 个留出点';
+        el.calibAvgErr.textContent = '--';
+        el.calibMaxErr.textContent = '--';
+        el.calibPointList.innerHTML = '<p class="quality-card-empty">点击「校验准确度」测量落点误差。</p>';
+        el.calibQualityHint.textContent = '校验会测量 5 个留出点的预测落点与目标点的真实差异。';
+        if (el.btnValidate) el.btnValidate.disabled = false;
+      }
+      toast(model ? '视线模型已更新 · ' + sig : '视线模型不可用：请回工作台重新标定', model ? 'ok' : 'bad');
+    } catch (e) {}
+  }
+
+  /* GAZE-LANDMARKS：宿主管摄像头与推理，本页只订阅 landmarks 自己算点 */
+  let hostedSource = null;
+  let hostedRaw = null;
+  let latestLm = null;
+  let hostedHead = null;
+  async function ensureHostedSource() {
+    if (hostedSource) return hostedSource;
+    const [{ AbsoluteGazeSource }, idbMod, headMod] = await Promise.all([
+      import('../shared/gaze/core/index.js'),
+      import('../shared/gaze/idb.js'),
+      import('../shared/gaze/head.js'),
+    ]);
+    hostedHead = headMod;
+    const src = new AbsoluteGazeSource();
+    const model = await idbMod.readPredictor();
+    if (model) {
+      src.setModel(model);
+      hostedRaw = model;
+    }
+    hostedSource = src;
+    return src;
+  }
+
+  function pageToClientPoint(p) {
+    const F = window.__epblGazeFrame;
+    if (F && typeof F.clientFromPage === 'function') {
+      try {
+        return F.clientFromPage({ x: p.x, y: p.y });
+      } catch (e) {
+        /* 跨域回退 */
+      }
+    }
+    return { x: p.x * window.innerWidth, y: p.y * window.innerHeight };
+  }
+
+  /* 尺寸变化 → 两点校正。热力图**不采集点击**：它在做测量，点击位置不代表注视位置，
+     收进来只会污染共享样本池。只接受 9 点标定与两点校正。 */
+  let learning = null;
+  let twoPt = null;
+  async function ensureGazeLearning() {
+    if (learning) return learning;
+    const { createGazeLearning } = await import('../shared/gaze/attach.js');
+    learning = createGazeLearning({
+      collect: false,
+      getModel: () => hostedRaw,
+      getAspect: () => 4 / 3,
+      storage: (() => {
+        try {
+          return localStorage;
+        } catch {
+          return null;
+        }
+      })(),
+      onRefine: () => startTwoPoint(),
+    });
+    learning.installGuard(document.body);
+    return learning;
+  }
+
+  async function startTwoPoint() {
+    if (twoPt && twoPt.running) return twoPt;
+    if (!hostedRaw) {
+      toast('还没有可用模型，先做 9 点标定', 'warn');
+      return null;
+    }
+    const { createTwoPoint } = await import('../shared/gaze/calibrate/two-point.js');
+    twoPt = createTwoPoint({
+      container: document.body,
+      model: hostedRaw,
+      getLandmarks: () => latestLm,
+      getAspect: () => 4 / 3,
+      storage: (() => {
+        try {
+          return localStorage;
+        } catch {
+          return null;
+        }
+      })(),
+      onDone: (r) => {
+        if (!r.ok) {
+          toast(r.reason === 'out-of-range' ? '变化太大，请重新标定' : '两点校正未完成', 'bad');
+          return;
+        }
+        hostedRaw = r.raw;
+        if (hostedSource) {
+          try {
+            hostedSource.setModel(r.model);
+          } catch (e) {}
+        }
+        const e = r.after && r.after.avgErr;
+        toast(`两点校正完成${isFinite(e) ? `（平均 ${(e * 100).toFixed(1)}%）` : ''}`, 'ok');
+      },
+    });
+    twoPt.start();
+    return twoPt;
+  }
+
+  let lmOff = null;
+  window.addEventListener('pagehide', () => {
+    if (lmOff) {
+      lmOff();
+      lmOff = null;
+    }
+  });
+
+  function initGazeBus(tries) {
+    const bus = window.__epblBus;
+    if (!bus) {
+      if ((tries || 0) < 40) setTimeout(() => initGazeBus((tries || 0) + 1), 80);
+      return;
+    }
+    bus.hello();
+    bus.onModel((msg) => applySharedModel(msg));
+    // 宿主 landmarks → 本地模型 → 热力图（不开自己的摄像头）
+    lmOff = bus.onLandmarks(async (f) => {
+      if (!GAZE_SHARED) return;
+      if (!f || !f.landmarks || !f.landmarks.length) return;
+      latestLm = f.landmarks;
+      ensureGazeLearning();
+      try {
+        const src = await ensureHostedSource();
+        const pt = src.getPoint({ multiFaceLandmarks: [f.landmarks] });
+        if (!pt) return;
+        const c = pageToClientPoint(pt);
+        onGaze(c.x, c.y, performance.now(), 'external');
+      } catch (e) {
+        /* 模型/坐标异常：不影响 WebGazer 原有路径 */
+      }
+    });
+
+    bus.onFrame((msg) => {
+      if (!GAZE_SHARED) return;
+      const p = msg && msg.point;
+      if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return;
+      const F = window.__epblGazeFrame;
+      let c = null;
+      if (F && typeof F.clientFromPage === 'function') {
+        try {
+          c = F.clientFromPage({ x: p.x, y: p.y });
+        } catch (e) {
+          c = null;
+        }
+      }
+      if (!c) c = { x: p.x * window.innerWidth, y: p.y * window.innerHeight };
+      onGaze(c.x, c.y, performance.now(), 'external');
+    });
+    window.__epblGazeBusReady = true;
+  }
+  initGazeBus(0);
+
   updateStats(true);
   requestAnimationFrame(loop);
 })();

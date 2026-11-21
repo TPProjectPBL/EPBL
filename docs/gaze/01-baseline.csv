@@ -1,0 +1,8 @@
+page,engine,points,avg_err,max_err,unit,viewport,dpr,notes
+controller-demo,webgazer-2.1.2,9,,,screen-px,639x804,2,独立测试页，不在工作台导航；页面无误差显示
+control-frontend,webgazer-2.1.2,0,,,page-norm,pending,pending,非工作台模块；无标定 UI
+dual-test,webgazer-2.1.2,13,pending,pending,screen-px,pending,pending,13 点；S.gaze.errs 为像素误差
+gaze-heatmap,webgazer-2.1.2,9,234,311,stage-px,150x804,2,5 点校验 61 帧；视口 150px 宽属设备模拟 18.3% 舞台宽；建议拉宽重测
+draw,webgazer-2.1.2,9,,,page-norm,639x804,2,penX/penY 已含 1-x 镜像；页面无误差显示
+air-runner,mediapipe-face-mesh-478,9,2.93,5.23,%,pending,pending,grade=good；corrX=0.999；72 帧；头动项被弃用(纯眼球)；左下最差 5.2%
+workbench,none,0,,,page-norm,pending,pending,宿主页；导航仅 4 模块+下载控制小窗

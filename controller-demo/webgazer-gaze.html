@@ -8,8 +8,8 @@
 <script src="vendor/webgazer/webgazer.js"></script>
 <style>
   :root {
-    --bg: #ffffff; --ink: #1d1d1f; --muted: #6e6e73; --line: #e8e8ed;
-    --btn: #1d1d1f; --btn-hover: #3a3a3c; --blue: #0071e3; --soft: #f5f5f7;
+    --bg: #ffffff; --ink: #1d1d1f; --muted: #5f6b59; --line: #e2e8dc;
+    --btn: #1d1d1f; --btn-hover: #3a3a3c; --blue: #4d8046; --soft: #f2f5ed;
     --radius: 12px;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -25,7 +25,7 @@
     border-bottom: 1px solid var(--line); padding: 14px 28px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
   }
   header .brand { display: flex; align-items: center; gap: 12px; }
-  header .logo { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg,#0f1728,#2f4aa8); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 15px; }
+  header .logo { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg,#0c140d,#4d8046); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 15px; }
   header h1 { font-size: 17px; margin: 0; letter-spacing: .2px; }
   header .sub { font-size: 12px; color: var(--muted); }
   .spacer { flex: 1; }
@@ -52,12 +52,12 @@
   .key:hover { background: var(--btn-hover); }
   .key:active { transform: scale(.96); }
   .key .glyph { display: block; font-size: 20px; margin-bottom: 6px; }
-  .key.hovered { background: #515154; box-shadow: 0 0 0 3px rgba(0,113,227,.35); }
+  .key.hovered { background: #515154; box-shadow: 0 0 0 3px rgba(77,128,70,.35); }
   .key.triggered { background: var(--blue); }
 
   .calib-panel { display: flex; flex-direction: column; gap: 14px; }
   .big-btn { background: var(--blue); color: #fff; border: none; border-radius: var(--radius); padding: 16px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background .18s ease, transform .12s ease; }
-  .big-btn:hover { background: #1a5fc0; }
+  .big-btn:hover { background: #3f6b3a; }
   .big-btn:active { transform: scale(.98); }
   .big-btn.ghost { background: var(--soft); color: var(--ink); border: 1px solid var(--line); }
   .big-btn.ghost:hover { background: #eaeaee; }
@@ -69,7 +69,7 @@
   .gaze-cursor.live { display: block; }
 
   /* 标定覆盖层 */
-  .overlay { position: fixed; inset: 0; z-index: 100; background: rgba(15,23,40,.96); display: none; flex-direction: column; align-items: center; justify-content: center; color: #fff; }
+  .overlay { position: fixed; inset: 0; z-index: 100; background: rgba(15,23,15,.96); display: none; flex-direction: column; align-items: center; justify-content: center; color: #fff; }
   .overlay.show { display: flex; }
   .overlay h2 { font-size: 20px; margin: 0 0 6px; }
   .overlay .sub { font-size: 13px; opacity: .8; margin: 0 0 20px; }

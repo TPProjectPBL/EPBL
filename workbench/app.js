@@ -65,6 +65,32 @@ function bindShell() {
     const mod = currentModule();
     if (mod) window.open(mod.path, '_blank', 'noopener');
   });
+  byId('backBtn').addEventListener('click', () => {
+    location.hash = '#/home';
+  });
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const v = document.body.dataset.view;
+    if (v === 'nav' || v === 'calibrate' || v === 'module' || v === 'releases') {
+      location.hash = '#/';
+    }
+  });
+  // 宿主标定完成 → 自动进导航页；失败则退回首页说明原因
+  window.addEventListener('epbl:gaze-calibrated', (ev) => {
+    const ok = !!(ev.detail && ev.detail.ok);
+    if (ok) {
+      // 本次页面会话已标定：后续在同一会话内切换空间不再强制重标；
+      // 刷新页面会话结束 → 标记清空 → 下次进入重新强制 9 点标定。
+      try {
+        sessionStorage.setItem('epbl.gaze.calibrated', '1');
+      } catch (_) {}
+    }
+    if (document.body.dataset.view !== 'calibrate') return;
+    setTimeout(() => {
+      if (document.body.dataset.view !== 'calibrate') return;
+      location.hash = ok ? '#/home' : '#/';
+    }, 1500);
+  });
 }
 
 function applyTheme(theme) {
@@ -163,23 +189,44 @@ function markActive(id) {
 /* ---------------- 路由 ---------------- */
 function route() {
   const hash = decodeURIComponent(location.hash.replace(/^#\/?/, '')).trim();
+
+  // 标定 overlay 挂在 body 上，换路由不会自动收：离开标定屏只暂停、不清已完成的点，
+  // 这样右上角「回到首页」之后还能从原进度继续。
+  if (hash !== 'calibrate' && window.__epblGazeHost) {
+    try {
+      if (window.__epblGazeHost.pause) window.__epblGazeHost.pause();
+    } catch (_) {}
+  }
+
+  if (hash === '') return showLanding();
+  if (hash === 'calibrate') return showCalibrate();
+
+  // 协议：每次进入页面强制 9 点标定，无例外。
+  // 未完成本次会话标定时，任何主界面 / 空间入口都先回标定屏。
+  const calibrated = (() => {
+    try {
+      return sessionStorage.getItem('epbl.gaze.calibrated') === '1';
+    } catch (_) {
+      return false;
+    }
+  })();
+  if (!calibrated && hash !== 'home') {
+    history.replaceState(null, '', '#/calibrate');
+    return showCalibrate();
+  }
+
+  if (hash === 'home') return showHome();
   if (hash === 'releases') {
     showReleases();
     return;
   }
 
-  const last = localStorage.getItem(LS.last);
-  const mod =
-    state.modules.find((m) => m.id === hash) ||
-    state.modules.find((m) => m.id === last) ||
-    state.modules.find((m) => m.id === state.registry.default) ||
-    state.modules[0];
-
+  const mod = state.modules.find((m) => m.id === hash);
   if (!mod) {
-    showEmpty('没有可用模块', '请检查 modules.json 的 modules 数组。');
+    // 未知路由不猜模块：回首页，避免地址栏乱写就进了某个项目
+    showLanding();
     return;
   }
-  if (hash !== mod.id) history.replaceState(null, '', '#/' + mod.id);
   activate(mod);
 }
 
@@ -199,6 +246,7 @@ function teardownFrame() {
 function activate(mod, { force = false } = {}) {
   if (!force && state.active === mod.id && byId('stage').querySelector('iframe.frame')) return;
 
+  setView('module');
   teardownFrame();
   byId('stage').replaceChildren();
   state.active = mod.id;
@@ -298,8 +346,400 @@ function showEmpty(title, detail) {
   stage.appendChild(wrap);
 }
 
+
+/* ---------------- 三段屏：首页 / 标定 / 空间导航 ---------------- */
+
+const DWELL_MS = 1500;      // 视线在卡片上停满这么久就进入（圆环走满一圈）
+const DWELL_DECAY = 1.8;    // 视线移开后进度回落倍率
+
+const screens = { gazeOff: null, view: 'landing' };
+
+/** 切换整页视图：landing | calibrate | nav | module */
+function setView(view) {
+  document.body.dataset.view = view;
+  screens.view = view;
+  if (screens.gazeOff) {
+    screens.gazeOff();
+    screens.gazeOff = null;
+  }
+  if (screens.statusOff) {
+    screens.statusOff();
+    screens.statusOff = null;
+  }
+  if (screens.stageOff) {
+    screens.stageOff();
+    screens.stageOff = null;
+  }
+  if (screens.calibVideo) {
+    screens.calibVideo.classList.remove('calib-video');
+    screens.calibVideo = null;
+  }
+}
+
+function newScreen(className) {
+  teardownFrame();
+  const stage = byId('stage');
+  stage.replaceChildren();
+  byId('moduleBar').hidden = true;
+  const el = document.createElement('div');
+  el.className = 'screen ' + className;
+  stage.appendChild(el);
+  return el;
+}
+
+/* ---------- 首页 ---------- */
+function showLanding() {
+  setView('landing');
+  state.active = null;
+  markActive(null);
+  byId('crumb').textContent = '首页';
+  if (location.hash !== '#/' && location.hash !== '') history.replaceState(null, '', '#/');
+
+  const wrap = newScreen('landing');
+  wrap.innerHTML = [
+    '<div class="hero-glow" aria-hidden="true"></div>',
+    '<div class="hero">',
+    '  <span class="hero-badge">视线 · 手势 · 隔空操作</span>',
+    '  <h1>隔空控制器</h1>',
+    '  <p class="hero-sub">进入前先做 9 点标定：每点 1 秒，完成后 5 点验证。</p>',
+    '  <button class="cta" id="ctaStart">开始 9 点标定</button>',
+    '  <p class="hero-note">只在本机读取摄像头 · 不上传任何画面</p>',
+    '</div>',
+    '<div class="hero-foot">127.0.0.1:8125 · workbench</div>',
+  ].join('\n');
+
+  const cta = wrap.querySelector('#ctaStart');
+  cta.addEventListener('click', () => { location.hash = '#/calibrate'; });
+  byId('crumb').textContent = '首页';
+}
+
+/* ---------- 标定 ---------- */
+async function showCalibrate() {
+  setView('calibrate');
+  state.active = null;
+  markActive(null);
+  byId('crumb').textContent = '标定';
+  if (location.hash !== '#/calibrate') history.replaceState(null, '', '#/calibrate');
+
+  const wrap = newScreen('calibrate');
+  wrap.innerHTML = [
+    '<div class="calib-head">',
+    '  <h2>开始 9 点视线标定</h2>',
+    '  <p>9 个标定点 + 5 个测试点，每个点 1 秒；点与点之间停 1 秒。开始前有 3-2-1 倒计时。</p>',
+    '</div>',
+    '<div class="calib-hint" id="calibHint"><span class="spinner"></span> 正在准备摄像头…</div>',
+    '<button class="btn ghost calib-back" id="calibBack">回到首页</button>',
+  ].join('\n');
+
+  const hint = wrap.querySelector('#calibHint');
+  const back = wrap.querySelector('#calibBack');
+
+  // 宿主按阶段广播，页面只负责把当前该做什么写在同一行里
+  const STAGE_TEXT = {
+    guide: '① 调整坐姿：让整张脸落在虚线框里',
+    'guide-ready': '① 就位完成，点「开始标定」',
+    calib: '② 9 点标定：盯住圆点 1 秒，不要让头离开虚线框',
+    validate: '③ 5 点测试：继续盯住圆点，每点固定 1 秒',
+    review: '③ 正确率未达标：选择重新标定或跳过',
+    validated: '④ 测试完成',
+    done: '标定完成，正在返回导航',
+  };
+  const onStage = (e) => {
+    const d = (e && e.detail) || {};
+    const t = STAGE_TEXT[d.stage];
+    if (t) {
+      hint.classList.remove('bad');
+      hint.textContent = d.stage === 'validated' && d.note ? `${t}：${d.note}` : t;
+    }
+    // overlay 接管整屏时页面自己的标题/按钮必须退场
+    if (d.stage === 'calib') {
+      wrap.classList.add('calib-live');
+      try {
+        const v = window.__epblGazeHost && window.__epblGazeHost.getVideo && window.__epblGazeHost.getVideo();
+        if (v) {
+          v.classList.add('calib-video');
+          screens.calibVideo = v;
+        }
+      } catch (_) {}
+    } else if (d.stage === 'validated' || d.stage === 'done') {
+      wrap.classList.remove('calib-live');
+    }
+  };
+  window.addEventListener('epbl:gaze-stage', onStage);
+  screens.stageOff = () => window.removeEventListener('epbl:gaze-stage', onStage);
+  back.addEventListener('click', () => {
+    try {
+      if (window.__epblGazeHost && window.__epblGazeHost.backHome) {
+        window.__epblGazeHost.backHome();
+        return;
+      }
+      if (window.__epblGazeHost) window.__epblGazeHost.pause();
+    } catch (_) {}
+    location.hash = '#/home';
+  });
+
+  // app.js 先于 gaze-host.js 起跑：等宿主挂到 window 上再发起标定
+  const t0 = performance.now();
+  while (!window.__epblGazeHost) {
+    if (performance.now() - t0 > 3000) break;
+    await new Promise((r) => setTimeout(r, 60));
+  }
+  if (!window.__epblGazeHost) {
+    hint.classList.add('bad');
+    hint.textContent = '视线宿主没有加载，无法标定。';
+    return;
+  }
+
+  const r = await window.__epblGazeHost.startCalib();
+  if (r && (r.reason === 'cancelled' || r.reason === 'paused')) return;
+  if (r && r.ok) return;
+  const el = byId('calibHint');
+  if (el) {
+    el.classList.add('bad');
+    el.textContent = describeCalibError(r && r.reason);
+  }
+}
+
+function describeCalibError(reason) {
+  const map = {
+    busy: '上一次标定还没结束，请稍等两秒再试。',
+    'no-stage': '标定画布没有准备好，请刷新页面。',
+    'no-camera-api': '当前浏览器不支持摄像头采集，请用 Chrome / Edge 打开。',
+    'camera-denied': '摄像头被拒绝：请在系统设置里允许浏览器使用摄像头后刷新。',
+    'no-video-frame': '摄像头已授权但没有画面，换一个摄像头或拔插后重试。',
+    'csp-wasm': '当前页面策略不允许 WebAssembly，人脸引擎无法启动。',
+    'engine-init': '人脸引擎初始化失败，请看控制台。',
+    'sim-init': '模拟数据初始化失败。',
+    'sim-mode': '当前是模拟模式（?gazeSim=1），没有真实摄像头帧，不能标定。请去掉该参数后刷新。',
+    'fit-failed': '拟合失败：请确认光线充足、整张脸在画面内后重试。',
+    'idb-write': '模型写入 IndexedDB 失败，请检查浏览器存储权限后重试。',
+  };
+  return map[reason] || ('标定没能启动：' + (reason || '未知原因'));
+}
+
+/* ---------- 空间导航（2×2 卡片 + 视线停留选中） ---------- */
+
+/** 宿主状态；脚本还没加载时返回 null，调用方自己补渲染。 */
+function hostStatus() {
+  try {
+    return window.__epblGazeHost ? window.__epblGazeHost.getStatus() : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * 「已标定」不等于「现在能用」：模型绑定了标定时的窗口尺寸和摄像头分辨率。
+ * soft = 尺寸变了但比例接近，仍可用，只是建议校正；hard = 环境变化大，重新标定。
+ */
+function paintPill(el, st) {
+  if (!el) return;
+  const has = !!(st && st.hasModel);
+  const ok = has && st.status === 'ok';
+  const soft = has && st.status === 'stale' && st.reason === 'soft';
+  el.textContent = !has ? '尚未标定' : ok ? '视线已就绪' : soft ? '建议重新标定' : '模型已过期';
+  el.className = 'pill ' + (ok ? 'ok' : has ? 'wait' : 'off');
+  el.title = !has
+    ? '还没有模型，做一次 9 点标定即可'
+    : ok
+      ? '标定环境与当前窗口一致'
+      : '窗口尺寸或摄像头分辨率变了，请重新做一次 9 点标定';
+}
+
+function showHome() {
+  setView('nav');
+  state.active = null;
+  markActive(null);
+  byId('crumb').textContent = '空间导航';
+  if (location.hash !== '#/home') history.replaceState(null, '', '#/home');
+
+  const wrap = newScreen('nav');
+  if (!document.getElementById('calibResumeCss')) {
+    const st = document.createElement('style');
+    st.id = 'calibResumeCss';
+    st.textContent = CALIB_RESUME_CSS;
+    document.head.appendChild(st);
+  }
+  const pending = (() => {
+    try {
+      return window.__epblGazeHost && window.__epblGazeHost.getPending
+        ? window.__epblGazeHost.getPending()
+        : null;
+    } catch (_) {
+      return null;
+    }
+  })();
+  const calibratedNow = (() => {
+    try {
+      return sessionStorage.getItem('epbl.gaze.calibrated') === '1';
+    } catch (_) {
+      return false;
+    }
+  })();
+  const resumeText = pending && pending.idx
+    ? `标定未完成：已完成 ${pending.idx} / ${pending.total} 点`
+    : '还没有完成本次标定';
+  const resumeBtn = pending && pending.idx ? '继续标定' : '开始标定';
+
+  wrap.innerHTML = [
+    !calibratedNow && [
+      '<div class="calib-resume" id="calibResume">',
+      `  <span>${resumeText}</span>`,
+      `  <button class="btn primary" id="btnResumeCalib">${resumeBtn}</button>`,
+      '</div>',
+    ].join(''),
+    '<header class="nav-head">',
+    '  <div class="nav-title">',
+    '    <h2>选择要进入的空间</h2>',
+    '    <p>注视着卡片别动，圆环走满一圈就进入；也可以直接点。</p>',
+    '  </div>',
+    '  <div class="nav-side">',
+    '    <span class="pill off" id="navPill">检查中…</span>',
+    '    <button class="btn ghost" id="navReCalib">重新标定</button>',
+    '  </div>',
+    '</header>',
+    '<div class="card-grid" id="cardGrid"></div>',
+    '<div class="gaze-cursor" id="gazeCursor" hidden><i></i></div>',
+    '<div class="nav-foot"><span>视线停留 1.5 秒进入</span><span>ESC 返回首页</span></div>',
+  ].join('\n');
+
+  // 状态点：立即渲染 + 跟随宿主事件 + 宿主脚本晚到时补渲染
+  const pillEl = wrap.querySelector('#navPill');
+  paintPill(pillEl, hostStatus());
+  const onStatus = (e) => paintPill(pillEl, e.detail || hostStatus());
+  window.addEventListener('epbl:gaze-status', onStatus);
+  screens.statusOff = () => window.removeEventListener('epbl:gaze-status', onStatus);
+  [350, 1200].forEach((ms) => setTimeout(() => {
+    if (screens.view === 'nav' && pillEl.isConnected) paintPill(pillEl, hostStatus());
+  }, ms));
+
+  const grid = wrap.querySelector('#cardGrid');
+  state.modules.forEach((mod) => grid.appendChild(cardEl(mod)));
+
+  const resumeEl = wrap.querySelector('#btnResumeCalib');
+  if (resumeEl) resumeEl.addEventListener('click', () => { location.hash = '#/calibrate'; });
+  wrap.querySelector('#navReCalib').addEventListener('click', () => {
+    // 重新标定 = 丢掉暂停中的进度，从第 1 点开始
+    try {
+      if (window.__epblGazeHost && window.__epblGazeHost.cancel) window.__epblGazeHost.cancel();
+    } catch (_) {}
+    location.hash = '#/calibrate';
+  });
+
+  startDwell(wrap);
+}
+
+const CALIB_RESUME_CSS = [
+  '.calib-resume{display:flex;align-items:center;justify-content:space-between;gap:14px;',
+  'margin:0 0 16px;padding:12px 16px;border-radius:12px;',
+  'border:1px solid var(--line,rgba(255,255,255,.14));',
+  'background:var(--card,rgba(255,255,255,.05));font-size:13px}',
+].join('');
+
+function cardEl(mod) {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'space-card';
+  el.dataset.id = mod.id;
+  el.innerHTML = [
+    '<span class="card-media">',
+    '  <img alt="" loading="lazy" src="assets/preview-' + mod.id + '.jpg">',
+    '</span>',
+    '<span class="card-body">',
+    '  <b class="card-title"></b>',
+    '  <span class="card-desc"></span>',
+    '</span>',
+    '<svg class="card-ring" viewBox="0 0 100 100" aria-hidden="true">',
+    '  <circle class="ring-bg" cx="50" cy="50" r="46"></circle>',
+    '  <circle class="ring-fg" cx="50" cy="50" r="46" pathLength="100"></circle>',
+    '</svg>',
+  ].join('\n');
+  el.querySelector('.card-title').textContent = mod.name;
+  el.querySelector('.card-desc').textContent = mod.desc || '';
+  el.addEventListener('click', () => { location.hash = '#/' + mod.id; });
+  return el;
+}
+
+/**
+ * 视线停留选中：宿主每帧推 gaze（页面归一化），这里做命中判定与圆环进度。
+ * 同一时间只有一张卡片在累积；视线离开后进度按倍率回落。
+ */
+function startDwell(wrap) {
+  const cards = Array.from(wrap.querySelectorAll('.space-card'));
+  if (!cards.length) return;
+  const cursor = wrap.querySelector('#gazeCursor');
+  const progress = new Map(cards.map((c) => [c, 0]));
+  let last = performance.now();
+  let entering = false;
+  let sawGaze = false;
+
+  const paint = (card, v) => {
+    const ring = card.querySelector('.ring-fg');
+    if (!ring) return;
+    const p = Math.max(0, Math.min(1, v / DWELL_MS));
+    ring.style.strokeDashoffset = String(100 - p * 100);
+    card.classList.toggle('hot', p > 0.04 && !entering);
+  };
+
+  const placeCursor = (x, y) => {
+    if (!cursor) return;
+    cursor.hidden = false;
+    cursor.style.transform = 'translate3d(' + x + 'px,' + y + 'px,0)';
+  };
+
+  const hitAt = (x, y) => cards.find((c) => {
+    const r = c.getBoundingClientRect();
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  });
+
+  const enter = (card) => {
+    if (entering) return;
+    entering = true;
+    card.classList.add('entering');
+    cards.forEach((c) => { if (c !== card) c.classList.remove('hot'); });
+    setTimeout(() => { location.hash = '#/' + card.dataset.id; }, 240);
+  };
+
+  const step = (x, y) => {
+    const now = performance.now();
+    const dt = Math.min(140, now - last);
+    last = now;
+    const hit = hitAt(x, y);
+
+    cards.forEach((c) => {
+      if (c === hit) return;
+      const v = progress.get(c);
+      if (v > 0) progress.set(c, Math.max(0, v - dt * DWELL_DECAY));
+      paint(c, progress.get(c));
+    });
+    if (!hit) return;
+
+    const v = Math.min(DWELL_MS, progress.get(hit) + dt);
+    progress.set(hit, v);
+    paint(hit, v);
+    if (v >= DWELL_MS) enter(hit);
+  };
+
+  // 有视线模型时由宿主推坐标；没有模型时退回鼠标位置，页面不至于没法用
+  if (window.__epblGazeHost && window.__epblGazeHost.onGaze) {
+    screens.gazeOff = window.__epblGazeHost.onGaze((g) => {
+      if (!g) return;
+      sawGaze = true;
+      const x = g.x * window.innerWidth;
+      const y = g.y * window.innerHeight;
+      placeCursor(x, y);
+      step(x, y);
+    });
+  }
+  wrap.addEventListener('mousemove', (e) => {
+    if (sawGaze) return;
+    placeCursor(e.clientX, e.clientY);
+  });
+}
+
 /* ---------------- 下载中心 ---------------- */
 async function showReleases() {
+  setView('releases');
   teardownFrame();
   markActive('releases');
   byId('moduleBar').hidden = true;
@@ -472,4 +912,18 @@ async function checkBackend() {
   byId('backendPill').title = ok
     ? '控制后端 127.0.0.1:8899 可用'
     : '控制后端未运行：需要远程控制/受控浏览器时请启动 control-backend';
+}
+
+/* GAZE-AUDIT-PROBE：只读；window.__GAZE_AUDIT_OFF 可整体关闭 */
+if (!window.__GAZE_AUDIT_OFF && window.__makeGazeAudit) {
+  window.__gazeAudit = window.__makeGazeAudit({
+    page: 'workbench',
+    engine: () => 'none',
+    model: () => null,
+    points: () => 0,
+    coord: 'page-norm',
+    lastGaze: () => null,
+    quality: () => null,
+    note: '宿主页，自身不采集眼动'
+  });
 }

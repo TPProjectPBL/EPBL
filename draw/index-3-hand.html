@@ -7,7 +7,7 @@
 <style>
 /* ============================================================
  * 隔空画板 · 单文件 UI v2.1（零外部依赖，无构建步骤）
- * 深色霓虹科技风：背景 #0a0e17 / 面板 #111827 / 分割线 #1f2b45
+ * 深色霓虹科技风：背景 #080d09 / 面板 #111a13 / 分割线 #1e2c21
  * v2   变更：视线九宫格笔尖 / 开门+停留选色 / 撤回 / 重做 / 橡皮
  * v2.1 变更（修改6）：双手分工——左手平移画布（世界坐标 + panOffset）、笔尖来源可切换、复位视图
  * v2.1 变更（修改7）：画布颜色可切换（黑 / 白），网格线随画布色适配
@@ -27,14 +27,14 @@
  *            台灯灯效保留；进入画板后滚轮上推或点顶栏「封面」退回。
  * ============================================================ */
 :root{
-  --bg:#0a0e17;
-  --panel:#111827;
-  --line:#1f2b45;
-  --accent:#4cc9f0;
+  --bg:#080d09;
+  --panel:#111a13;
+  --line:#1e2c21;
+  --accent:#a9db7b;
   --danger:#ff4d6d;
   --warn:#ffd166;
-  --text:#e6edf7;
-  --muted:#7d8da8;
+  --text:#e8f1e5;
+  --muted:#8b9a8b;
   --ease:.18s ease;
 }
 
@@ -62,7 +62,7 @@ body{
   gap:16px;
   padding:14px 26px;
   border-bottom:1px solid var(--line);
-  background:linear-gradient(180deg,rgba(17,24,39,.94),rgba(10,14,23,.8));
+  background:linear-gradient(180deg,rgba(17,26,19,.94),rgba(10,14,23,.8));
 }
 .brand{ display:flex; align-items:baseline; gap:12px; }
 .brand h1{
@@ -124,7 +124,7 @@ body{
   gap:16px;
   padding:14px 26px;
   border-bottom:1px solid var(--line);
-  background:rgba(17,24,39,.72);
+  background:rgba(17,26,19,.72);
   /* 修改2：颜色条浮层的定位基准；z-index 高于画布，低于 toast */
   position:relative;
   z-index:45;
@@ -267,7 +267,7 @@ body{
 .btn.is-armed{ animation:armedPulse .45s ease-in-out; }
 @keyframes armedPulse{
   0%,100%{ box-shadow:0 0 0 1px var(--accent) inset,0 0 10px -6px var(--accent); }
-  50%{ box-shadow:0 0 0 2px var(--accent) inset,0 0 34px -4px var(--accent); background:rgba(76,201,240,.16); }
+  50%{ box-shadow:0 0 0 2px var(--accent) inset,0 0 34px -4px var(--accent); background:rgba(169,219,123,.16); }
 }
 .btn.danger:hover{
   border-color:var(--danger);
@@ -350,7 +350,7 @@ body{
 }
 .btn.is-active{
   border-color:var(--accent);
-  background:rgba(76,201,240,.14);
+  background:rgba(169,219,123,.14);
   box-shadow:0 0 0 1px var(--accent) inset,0 0 26px -8px var(--accent);
 }
 
@@ -488,7 +488,7 @@ body{
   padding:14px 18px;
   border-radius:14px;
   border:1px solid var(--line);
-  background:rgba(17,24,39,.74);
+  background:rgba(17,26,19,.74);
   backdrop-filter:blur(10px);
   -webkit-backdrop-filter:blur(10px);
   font:400 12px/1.7 ui-monospace,Menlo,Consolas,monospace;
@@ -540,7 +540,7 @@ body{
   padding:14px 18px;
   border-radius:14px;
   border:1px solid var(--line);
-  background:rgba(17,24,39,.74);
+  background:rgba(17,26,19,.74);
   backdrop-filter:blur(10px);
   -webkit-backdrop-filter:blur(10px);
   font-size:12px;
@@ -914,7 +914,7 @@ body.is-landing > .hud{
   padding:16px 32px;
   border-radius:14px;
   border:1px solid var(--accent);
-  background:rgba(17,24,39,.94);
+  background:rgba(17,26,19,.94);
   box-shadow:0 0 46px -10px var(--accent);
   font-size:17px;
   font-weight:600;
@@ -944,8 +944,8 @@ body.is-landing > .hud{
   height:64px;
   padding:0 10px;
   border-radius:14px;
-  border:1px solid rgba(76,201,240,.26);
-  background:rgba(13,18,30,.86);
+  border:1px solid rgba(169,219,123,.26);
+  background:rgba(17,26,19,.86);
   box-shadow:0 12px 30px -18px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.03) inset;
   font:400 11px/1.5 ui-monospace,Menlo,Consolas,monospace;
   color:var(--muted);
@@ -973,7 +973,7 @@ body.is-landing > .hud{
   height:8px;
   border-radius:50%;
   background:var(--muted);
-  box-shadow:0 0 0 3px rgba(125,141,168,.12);
+  box-shadow:0 0 0 3px rgba(139,154,139,.12);
   flex:0 0 auto;
 }
 .real-dot.on{ background:#06d6a0; box-shadow:0 0 10px #06d6a0; }
@@ -1017,8 +1017,8 @@ body.is-landing > .hud{
   height:34px;
   padding:0 10px;
   border-radius:9px;
-  border:1px solid rgba(76,201,240,.38);
-  background:rgba(76,201,240,.12);
+  border:1px solid rgba(169,219,123,.38);
+  background:rgba(169,219,123,.12);
   color:var(--text);
   font:700 11px/1 ui-sans-serif,system-ui,sans-serif;
   letter-spacing:.08em;
@@ -1026,7 +1026,7 @@ body.is-landing > .hud{
   white-space:nowrap;
   transition:background var(--ease),border-color var(--ease),opacity var(--ease);
 }
-.mini-btn:hover{ background:rgba(76,201,240,.22); border-color:var(--accent); }
+.mini-btn:hover{ background:rgba(169,219,123,.22); border-color:var(--accent); }
 .mini-btn.ghost{
   border-color:var(--line);
   background:rgba(10,14,23,.6);
@@ -1068,10 +1068,10 @@ body.is-landing > .hud{
   height:30px;
   margin:-15px 0 0 -15px;
   border-radius:50%;
-  border:2px solid rgba(76,201,240,.95);
-  background:rgba(76,201,240,.10);
+  border:2px solid rgba(169,219,123,.95);
+  background:rgba(169,219,123,.10);
   box-shadow:0 0 0 1px rgba(4,7,13,.72), 0 0 26px -2px var(--accent),
-             inset 0 0 12px rgba(76,201,240,.35);
+             inset 0 0 12px rgba(169,219,123,.35);
   pointer-events:none;
   opacity:0;
   transform:translate3d(-100px,-100px,0);
@@ -1125,14 +1125,14 @@ body.is-landing > .hud{
   margin:-15px 0 0 -15px;
   border-radius:50%;
   border:2px solid var(--accent);
-  background:rgba(76,201,240,.18);
+  background:rgba(169,219,123,.18);
   color:var(--text);
   font:700 11px/1 ui-monospace,Menlo,Consolas,monospace;
   cursor:crosshair;
   box-shadow:0 0 22px -2px var(--accent);
   transition:transform .15s ease,background .15s ease;
 }
-.calib-dot:hover{ transform:scale(1.25); background:rgba(76,201,240,.4); }
+.calib-dot:hover{ transform:scale(1.25); background:rgba(169,219,123,.4); }
 .calib-dot.done{
   border-color:#06d6a0;
   background:#06d6a0;
@@ -1147,7 +1147,7 @@ body.is-landing > .hud{
   padding:8px 18px;
   border-radius:10px;
   border:1px solid var(--line);
-  background:rgba(17,24,39,.8);
+  background:rgba(17,26,19,.8);
   color:var(--muted);
   font:600 11px/1 ui-sans-serif,system-ui,sans-serif;
   letter-spacing:.12em;
@@ -1346,7 +1346,13 @@ body.is-landing > .hud{
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <!-- WebGazer 2.1.2（本地 patched 版，facemesh 模型走 ./vendor/webgazer/facemesh_model） -->
+<script src="../shared/gaze/audit-probe.js"></script>
 <script src="./vendor/webgazer/webgazer.js"></script>
+<!-- 共享坐标工具：PAGE_NORM ↔ 容器/iframe（writeGaze 用 containerFromPage 换算笔尖） -->
+<script type="module">
+  import * as F from '../shared/gaze/frame.js';
+  window.__epblGazeFrame = F;
+</script>
 <script>
 (() => {
   'use strict';
@@ -1414,15 +1420,15 @@ body.is-landing > .hud{
   const CANVAS_THEMES = [
     {
       id: 'dark', name: '黑', hex: '#0a0e17', light: false,
-      glow: ['rgba(76,201,240,.10)', 'rgba(76,201,240,.03)', 'rgba(10,14,23,0)'],
-      grid: 'rgba(31,43,69,.78)',            // 浅色低对比网格
+      glow: ['rgba(169,219,123,.10)', 'rgba(169,219,123,.03)', 'rgba(10,14,9,0)'],
+      grid: 'rgba(31,43,34,.78)',            // 浅色低对比网格
       vignette: ['rgba(0,0,0,0)', 'rgba(0,0,0,.55)']
     },
     {
       id: 'light', name: '白', hex: '#FFFFFF', light: true,
-      glow: ['rgba(76,201,240,.07)', 'rgba(76,201,240,.02)', 'rgba(255,255,255,0)'],
-      grid: 'rgba(41,58,92,.20)',            // 深色低对比网格
-      vignette: ['rgba(0,0,0,0)', 'rgba(76,90,120,.14)']
+      glow: ['rgba(169,219,123,.07)', 'rgba(169,219,123,.02)', 'rgba(255,255,255,0)'],
+      grid: 'rgba(41,58,46,.20)',            // 深色低对比网格
+      vignette: ['rgba(0,0,0,0)', 'rgba(90,110,90,.14)']
     }
   ];
 
@@ -1727,6 +1733,25 @@ body.is-landing > .hud{
   const REAL_Q = new URLSearchParams(location.search);
   let HANDEDNESS_FLIP = REAL_Q.get('fliphand') === '1';
 
+  /* 注视来源模式：默认 shared（共享模型 + 共享引擎），?gaze=legacy 走原 WebGazer */
+  const GAZE_MODE = REAL_Q.get('gaze') === 'legacy' ? 'legacy' : 'shared';
+  window.__epblGazeMode = GAZE_MODE;
+
+  /* shared 运行态（与 real 分开，便于自检） */
+  const sharedGaze = {
+    stream: null,
+    video: null,
+    canvas: null,
+    engine: null,
+    source: null,
+    model: null,
+    lastPush: 0,
+    inFlight: false,
+    lastLandmarks: null,
+    err: ''
+  };
+  window.__epblSharedGaze = sharedGaze;
+
   const real = {
     running: false,
     starting: false,
@@ -1761,7 +1786,8 @@ body.is-landing > .hud{
     err: '',
     gestureErr: '',
     penKey: '',
-    statusHoldUntil: 0
+    statusHoldUntil: 0,
+    videoCanvas: null     // shared 模式：手势/预览/人脸共用的同一路帧
   };
   window.__airCanvasReal = real;
 
@@ -1792,15 +1818,30 @@ body.is-landing > .hud{
   }
 
   /** 浏览器 / 页面坐标的注视点 → raw（屏幕坐标用于 UI，画布坐标用于笔尖） */
-  function writeGaze(sx, sy) {
+  function writeGaze(sx, sy, page) {
     const vw = Math.max(1, window.innerWidth);
     const vh = Math.max(1, window.innerHeight);
     const r = stage.getBoundingClientRect();
-    raw.gazeX = 1 - clamp01(sx / vw);
+    // 全流程只允许一次镜像：摄像头预览（previewLoop 的 scale(-1,1)）。
+    // 共享模型输出 PAGE_NORM（左起、未镜像），WebGazer 输出的也是左起屏幕坐标，
+    // 因此这里直接写入，不再做 1-x —— 原来的第二层镜像是 bug，已删除。
+    raw.gazeX = clamp01(sx / vw);
     raw.gazeY = clamp01(sy / vh);
-    // 笔尖目标用「未磁吸」的平滑点，避免视线经过按钮时把画笔吸到工具栏
-    raw.gazeTargetX = clamp01((sx - r.left) / Math.max(1, r.width));
-    raw.gazeTargetY = clamp01((sy - r.top) / Math.max(1, r.height));
+
+    // 笔尖目标用「未磁吸」的平滑点，避免视线经过按钮时把画笔吸到工具栏。
+    // 注意：这里必须用平滑后的 client 反推页面归一化，不能直接用模型原始 page ——
+    // 否则平滑只作用在光标上，笔尖会按原始预测跳变，画出周期性抖动。
+    const pg = { x: clamp01(sx / vw), y: clamp01(sy / vh) };
+    void page;   // 原始 page 仅供诊断，不参与换算
+    const F = window.__epblGazeFrame;
+    let tx = (sx - r.left) / Math.max(1, r.width);
+    let ty = (sy - r.top) / Math.max(1, r.height);
+    if (F && typeof F.containerFromPage === 'function') {
+      const q = F.containerFromPage(pg, stage);
+      if (q) { tx = q.clamped.x; ty = q.clamped.y; }
+    }
+    raw.gazeTargetX = clamp01(tx);
+    raw.gazeTargetY = clamp01(ty);
     raw.inside = true;
     raw.gazeSeenAt = performance.now();
     real.gazeOk = true;
@@ -1840,7 +1881,7 @@ body.is-landing > .hud{
     calibGaze.classList.remove('is-on');
   }
 
-  function onGaze(data) {
+  function onGaze(data, page) {
     if (!data) {
       real.gazeOk = false;
       return;
@@ -1857,11 +1898,11 @@ body.is-landing > .hud{
     real.gazeSmoothY += (ry - real.gazeSmoothY) * REAL_SNAP.ema;
     if (real.calibrating) moveCalibGaze(real.gazeSmoothX, real.gazeSmoothY);
     const s = snapGaze(real.gazeSmoothX, real.gazeSmoothY);
-    writeGaze(real.gazeSmoothX, real.gazeSmoothY);
-    // 磁吸后的 UI 命中点单独写回（writeGaze 用的是未磁吸点）
+    writeGaze(real.gazeSmoothX, real.gazeSmoothY, page);
+    // 磁吸后的 UI 命中点单独写回（writeGaze 用的是未磁吸点）；同样不再翻转
     const vw = Math.max(1, window.innerWidth);
     const vh = Math.max(1, window.innerHeight);
-    raw.gazeX = 1 - clamp01(s.x / vw);
+    raw.gazeX = clamp01(s.x / vw);
     raw.gazeY = clamp01(s.y / vh);
   }
 
@@ -1892,7 +1933,8 @@ body.is-landing > .hud{
     if (now - real.lastPreview < 66) return;
     real.lastPreview = now;
     const wg = window.webgazer;
-    const src = wg && typeof wg.getVideoElementCanvas === 'function' ? wg.getVideoElementCanvas() : null;
+    // shared 模式没有 WebGazer，改用自己那一路流；legacy 仍读 WebGazer 的 canvas
+    const src = real.videoCanvas || (wg && typeof wg.getVideoElementCanvas === 'function' ? wg.getVideoElementCanvas() : null);
     if (!src || !src.width || !src.height) return;
     const ctx = realPreview.getContext('2d');
     const w = realPreview.width;
@@ -2147,7 +2189,8 @@ body.is-landing > .hud{
     if (!real.gr || now - real.lastDetect < 34) return;
     real.lastDetect = now;
     const wg = window.webgazer;
-    const src = wg && typeof wg.getVideoElementCanvas === 'function' ? wg.getVideoElementCanvas() : null;
+    // 手部识别与预览、人脸共用同一路 canvas，不另开摄像头
+    const src = real.videoCanvas || (wg && typeof wg.getVideoElementCanvas === 'function' ? wg.getVideoElementCanvas() : null);
     if (!src || !src.width || !src.height) return;
     let res;
     try {
@@ -2410,7 +2453,7 @@ body.is-landing > .hud{
     }
   }
 
-  btnCalib.addEventListener('click', openCalib);
+  btnCalib.addEventListener('click', requestCalib);
   calibSkip.addEventListener('click', () => finishCalib(true));
   btnHandFlip.addEventListener('click', () => {
     HANDEDNESS_FLIP = !HANDEDNESS_FLIP;
@@ -2420,9 +2463,462 @@ body.is-landing > .hud{
     setRealUi(real.running ? 'on' : 'idle', '左右手已' + (HANDEDNESS_FLIP ? '交换' : '恢复') + ' · 请重新捏合测试', false);
   });
 
+  /* ============================================================
+   * 4.2 共享模式（默认）：同一路流 → 共享引擎 → 共享模型
+   * ------------------------------------------------------------
+   * 只是把「注视从哪来」换掉：手势、预览、笔尖管线一行未改。
+   * 摄像头只开一次（sharedGaze.stream），预览 / MediaPipe / 人脸都读同一张 canvas。
+   * ============================================================ */
+
+  function sharedErrorText(code) {
+    const c = String(code || '');
+    if (c === 'no-camera') return '当前环境没有可用的摄像头接口';
+    if (c === 'no-video-frame') return '摄像头已授权，但 3 秒内没有画面（设备未投帧）';
+    if (c.indexOf('permission') === 0) return '摄像头权限被拒绝（' + c.split(':')[1] + '）';
+    return c || '未知错误';
+  }
+
+  /**
+   * 画板的画笔手势依赖手部 landmark 的原图，而 bus 只广播人脸 landmarks（不传图像），
+   * 所以这里保留独立摄像头，并按约定向宿主声明「独占」，宿主会释放设备后再让我们开流。
+   */
+  function declareExclusive(on) {
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage(
+          { type: 'epbl:gaze-exclusive', version: 1, on: !!on },
+          location.origin
+        );
+      }
+    } catch (e) {
+      /* 跨域：忽略 */
+    }
+  }
+
+  // 跑在工作台 iframe 里 → 眼动与手势都由宿主推理（本页不再开摄像头、不声明独占）
+  const HOSTED = (() => {
+    try {
+      return !!(window.parent && window.parent !== window);
+    } catch {
+      return false;
+    }
+  })();
+
+  let hostedOffLandmarks = null;
+  let hostedOffHands = null;
+
+  async function startHosted() {
+    if (real.running || real.starting) return;
+    real.starting = true;
+    setRealUi('loading', '正在连接工作台宿主…', false);
+    try {
+      const [storeMod, coreMod, busMod, attachMod] = await Promise.all([
+        import('../shared/gaze/store.js'),
+        import('../shared/gaze/core/index.js'),
+        import('../shared/gaze/bus.js'),
+        import('../shared/gaze/attach.js'),
+      ]);
+
+      const idbMod = await import('../shared/gaze/idb.js');
+      sharedGaze.model = await idbMod.readPredictor();
+      if (!sharedGaze.model) {
+        setRealUi('err', '尚未完成 9 点标定：请回到工作台标定后再进入画板', true);
+        real.starting = false;
+        return;
+      }
+      sharedGaze.source = new coreMod.AbsoluteGazeSource({
+        model: sharedGaze.model,
+        aspect: 4 / 3,
+      });
+      sharedGaze.pageToClient = attachMod.pageNormToClient;
+
+      real.videoCanvas = null;   // 没有本地流：预览空着，手势与眼动都来自宿主
+      real.running = true;
+      real.starting = false;
+      real.fpsAt = performance.now();
+
+      hostedOffLandmarks = busMod.onLandmarks((f) => {
+        if (!f || !f.landmarks || !f.landmarks.length) {
+          real.gazeOk = false;
+          return;
+        }
+        sharedGaze.lastLandmarks = f.landmarks;
+        applySharedGaze(f.landmarks);
+      });
+
+      hostedOffHands = busMod.onHands((f) => {
+        const list = (f && f.hands) || [];
+        const res = {
+          landmarks: list.map((h) => h.points),
+          gestures: list.map((h) => [{ categoryName: h.gesture, score: h.gestureScore }]),
+          handedness: list.map((h) => [{ categoryName: h.handedness, score: h.handednessScore }]),
+        };
+        real.handPoints++;
+        handleHands(res, performance.now());
+      });
+
+      // 请宿主开始手部推理（宿主收到才加载 GestureRecognizer）
+      try {
+        window.parent.postMessage(
+          { type: 'epbl:gaze-gesture-request', version: 1, on: true },
+          window.location.origin
+        );
+      } catch (e) {}
+
+      try {
+        window.__drawGazeLearn = attachMod.createGazeLearning({
+          collect: true,
+          getModel: () => sharedGaze.model,
+          getAspect: () => 4 / 3,
+          onModel: (r) => {
+            sharedGaze.model = r.model;
+            if (sharedGaze.source) sharedGaze.source.setModel(r.model);
+          },
+          onRefine: () => window.__drawTwoPoint && window.__drawTwoPoint(),
+        });
+        window.__drawGazeLearn.installClicks(document);
+        window.__drawGazeLearn.installGuard(document.body);
+      } catch (e) {
+        console.warn('[draw] gaze learning 未装上', e);
+      }
+
+      setRealUi(
+        'on',
+        sharedGaze.model
+          ? '宿主托管 · 共享模型 · 手势由宿主识别'
+          : '宿主托管 · 未找到共享模型，先到工作台标定',
+        false
+      );
+      requestAnimationFrame(previewLoop);
+      toast('已切换到宿主推理：本页不再打开摄像头', 'ok');
+    } catch (e) {
+      real.starting = false;
+      const msg = (e && e.message) || String(e);
+      sharedGaze.err = msg;
+      real.err = msg;
+      setRealUi('err', '宿主模式启动失败：' + sharedErrorText(msg), true);
+    }
+  }
+
+  async function startShared() {
+    if (HOSTED) return startHosted();
+    declareExclusive(true);
+    setRealUi('loading', '正在开启摄像头并加载共享引擎…', false);
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('no-camera');
+
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+          audio: false
+        });
+      } catch (e) {
+        throw new Error('permission:' + ((e && e.name) || 'Error'));
+      }
+
+      const video = document.createElement('video');
+      video.muted = true;
+      video.playsInline = true;
+      video.setAttribute('playsinline', '');
+      video.srcObject = stream;
+      await video.play();
+
+      // 等首帧：设备不投帧时 videoWidth 会一直是 0
+      await new Promise((resolve, reject) => {
+        const t0 = performance.now();
+        const tick = () => {
+          if (video.videoWidth > 0) return resolve();
+          if (performance.now() - t0 > 3000) return reject(new Error('no-video-frame'));
+          requestAnimationFrame(tick);
+        };
+        tick();
+      });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      sharedGaze.stream = stream;
+      sharedGaze.video = video;
+      sharedGaze.canvas = canvas;
+      real.videoCanvas = canvas;   // 手势 / 预览 / 人脸共用，不新开摄像头
+
+      const [faceMod, storeMod, coreMod] = await Promise.all([
+        import('../shared/gaze/engine/face-engine.js'),
+        import('../shared/gaze/store.js'),
+        import('../shared/gaze/core/index.js')
+      ]);
+      sharedGaze.engine = await faceMod.createFaceEngine();
+
+      const idbMod = await import('../shared/gaze/idb.js');
+      sharedGaze.model = await idbMod.readPredictor();
+      if (!sharedGaze.model) {
+        setRealUi('err', '尚未完成 9 点标定：请回到工作台标定后再进入画板', true);
+        real.starting = false;
+        return;
+      }
+      sharedGaze.source = new coreMod.AbsoluteGazeSource({
+        model: sharedGaze.model,
+        aspect: canvas.width / Math.max(1, canvas.height)
+      });
+
+      // 点击即训练 + 尺寸变化提示（attach 统一装：只收「明确可交互」的元素）
+      try {
+        const { createGazeLearning, pageNormToClient } = await import('../shared/gaze/attach.js');
+        sharedGaze.pageToClient = pageNormToClient; // PAGE_NORM → 本窗口 client（iframe 内要扣偏移）
+        window.__drawGazeLearn = createGazeLearning({
+          collect: true,
+          getModel: () => sharedGaze.model,
+          getAspect: () =>
+            sharedGaze.canvas ? sharedGaze.canvas.width / Math.max(1, sharedGaze.canvas.height) : 4 / 3,
+          onModel: (r) => {
+            sharedGaze.model = r.model;
+            if (sharedGaze.source) sharedGaze.source.setModel(r.model);
+          },
+          onRefine: () => window.__drawTwoPoint && window.__drawTwoPoint(),
+        });
+        window.__drawGazeLearn.installClicks(document);
+        window.__drawGazeLearn.installGuard(document.body);
+      } catch (e) {
+        console.warn('[draw] gaze learning 未装上', e);
+      }
+
+      real.running = true;
+      real.starting = false;
+      real.fpsAt = performance.now();
+      setRealUi('on', sharedGaze.model
+        ? '共享模型已加载 · 等待人脸…'
+        : '未找到共享模型 · 点「标定」先做一次', false);
+      requestAnimationFrame(previewLoop);
+      requestAnimationFrame(handLoop);
+      requestAnimationFrame(sharedGazeLoop);
+
+      try {
+        real.gr = await createGestureRecognizer();
+        setRealUi('on', sharedGaze.model ? '共享模型 + 手势已就绪' : '手势已就绪 · 尚缺共享模型', false);
+      } catch (e) {
+        real.gestureErr = (e && e.message) || String(e);
+        setRealUi('on', '共享注视已就绪；手势模型加载失败：' + real.gestureErr, true);
+      }
+    } catch (e) {
+      real.starting = false;
+      const msg = (e && e.message) || String(e);
+      sharedGaze.err = msg;
+      real.err = msg;
+      setRealUi('err', '共享模式启动失败：' + sharedErrorText(msg), true);
+      try {
+        if (sharedGaze.stream) sharedGaze.stream.getTracks().forEach((t) => t.stop());
+      } catch (err) { /* 已停 */ }
+    }
+  }
+
+  function sharedGazeLoop(now) {
+    if (!real.running || GAZE_MODE !== 'shared') return;
+    requestAnimationFrame(sharedGazeLoop);
+    if (now - sharedGaze.lastPush < 66) return;
+    sharedGaze.lastPush = now;
+    const v = sharedGaze.video;
+    const c = sharedGaze.canvas;
+    if (!v || !c || !v.videoWidth) return;
+    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+    if (!sharedGaze.engine || sharedGaze.inFlight) return;
+    sharedGaze.inFlight = true;
+    sharedGaze.engine.push(c, now)
+      .then((res) => {
+        sharedGaze.inFlight = false;
+        if (!res || !res.landmarks) { real.gazeOk = false; return; }
+        sharedGaze.lastLandmarks = res.landmarks;
+        applySharedGaze(res.landmarks);
+      })
+      .catch(() => { sharedGaze.inFlight = false; });
+  }
+
+  async function startTwoPointDraw() {
+    if (!sharedGaze.model) return null;
+    const { createTwoPoint } = await import('../shared/gaze/calibrate/two-point.js');
+    const tp = createTwoPoint({
+      container: document.body,
+      model: sharedGaze.model,
+      getLandmarks: () => sharedGaze.lastLandmarks || null,
+      getAspect: () => 4 / 3,
+      onDone: (r) => {
+        if (!r.ok) return;
+        sharedGaze.model = r.model;
+        if (sharedGaze.source) sharedGaze.source.setModel(r.model);
+      },
+    });
+    tp.start();
+    return tp;
+  }
+  window.__drawTwoPoint = startTwoPointDraw;
+
+  function applySharedGaze(lm) {
+    // 每帧记一次特征：点击样本要靠它判「特征是否新鲜」
+    if (window.__drawGazeLearn) {
+      try {
+        window.__drawGazeLearn.onFrame(lm, Date.now());
+      } catch (e) {}
+    }
+    const src = sharedGaze.source;
+    if (!src) return;
+    const p = src.getPoint({ multiFaceLandmarks: [lm] });
+    if (!p || !src.active) { real.gazeOk = false; return; }
+    // p 是 PAGE_NORM（左起、未镜像）→ 转本窗口 client 交给统一管线。
+    // 注意：不能在 iframe 里直接用 innerWidth/innerHeight，那是 iframe 自己的视口，
+    // 而 p 是相对**顶层页面**归一化的（y 会整体偏下、比例也会错）。
+    const conv = sharedGaze.pageToClient;
+    const c = conv ? conv(p, window) : { x: p.x * window.innerWidth, y: p.y * window.innerHeight };
+    onGaze(c, { x: p.x, y: p.y });
+  }
+
+  /* ---------------- shared 标定（独立打开时用本地 Calibrator） ---------------- */
+  let sharedCal = null;
+  let sharedCalRaf = 0;
+
+  // 卸载/隐藏：释放独占，宿主可以恢复推理
+  window.addEventListener('pagehide', () => {
+    declareExclusive(false);
+    if (hostedOffLandmarks) { hostedOffLandmarks(); hostedOffLandmarks = null; }
+    if (hostedOffHands) { hostedOffHands(); hostedOffHands = null; }
+    try {
+      if (HOSTED) window.parent.postMessage({ type: 'epbl:gaze-gesture-request', version: 1, on: false }, window.location.origin);
+    } catch (e) {}
+  });
+
+  function stopSharedCalib() {
+    if (sharedCalRaf) cancelAnimationFrame(sharedCalRaf);
+    sharedCalRaf = 0;
+    sharedCal = null;
+    hideCalibGaze();
+  }
+
+  async function openSharedCalib() {
+    if (real.calibrating) return;
+    if (HOSTED) {
+      // 宿主模式：标定统一在工作台做，一次标定三页共用
+      try {
+        window.parent.postMessage({ type: 'epbl:gaze-calib-request', version: 1 }, window.location.origin);
+        toast('已请求工作台开始标定（标定一次，三页共用）', 'ok');
+      } catch (e) {
+        toast('无法联系工作台', 'bad');
+      }
+      return;
+    }
+    // 统一标定：独立打开时不在本页跑 9 点，跳回工作台标定页
+    try {
+      location.href = new URL('/workbench/index.html#/calibrate', location.href).href;
+      return;
+    } catch (e) {}
+    if (!sharedGaze.engine) { toast('共享引擎还没就绪，先点「开启摄像头」'); return; }
+    real.calibrating = true;
+    raw.down = false;
+    raw.panDown = false;
+    real.fistFrames = 0;
+    try {
+      const [C, O, S] = await Promise.all([
+        import('../shared/gaze/calibrate/calibrator.js'),
+        import('../shared/gaze/calibrate/overlay.js'),
+        import('../shared/gaze/store.js')
+      ]);
+
+      let ov = null;
+      // 标定期间持续采样：engine.push 是异步的，而 Calibrator.getLandmarks 必须同步返回，
+      // 所以这里用「异步刷新缓存 + 同步读缓存」的接法，避免状态机拿到 Promise 判成没人脸。
+      const lmTimer = setInterval(() => {
+        if (!sharedCal || sharedGaze.inFlight) return;
+        const v = sharedGaze.video;
+        const c = sharedGaze.canvas;
+        if (!v || !c || !v.videoWidth) return;
+        sharedGaze.inFlight = true;
+        try {
+          c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+        } catch (e) {
+          sharedGaze.inFlight = false;
+          return;
+        }
+        sharedGaze.engine.push(c, performance.now())
+          .then((r) => { if (r && r.landmarks) sharedGaze.lastLandmarks = r.landmarks; })
+          .catch(() => {})
+          .then(() => { sharedGaze.inFlight = false; });
+      }, 66);
+
+      const finish = (res) => {
+        clearInterval(lmTimer);
+        if (ov) ov.destroy();
+        stopSharedCalib();
+        real.calibrating = false;
+        if (!res) { toast('已取消标定'); setRealUi('on', '标定已取消', false); return; }
+        // 拟合退化 / 误差过大时不要假装成功：不写库、不换模型
+        if (!res.model || res.model.ok === false) {
+          toast('标定无效：' + ((res.model && res.model.reason) || '精度不足') + ' · 未保存', 'bad');
+          setRealUi('on', '标定未通过 · 请调整姿势后重试', true);
+          return;
+        }
+        const q = (res.model && res.model.quality) || {};
+        const saved = S.saveModel(res.model, {
+          viewport: { w: Math.max(1, window.innerWidth), h: Math.max(1, window.innerHeight), dpr: window.devicePixelRatio || 1 },
+          camera: { w: sharedGaze.canvas.width, h: sharedGaze.canvas.height }
+        });
+        sharedGaze.model = res.model;
+        if (sharedGaze.source) sharedGaze.source.setModel(res.model);
+        toast('标定完成 · 平均误差 ' + (((q.avgErr || 0) * 100).toFixed(1)) + '%' + (saved && saved.ok ? '' : '（保存失败）'),
+          q.grade === 'good' ? 'ok' : '');
+        setRealUi('on', '共享模型已更新 · 等待人脸…', false);
+      };
+
+      const cal = new C.Calibrator({
+        container: stage,
+        getAspect: () => (sharedGaze.canvas ? sharedGaze.canvas.width / Math.max(1, sharedGaze.canvas.height) : 4 / 3),
+        // 同步返回最近一帧缓存（见上面的 lmTimer）
+        getLandmarks: () => sharedGaze.lastLandmarks,
+        onProgress: (st) => {
+          if (ov) ov.update(st);
+          if (st && st.point) sharedGaze.calPoint = st.point;   // 诊断/自检用
+        },
+        onDone: (res) => finish(res)
+      });
+      sharedCal = cal;
+      ov = O.createOverlay({
+        container: stage,
+        points: cal.points,
+        label: '眼动标定',
+        onCancel: () => finish(null)
+      });
+      ov.mount();
+
+      cal.start();
+      const tick = (now) => {
+        if (!sharedCal) return;
+        if (cal.phase === 'result') return;
+        cal.update(now);
+        sharedCalRaf = requestAnimationFrame(tick);
+      };
+      sharedCalRaf = requestAnimationFrame(tick);
+    } catch (e) {
+      real.calibrating = false;
+      stopSharedCalib();
+      toast('标定启动失败：' + ((e && e.message) || e), 'bad');
+    }
+  }
+
+  /** 标定入口：shared 优先请求宿主，独立打开时用本地 Calibrator；legacy 走原 9 点 */
+  function requestCalib() {
+    if (GAZE_MODE === 'legacy') { openCalib(); return; }
+    if (window.parent && window.parent !== window) {
+      try {
+        window.parent.postMessage({ type: 'epbl:gaze-calib-request', version: 1 }, location.origin);
+        setRealUi(real.running ? 'on' : 'idle', '已请求工作台发起标定', false);
+        return;
+      } catch (e) { /* 跨域父窗口 → 退回本地标定 */ }
+    }
+    openSharedCalib();
+  }
+
   /* ---------------- 启动 / 主循环 ---------------- */
   async function startReal() {
     if (real.running || real.starting) return;
+    if (GAZE_MODE === 'shared') return startShared();
     real.starting = true;
     real.err = '';
     real.gestureErr = '';
@@ -2478,6 +2974,14 @@ body.is-landing > .hud{
     kit: AirCanvasKit,
     noteGaze: writeGaze,
     injectGaze: (x, y) => onGaze({ x: x, y: y }),
+    // 注入 PAGE_NORM（左起、未镜像），用于校验「不再翻转」与画布换算
+    injectPage: (x, y) => {
+      const vw = Math.max(1, window.innerWidth);
+      const vh = Math.max(1, window.innerHeight);
+      onGaze({ x: x * vw, y: y * vh }, { x: x, y: y });
+    },
+    mode: () => GAZE_MODE,
+    shared: sharedGaze,
     setFaceOk: (v) => { faceSimOk = !!v; if (!v) raw.gazeSeenAt = -1e9; },
     setCalibrating: (v) => { real.calibrating = !!v; raw.down = false; },
     getState: () => ({
@@ -3704,6 +4208,19 @@ body.is-landing > .hud{
   window.addEventListener('resize', syncSize);
 
   requestAnimationFrame(tick);
+  /* GAZE-AUDIT-PROBE：只读；window.__GAZE_AUDIT_OFF 可整体关闭 */
+  if (!window.__GAZE_AUDIT_OFF && window.__makeGazeAudit) {
+    window.__gazeAudit = window.__makeGazeAudit({
+      page: 'draw',
+      engine: () => 'webgazer',
+      model: () => null,
+      points: () => CALIB_POINTS.length,
+      coord: 'page-norm',
+      lastGaze: () => ({ x: state.penX, y: state.penY, live: true, ts: state.lastFrame }),
+      quality: () => null,
+      note: 'penX/penY 为画布归一化坐标；下游另有一层 1-x 镜像'
+    });
+  }
 })();
 </script>
 </body>

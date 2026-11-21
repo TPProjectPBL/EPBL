@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>frame.js 自检 · PAGE_NORM ↔ 容器 / iframe</title>
+<style>
+  :root{
+    --bg:#0b1410; --panel:#111e18; --line:#26382e; --ink:#e9f3e7; --dim:#94a89b;
+    --brand:#A9DB7B; --warn:#f0c674;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--bg); color:var(--ink); font:13px/1.55 -apple-system,"PingFang SC",sans-serif;
+    display:flex; flex-direction:column; padding:14px; gap:10px;
+  }
+  h1{font-size:14px;margin:0;font-weight:600}
+  .sub{color:var(--dim);font-size:12px}
+  .cols{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:12px;min-height:0}
+  .pane{
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:10px;display:flex;flex-direction:column;gap:8px;min-height:0;
+  }
+  .pane h2{font-size:12px;margin:0;color:var(--dim);font-weight:600;letter-spacing:.04em}
+  #hostPad{
+    flex:1;border:1px dashed #33513f;border-radius:9px;position:relative;overflow:hidden;
+    background:
+      linear-gradient(#182a20 1px,transparent 1px) 0 0/100% 25%,
+      linear-gradient(90deg,#182a20 1px,transparent 1px) 0 0/25% 100%,
+      #0e1a14;
+    cursor:crosshair;min-height:180px;
+  }
+  #hostDot{
+    position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;
+    background:var(--brand);box-shadow:0 0 12px rgba(169,219,123,.6);display:none;pointer-events:none;
+  }
+  #hostHint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#4e6a58;pointer-events:none;text-align:center;padding:0 12px}
+  #winBox{
+    position:absolute;left:0;top:0;border:1px solid #2f4a3a;border-radius:6px;
+    background:#0c1712;overflow:hidden;
+  }
+  #iframeProj{
+    position:absolute;display:none;border:1px solid rgba(169,219,123,.6);border-radius:4px;
+    background:rgba(169,219,123,.07);pointer-events:none;
+  }
+  #iframeProj span{position:absolute;left:4px;top:2px;font-size:10px;color:#A9DB7B;opacity:.9}
+  iframe{flex:1;width:100%;border:1px solid #33513f;border-radius:9px;background:#0e1a14;min-height:180px}
+  pre{
+    margin:0;padding:8px 10px;border-radius:8px;background:#0b1510;border:1px solid #1e2f25;
+    font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#cfe3c8;white-space:pre-wrap;word-break:break-all;
+  }
+  .ok{color:var(--brand)}
+  .bad{color:#e06c6c}
+  .tag{display:inline-block;padding:1px 7px;border-radius:999px;border:1px solid #33513f;color:var(--dim);font-size:11px;margin-left:6px}
+  /* iframe 面板 */
+  #iframeRoot{display:none}
+  body[data-panel="right"]{padding:0}
+  body[data-panel="right"] .shell{display:none}
+  body[data-panel="right"] #iframeRoot{
+    display:flex;flex-direction:column;height:100%;padding:8px;gap:6px;background:#0b1410;
+  }
+  #pad{
+    flex:1;position:relative;border:1px solid #33513f;border-radius:8px;overflow:hidden;
+    background:
+      linear-gradient(#17291f 1px,transparent 1px) 0 0/100% 25%,
+      linear-gradient(90deg,#17291f 1px,transparent 1px) 0 0/25% 100%,
+      #0e1a14;
+  }
+  #dot{
+    position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;
+    background:var(--warn);box-shadow:0 0 12px rgba(240,198,116,.65);display:none;
+  }
+  #frameInfo{font-size:11px;color:#a9c0b1}
+</style>
+</head>
+<body data-panel="host">
+<div class="shell" id="shell">
+  <div style="display:flex;align-items:baseline;gap:10px">
+    <h1>frame.js 自检</h1>
+    <span class="sub">左栏模拟整窗 · 右栏是真实 iframe · 鼠标在左栏移动，右栏应精确跟随</span>
+  </div>
+  <div class="cols">
+    <section class="pane">
+      <h2>模拟整窗（host window）</h2>
+      <div id="hostPad">
+        <div id="winBox">
+          <div id="iframeProj"><span>iframe</span></div>
+          <div id="hostDot"></div>
+        </div>
+        <div id="hostHint">鼠标在框内移动（这里 = 整窗坐标）</div>
+      </div>
+      <pre id="hostInfo">page: —</pre>
+    </section>
+    <section class="pane">
+      <h2>模拟 iframe（真实嵌套，带 12px 边距偏移）</h2>
+      <iframe id="frame" src="?panel=right" title="simulated iframe"></iframe>
+      <pre id="frameInfo">等待鼠标进入左栏…</pre>
+    </section>
+  </div>
+</div>
+
+<div id="iframeRoot">
+  <div id="pad"><div id="dot"></div></div>
+  <div id="frameInfo2" style="font-size:11px;color:#a9c0b1">等待父页面消息…</div>
+</div>
+
+<script type="module">
+import { pageFromClient, clientFromPage, containerFromPage, pageFromContainer, frameContext } from '../frame.js';
+
+const PANEL = new URLSearchParams(location.search).get('panel') === 'right';
+
+/* ============================ 父页（整窗） ============================ */
+function bootHost() {
+  const pad = document.getElementById('hostPad');
+  const dot = document.getElementById('hostDot');
+  const hint = document.getElementById('hostHint');
+  const hostInfo = document.getElementById('hostInfo');
+  const frameInfo = document.getElementById('frameInfo');
+  const frame = document.getElementById('frame');
+
+  // 页面加载早期可视视口可能是 0×0，frameContext 会返回 null，这里降级到 innerWidth
+  const ctx = frameContext() || {
+    hostW: window.innerWidth || 0,
+    hostH: window.innerHeight || 0,
+    dpr: window.devicePixelRatio || 1,
+    scale: 1,
+  };
+  hostInfo.textContent = `host: ${ctx.hostW}×${ctx.hostH} dpr=${ctx.dpr} scale=${ctx.scale}`;
+
+  const proj = document.getElementById('iframeProj');
+  const winBox = document.getElementById('winBox');
+
+  // 左栏里放一个「整窗缩略图」，按 1:1 比例缩放，鼠标坐标直接就是整窗 PAGE_NORM
+  function layoutWinBox() {
+    const pr = pad.getBoundingClientRect();
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    if (!pr.width || !pr.height || !W || !H) return;
+    const k = Math.max(0.05, Math.min((pr.width - 10) / W, (pr.height - 10) / H));
+    winBox.style.width = W * k + 'px';
+    winBox.style.height = H * k + 'px';
+    winBox.style.left = (pr.width - W * k) / 2 + 'px';
+    winBox.style.top = (pr.height - H * k) / 2 + 'px';
+  }
+
+  winBox.addEventListener('mousemove', (e) => {
+    const r = winBox.getBoundingClientRect();
+    if (!(r.width > 0) || !(r.height > 0)) return;
+    const p = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return;
+    hint.style.display = 'none';
+    dot.style.display = 'block';
+    dot.style.left = p.x * 100 + '%';
+    dot.style.top = p.y * 100 + '%';
+    hostInfo.textContent =
+      `page:        ${p.x.toFixed(6)}, ${p.y.toFixed(6)}\n` +
+      `整窗 client: ${(p.x * window.innerWidth).toFixed(1)}, ${(p.y * window.innerHeight).toFixed(1)}`;
+    frame.contentWindow.postMessage({ type: 'gaze', page: p }, '*');
+  });
+
+  // 缩略图里标出右栏 iframe 的真实占位：鼠标移到框内，右栏的点就会落在容器内
+  function drawProj() {
+    layoutWinBox();
+    const fr = frame.getBoundingClientRect();
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    if (!W || !H) return;
+    proj.style.display = 'block';
+    proj.style.left = (fr.left / W) * 100 + '%';
+    proj.style.top = (fr.top / H) * 100 + '%';
+    proj.style.width = (fr.width / W) * 100 + '%';
+    proj.style.height = (fr.height / H) * 100 + '%';
+  }
+  frame.addEventListener('load', drawProj);
+  window.addEventListener('resize', drawProj);
+  setTimeout(drawProj, 400);
+
+  window.addEventListener('message', (e) => {
+    const m = e.data;
+    if (!m || m.type !== 'report') return;
+    const ok = m.err < 1e-9 && m.errClient < 1e-9;
+    frameInfo.innerHTML =
+      `容器 raw:     ${m.raw.x.toFixed(6)}, ${m.raw.y.toFixed(6)}\n` +
+      `容器 clamped: ${m.clamped.x.toFixed(6)}, ${m.clamped.y.toFixed(6)}\n` +
+      `outside:      ${m.outside}\n` +
+      `往返误差:     <span class="${ok ? 'ok' : 'bad'}">${m.err.toExponential(2)}</span>（容器）\n` +
+      `             <span class="${ok ? 'ok' : 'bad'}">${m.errClient.toExponential(2)}</span>（client）\n` +
+      `iframe rect:  ${m.rect.left.toFixed(1)}, ${m.rect.top.toFixed(1)} · ${m.rect.width.toFixed(1)}×${m.rect.height.toFixed(1)}`;
+  });
+}
+
+/* ============================ iframe 面板 ============================ */
+function bootFrame() {
+  document.body.dataset.panel = 'right';
+  const pad = document.getElementById('pad');
+  const dot = document.getElementById('dot');
+  const info = document.getElementById('frameInfo2');
+
+  window.addEventListener('message', (e) => {
+    const m = e.data;
+    if (!m || m.type !== 'gaze') return;
+
+    const host = window.parent;
+    let ctx;
+    try {
+      ctx = frameContext(host);
+    } catch (err) {
+      info.textContent = 'CROSS_ORIGIN: ' + (err.code || err.message);
+      return;
+    }
+    if (!ctx) return;
+
+    const c = containerFromPage(m.page, pad, { hostWindow: host });
+    if (!c) return;
+
+    // 画点（用 clamped，越界时贴边）
+    dot.style.display = 'block';
+    dot.style.left = (c.clamped.x * 100) + '%';
+    dot.style.top = (c.clamped.y * 100) + '%';
+
+    // 往返 1：容器 → PAGE_NORM
+    const back = pageFromContainer(c.raw, pad, { hostWindow: host });
+    const err = back ? Math.hypot(back.x - m.page.x, back.y - m.page.y) : Infinity;
+
+    // 往返 2：PAGE_NORM → iframe client → 整窗 client → PAGE_NORM
+    const cf = clientFromPage(m.page, host);
+    const back2 = cf
+      ? pageFromClient(cf.x + ctx.rect.left, cf.y + ctx.rect.top, host)
+      : null;
+    const errClient = back2 ? Math.hypot(back2.x - m.page.x, back2.y - m.page.y) : Infinity;
+
+    info.textContent =
+      `容器 ${(c.raw.x * 100).toFixed(2)}%, ${(c.raw.y * 100).toFixed(2)}%` +
+      (c.outside ? ' · 越界' : '');
+
+    host.postMessage(
+      { type: 'report', raw: c.raw, clamped: c.clamped, outside: c.outside, err, errClient, rect: ctx.rect },
+      '*'
+    );
+  });
+
+  info.textContent = '就绪，等待父页面消息…';
+}
+
+function start() {
+  if (PANEL) bootFrame();
+  else bootHost();
+}
+
+// 等一次布局，避免在视口还是 0×0 时初始化
+if (document.readyState === 'complete') requestAnimationFrame(start);
+else window.addEventListener('load', () => requestAnimationFrame(start));
+</script>
+</body>
+</html>

@@ -36,6 +36,10 @@ env/
 *.task
 *.tflite
 
+# 眼动人脸模型：用 scripts/fetch-gaze-model.sh 下载，只保留目录占位
+shared/gaze/models/*.task
+!shared/gaze/models/.gitkeep
+
 # 打包产物（不入库）
 packaging/stage/
 packaging/build/

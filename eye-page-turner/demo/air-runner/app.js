@@ -22,9 +22,20 @@ import { DwellController } from './lib/dwell.js';
 import { GazeZoneSelector, GAZE_SPLIT } from './lib/gaze-zone.js';
 import { WipeDetector, SwipeLaneDetector, classifyHand } from './lib/gesture.js';
 import { RunnerGame } from './lib/runner.js';
-import { AbsoluteGazeSource, GazeCalibModel, diagnoseText, isFaceUsable, medianSample, simLandmarksFor } from './lib/gaze-calib.js';
+import { AbsoluteGazeSource, diagnoseText, isFaceUsable, medianSample, simLandmarksFor } from './lib/gaze-calib.js';
 import { KalmanPoint, rFromAvgErr } from './lib/kalman.js';
-import { GazeOnlineTrainer } from './lib/gaze-online.js';
+import { GazeOnlineTrainer, LEGACY_SAMPLES_KEY } from '../../../../shared/gaze/online.js';
+import { centerPageNorm, installCompatGuard } from '../../../../shared/gaze/attach.js';
+import { createTwoPoint } from '../../../../shared/gaze/calibrate/two-point.js';
+import { createFaceEngine, FACE_ENGINE } from '../../../shared/gaze/engine/face-engine.js';
+import { Calibrator } from '../../../shared/gaze/calibrate/calibrator.js';
+import { loadModel, saveModel, clearModel, STORE_KEYS } from '../../../shared/gaze/store.js';
+import {
+  hello as gazeBusHello,
+  onModel as onGazeBusModel,
+  onLandmarks,
+} from '../../../shared/gaze/bus.js';
+import { containerFromPage } from '../../../shared/gaze/frame.js';
 import {
   OneEuroPoint,
   HandCursorSource,
@@ -44,8 +55,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const LS_SETTINGS = 'air-runner.settings';
 const LS_BEST = 'air-runner.best';
-const LS_GAZE = 'air-runner.gazeModel';
-const LS_GAZE_SAMPLES = 'air-runner.gazeSamples';
+const LS_GAZE_SAMPLES = LEGACY_SAMPLES_KEY; // 与 shared/gaze/online.js 的旧键双写保持一致
 
 const DEFAULT_SETTINGS = {
   mode: 'dual',
@@ -87,6 +97,22 @@ const LANE_TEXT = ['左道', '中间道', '右道'];
 /* ------------------------------------------------------------------ 状态 */
 
 const params = new URLSearchParams(location.search);
+
+/**
+ * 注视来源：
+ * - 工作台 iframe 内（默认）：优先用宿主标定的共享模型，标定也请求宿主
+ * - 独立打开：沿用本页 9 点自标定
+ * - `?gaze=legacy`：强制回到本页自标定，不接 bus
+ */
+const GAZE_LEGACY = params.get('gaze') === 'legacy';
+const IN_FRAME = (() => {
+  try {
+    return !!(window.parent && window.parent !== window);
+  } catch {
+    return false;
+  }
+})();
+const SHARED_HOSTED = IN_FRAME && !GAZE_LEGACY;
 const forcedMode = params.get('mode'); // sim | mouse | gaze | hand | dual
 
 const state = {
@@ -98,6 +124,9 @@ const state = {
   cursorSpeed: 0,
   faceResults: null,
   handResults: null,
+  faceEngine: 'legacy', // 'tasks'（默认）| 'legacy'
+  faceDelegate: null, // 实际使用的 GPU / CPU
+  faceModelSource: null, // 'local' | 'cdn'
   camReady: false,
   cameraWanted: false,
   trackReady: false, // 摄像头启动后是否已经真正推过帧（首帧推理完成）
@@ -261,6 +290,17 @@ function synthHand(cx, cy, k = 0.5, fist = false) {
 
 /* ------------------------------------------------------------------ 摄像头链路 */
 
+let hostedLmOff = null;
+
+/** 订阅宿主广播的 landmarks，喂进原有的 onFaceResults 统一入口（下游逻辑零改动） */
+function startHostedLandmarks() {
+  if (hostedLmOff) return;
+  hostedLmOff = onLandmarks((f) => {
+    const ok = !!(f && f.landmarks && f.landmarks.length);
+    onFaceResults({ multiFaceLandmarks: ok ? [f.landmarks] : [] });
+  });
+}
+
 function currentHand() {
   if (state.__synthHand) return state.__synthHand;
   const h = state.handResults;
@@ -285,18 +325,69 @@ function paintCamChip() {
   chip('chipCam', text, faceOk ? 'ok' : 'warn');
 }
 
+/** 人脸结果统一入口：Tasks 引擎与 legacy FaceMesh 都走这里，下游不用区分。 */
+function onFaceResults(r) {
+  state.faceResults = r;
+  state.trackReady = true;
+  updateCalib('face', !!currentFace());
+  drawBox('boxFace', currentFace());
+  paintCamChip();
+}
+
+/** 把 Tasks 引擎包成 legacy 的 { detect(image) -> {multiFaceLandmarks} } 形状。
+ *  注意：legacy FaceMesh 每帧都会 onResults（无人脸时数组为空），
+ *  这里也保持「每帧都回调」，否则 trackReady 会一直停在 false。 */
+function makeTasksFaceSource(engine) {
+  return {
+    kind: 'tasks',
+    detect(image) {
+      return engine.push(image, performance.now()).then((r) => {
+        const res = {
+          multiFaceLandmarks: r && r.landmarks ? [r.landmarks] : [],
+          _reason: (r && r.reason) || '',
+        };
+        onFaceResults(res);
+        return res;
+      });
+    },
+    close() {
+      engine.close();
+    },
+  };
+}
+
+/**
+ * 人脸数据源：默认 Tasks FaceLandmarker（本地模型优先），初始化失败回退 legacy FaceMesh。
+ * ?engine=legacy 强制走旧路径（保留一个版本）。
+ */
+async function createFaceSource() {
+  const forceLegacy = params.get('engine') === 'legacy';
+  if (!forceLegacy) {
+    try {
+      chip('chipCam', '人脸引擎：加载中…', 'warn');
+      const engine = await createFaceEngine({ refineLandmarks: true });
+      state.faceEngine = 'tasks';
+      state.faceDelegate = engine.delegate;
+      state.faceModelSource = engine.modelSource;
+      const tail = engine.modelSource === 'cdn' ? ' · CDN 模型' : '';
+      toast(`人脸引擎：Tasks ${engine.delegate}${tail}`, 'ok');
+      return makeTasksFaceSource(engine);
+    } catch (err) {
+      console.warn('[air-runner] Tasks 引擎不可用，回退 legacy FaceMesh', err);
+      state.faceEngine = 'legacy';
+      toast('人脸引擎：新引擎不可用，已回退 legacy', 'bad');
+    }
+  } else {
+    state.faceEngine = 'legacy';
+    toast('人脸引擎：legacy（?engine=legacy）', 'warn');
+  }
+  return new FaceMeshDetector({ onResults: onFaceResults }).init();
+}
+
 /** 创建检测器（只做实例化，不碰摄像头）。重试时复用同一份实例，避免反复加载模型。 */
-function ensureDetectors() {
+async function ensureDetectors() {
   if (!face) {
-    face = new FaceMeshDetector({
-      onResults: (r) => {
-        state.faceResults = r;
-        state.trackReady = true;
-        updateCalib('face', !!currentFace());
-        drawBox('boxFace', currentFace());
-        paintCamChip();
-      },
-    }).init();
+    face = await createFaceSource();
   }
   if (!hands) {
     hands = new HandDetector({
@@ -318,6 +409,19 @@ function ensureDetectors() {
  */
 async function startCamera() {
   if (state.cameraWanted) return state.camReady;
+
+  // 工作台内：摄像头与 FaceLandmarker 都由宿主跑，这里只订阅 landmarks，不再开流
+  if (SHARED_HOSTED) {
+    state.cameraWanted = true;
+    state.camReady = true;
+    state.camFailed = false;
+    state.trackReady = false;
+    camChipMemo = '';
+    chip('chipCam', '摄像头：宿主推理 · 等待人脸', 'warn');
+    startHostedLandmarks();
+    return true;
+  }
+
   state.cameraWanted = true;
   state.camFailed = false;
   state.trackReady = false;
@@ -326,7 +430,7 @@ async function startCamera() {
 
   const video = $('#video');
   try {
-    ensureDetectors();
+    await ensureDetectors();
 
     let busy = false;
     let tick = 0;
@@ -415,6 +519,14 @@ function stopCamera() {
     }
   }
   camera = null;
+  if (face && typeof face.close === 'function') {
+    try {
+      face.close();
+    } catch {
+      /* ignore */
+    }
+    face = null;
+  }
   state.cameraWanted = false;
   state.camReady = false;
   state.camFailed = false;
@@ -727,6 +839,9 @@ const gc = {
   model: null,
   note: '',
   tips: [], // 结果页的人类可读诊断（多行）
+  skipped: [], // 有效帧不足、被跳过的点（不中断整轮）
+  unverified: false, // 未通过质量门但仍被采用（允许跳过，但必须明确标记）
+  cal: null, // shared Calibrator 实例
 };
 
 function currentAspect() {
@@ -759,18 +874,55 @@ function pageToField(px, py) {
   };
 }
 
-function loadGazeModel() {
+/** 存储层环境描述：viewport + 摄像头分辨率 + 引擎标识（写进 schema:1 供签名与兼容判定） */
+function gazeStoreEnv() {
+  const v = $('#video');
+  return {
+    viewport: { w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio || 1 },
+    camera: v && v.videoWidth ? { w: v.videoWidth, h: v.videoHeight } : { w: 640, h: 480 },
+    engine: {
+      name: 'mediapipe-face-landmarker',
+      version: String(FACE_ENGINE.MIN_LANDMARKS),
+      landmarks: FACE_ENGINE.MIN_LANDMARKS,
+    },
+    mirror: false,
+  };
+}
+
+/**
+ * 读模型：优先 epbl.gaze.model.v1；新键缺失/无效时回退 air-runner.gazeModel 并升级（store 内完成）。
+ * 新键存在但损坏时不静默回退，直接返回 null（宁可未标定，也不带坏模型跑）。
+ */
+async function loadGazeModel() {
+  // 统一标定协议：唯一模型源是 IndexedDB 的 gaze_model
   try {
-    return GazeCalibModel.fromJSON(JSON.parse(localStorage.getItem(LS_GAZE) || 'null'));
+    const idb = await import('../../../shared/gaze/idb.js');
+    return await idb.readPredictor();
   } catch {
     return null;
   }
 }
 
+/**
+ * 启动取模型：iframe 内只认宿主写的新键（不把旧 v3 升级上来当共享模型），
+ * 独立打开仍走 loadGazeModel()，保留旧键升级。
+ */
+async function pickStartupModel() {
+  return loadGazeModel();
+}
+
+/**
+ * 写模型：新键写 schema:1，旧键双写 v3 旧格式（回滚可用）。
+ * 失败/重置时不删键，写 null 保留键位。
+ */
 function saveGazeModel(model) {
   try {
-    if (model && model.ok) localStorage.setItem(LS_GAZE, JSON.stringify(model.toJSON()));
-    else localStorage.removeItem(LS_GAZE);
+    if (model && model.ok) {
+      if (gc.unverified) model.unverified = true;
+      saveModel(model, { env: gazeStoreEnv(), legacy: true });
+    } else {
+      clearModel();
+    }
   } catch {
     /* 隐私模式下忽略 */
   }
@@ -786,10 +938,11 @@ function saveGazeModel(model) {
  * （输入=当帧面部特征，标签=被点按钮的中心），配合时间衰减加权 + 安全阀重训。
  * 算法全在 lib/gaze-online.js，这里只做采样与编排。
  *
- * 开关：?train=0 关闭（默认开）。样本存 air-runner.gazeSamples，与模型（LS_GAZE）分开。
+ * 开关：?train=0 关闭（默认开）。样本存 epbl.gaze.samples.v1，与模型（epbl.gaze.model.v1）分开。
  * ------------------------------------------------------------------ */
 
-const TRAIN_ON = params.get('train') !== '0';
+// 统一标定协议接管后，运行时不改写模型系数：在线学习固定关闭。
+const TRAIN_ON = false;
 /**
  * 特征新鲜度窗口（ms）：人脸刚要丢/刚丢失时，缓存的还是几帧前的特征，
  * 而标签是「现在点的按钮」——两者不同步的样本比没有样本更坏，直接丢弃。
@@ -855,11 +1008,12 @@ function noteGazeClick(el) {
   const age = Date.now() - gazeSource.lastFeaturesAt;
   if (!(age >= 0 && age <= CLICK_FEATURE_MAX_AGE_MS)) return null;
   if (!el || !el.getBoundingClientRect) return null;
-  const r = el.getBoundingClientRect();
-  if (!r.width || !r.height) return null;
-  const tx = (r.left + r.width / 2) / window.innerWidth;
-  const ty = (r.top + r.height / 2) / window.innerHeight;
-  if (tx < 0 || tx > 1 || ty < 0 || ty > 1) return null; // 屏外元素（隐藏屏幕里的按钮）
+  // 必须换算到**顶层** PAGE_NORM：本页跑在 iframe 里时，window.innerHeight 是 iframe 的高度，
+  // 直接用会把标签系统性地拉伸（宿主标定的模型目标是顶层页面坐标）。
+  const p = centerPageNorm(el, window);
+  if (!p) return null; // 元素不可见或落在屏外（隐藏屏幕里的按钮）
+  const tx = p.x;
+  const ty = p.y;
   // 时间基准必须是 Date.now()：样本要跨会话存活，performance.now() 每次刷新都归零
   const t = Date.now();
   trainer.addClick(f, tx, ty, t);
@@ -882,6 +1036,8 @@ function scheduleRetrain() {
  * 否则宁可维持现状——「不变准」比「变不准」好。
  */
 function retrainGaze() {
+  // 统一标定：模型只能在标定页由 9 点 + 5 点验证生成，本页不做在线更新
+  if (!TRAIN_ON) return { status: 'disabled' };
   const r = trainer.train({ now: Date.now(), aspect: currentAspect(), judge: state.gazeModel });
   if (r.status === 'accepted') {
     state.gazeModel = r.model;
@@ -970,7 +1126,29 @@ function paintGazeCalib(k = 0) {
   }
 }
 
+/**
+ * iframe 内点「标定」：不在本页跑 9 点，而是请求宿主（工作台）标定。
+ * 宿主完成后通过 epbl:gaze-model 广播，本页热加载，不刷新。
+ */
+function requestHostCalib() {
+  try {
+    window.parent.postMessage({ type: 'epbl:gaze-calib-request', version: 1 }, location.origin);
+    toast('已请求工作台发起标定 · 完成后自动应用，不用再标一次', 'ok');
+  } catch (e) {
+    toast('无法请求宿主标定：' + ((e && e.message) || e), 'bad');
+  }
+}
+
 function startGazeCalib() {
+  if (SHARED_HOSTED) {
+    requestHostCalib();
+    return;
+  }
+  // 统一标定：本页不再自己跑 9 点，独立打开时跳回工作台标定页
+  try {
+    location.href = new URL('/workbench/index.html#/calibrate', location.href).href;
+    return;
+  } catch (e) {}
   if (!state.camReady && !state.cameraWanted && !sim.active) {
     toast('标定需要摄像头：请先在模式页允许摄像头权限', 'bad');
     return;
@@ -988,12 +1166,41 @@ function startGazeCalib() {
   const apply = $('#gcApply');
   if (apply) apply.disabled = true;
   if (router) router.go('gazeCalib');
+
+  const field = $('#gazeField');
+  gc.cal = new Calibrator({
+    container: field,
+    settleMs: GC_SETTLE_MS,
+    collectMs: GC_COLLECT_MS,
+    minFrames: GC_MIN_FRAMES,
+    getAspect: currentAspect,
+    getLandmarks: ({ tx, ty }) => {
+      if (sim.active) {
+        const p = fieldToPage(tx, ty);
+        return simLandmarksFor(p.x, p.y, currentAspect(), { noise: 0.004 });
+      }
+      const arr = state.faceResults && state.faceResults.multiFaceLandmarks;
+      return arr && arr[0] ? arr[0] : null;
+    },
+    onProgress: (st) => {
+      gc.idx = st.idx;
+      gc.phase = st.phase;
+      gc.note = st.note === 'waiting-face' ? '未检测到可用人脸，请正对摄像头并保持睁眼' : st.note || '';
+      paintGazeCalib(st.pointProgress);
+    },
+    onDone: (r) => finishGazeCalib(r),
+  });
+  gc.cal.start();
   paintGazeCalib(0);
 }
 
 function cancelGazeCalib() {
   gc.active = false;
   gc.phase = 'idle';
+  if (gc.cal) {
+    gc.cal.cancel();
+    gc.cal = null;
+  }
   gc.note = '';
   if (router) router.go('settings');
   toast('已取消标定');
@@ -1013,23 +1220,29 @@ function clearGazeModel() {
   toast('已清除标定数据', 'ok');
 }
 
-function finishGazeCalib() {
+function finishGazeCalib(result) {
   gc.active = false;
   gc.phase = 'result';
-  const model = GazeCalibModel.fit(gc.samples, { aspect: currentAspect() });
+  if (result && result.samples) gc.samples = result.samples;
+  if (result && result.skipped) gc.skipped = result.skipped;
+  const model = result && result.model;
   gc.model = model;
   paintGazeCalib(0);
 
   if (!model || !model.ok) {
-    gc.note = gazeFailText(model);
+    // 允许跳过，但明确标记 unverified；沿用上一份可用模型，不把旧模型顶掉
+    gc.unverified = true;
+    gc.model = state.gazeModel || null;
+    gc.note = gazeFailText(model) + ' · 未通过质量门（unverified）';
     gc.tips = diagnoseText(model);
     const apply = $('#gcApply');
-    if (apply) apply.disabled = true;
+    if (apply) apply.disabled = !state.gazeModel;
     paintGazeCalib(0);
-    toast('标定失败：' + gc.note, 'bad');
+    toast('标定未通过质量门，已标记 unverified', 'warn');
     return;
   }
 
+  gc.unverified = !!(model.quality && model.quality.grade === 'poor');
   state.gazeModel = model;
   gazeSource.setModel(model);
   state.settings.gazeAbs = 'on';
@@ -1102,6 +1315,8 @@ function exportGazeDiag() {
       ? gc.samples.map((s) => ({ tx: r4(s.tx), ty: r4(s.ty), n: s.n, usable: s.usable, stats: s.stats || null, f: s.f }))
       : null,
     tips: diagnoseText(m),
+    skipped: gc.skipped && gc.skipped.length ? gc.skipped : null,
+    unverified: !!(gc.unverified || (m && m.unverified)),
   };
   const text = JSON.stringify(payload, null, 2);
   const done = () => toast('诊断数据已复制，可直接粘贴发送', 'ok');
@@ -1133,63 +1348,66 @@ function exportGazeDiag() {
 }
 
 function tickGazeCalib(now) {
-  const target = GC_POINTS[gc.idx];
-  if (!target || gc.phase === 'result' || gc.phase === 'idle') return;
+  if (gc.cal) gc.cal.update(now);
+}
 
-  const page = fieldToPage(target[0], target[1]);
-  const lm = sim.active
-    ? simLandmarksFor(page.x, page.y, currentAspect(), { noise: 0.004 })
-    : state.faceResults && state.faceResults.multiFaceLandmarks && state.faceResults.multiFaceLandmarks[0];
+/**
+ * PAGE_NORM（整窗归一化）→ 本页容器归一化。
+ * 独立全屏时容器≈视口，结果与输入相同；iframe 内扣掉 iframe 偏移后仍是 0..1，
+ * 所以 GAZE_SPLIT 分区阈值一行都不用改。
+ */
+function toZonePoint(pt) {
+  if (!pt) return null;
+  const conf = pt.conf == null ? 1 : pt.conf;
+  try {
+    // p 是「整窗」PAGE_NORM：iframe 内必须显式告诉 frame 模块宿主是 parent，
+    // 否则会把整窗归一化当成 iframe 自己的归一化，y 会整体偏大。
+    const q = containerFromPage({ x: pt.x, y: pt.y }, document.documentElement, {
+      hostWindow: IN_FRAME ? window.parent : window,
+    });
+    if (q) return { x: q.clamped.x, y: q.clamped.y, conf };
+  } catch {
+    /* 跨域 / 零尺寸：退回恒等（与旧行为一致） */
+  }
+  return { x: pt.x, y: pt.y, conf };
+}
 
-  if (gc.phase === 'wait') {
-    const ok = sim.active || isFaceUsable(lm);
-    gc.note = ok ? '' : '未检测到可用人脸，请正对摄像头并保持睁眼';
-    if (ok) {
-      gc.phase = 'stare';
-      gc.t0 = now;
-      gc.frames = [];
-    }
-    paintGazeCalib(0);
+/**
+ * 工作台宿主广播模型 → 热加载（不刷新页面）。
+ * 宿主标定不是本页采的样本，所以顺手清掉旧的在线学习基座，避免拿旧样本重训新模型。
+ */
+let appliedGazeSig = '';
+
+function initGazeBus() {
+  if (!SHARED_HOSTED) return;
+  if (state.gazeModel) {
+    appliedGazeSig = state.gazeModel.sig || 'created:' + state.gazeModel.created;
+  }
+  try {
+    gazeBusHello();
+  } catch {
+    /* 宿主没有 bus（旧版本）→ 静默降级，仍可本地标定 */
     return;
   }
-
-  const total = GC_SETTLE_MS + GC_COLLECT_MS;
-  const elapsed = now - gc.t0;
-
-  if (gc.phase === 'collect' && (sim.active || isFaceUsable(lm))) {
-    gc.frames.push({ lm, tx: page.x, ty: page.y });
-    if (gc.frames.length > 90) gc.frames.shift();
-  }
-
-  paintGazeCalib(elapsed / total);
-
-  if (gc.phase === 'stare') {
-    if (elapsed >= GC_SETTLE_MS) {
-      gc.phase = 'collect';
-      gc.frames = [];
-      gc.note = '';
-    }
-    return;
-  }
-
-  if (elapsed >= total) {
-    if (gc.frames.length >= GC_MIN_FRAMES) {
-      const s = medianSample(gc.frames, currentAspect());
-      if (s) gc.samples.push(s);
-      else gc.note = '该点采样无效';
-    } else {
-      gc.note = '该点有效帧不足，已跳过';
-    }
-    gc.idx += 1;
-    gc.frames = [];
-    if (gc.idx >= GC_POINTS.length) {
-      finishGazeCalib();
-      return;
-    }
-    gc.phase = 'stare';
-    gc.t0 = now;
-    paintGazeCalib(0);
-  }
+  onGazeBusModel(async (msg) => {
+    const m = await loadGazeModel();
+    if (!m || !m.ok) return;
+    // 广播里带 sig；模型实例上不一定有（store 的 sig 是存储层字段）
+    const sig = (msg && msg.sig) || m.sig || 'created:' + m.created;
+    if (sig === appliedGazeSig) return;
+    appliedGazeSig = sig;
+    state.gazeModel = m;
+    gazeSource.setModel(m);
+    state.settings.gazeAbs = 'on';
+    trainer.clearClicks();
+    trainer.setBase([]);
+    saveGazeSamples();
+    kalman.reset();
+    smooth.reset();
+    syncKalmanR();
+    syncSettingsUi();
+    toast('已应用工作台的共享模型 · ' + (sig || 'new') + '（无需刷新）', 'ok');
+  });
 }
 
 /* ------------------------------------------------------------------ 主循环 */
@@ -1262,11 +1480,12 @@ function frame(now) {
   const liveInput = inGameStage || sim.active; // sim 自动演示需要走同一套分发
   if (router.current === 'tutorial' && liveInput) {
     gazeZone.setEnabled(true);
-    gazeZone.update(state.cursor, now);
+    gazeZone.update(toZonePoint(state.cursor), now);
   } else if (router.current === 'game' && game) {
     // 视线落在顶部 HUD 区域时不分发变道，避免"看暂停钮也变道"
     gazeZone.setEnabled(true);
-    const usable = state.cursor && state.cursor.y >= 0.16 ? state.cursor : null;
+    const local = toZonePoint(state.cursor);
+    const usable = local && local.y >= 0.16 ? local : null;
     if (!usable) clearZones(); // 没有有效视线时把箭头/识别带的高亮收回
     gazeZone.update(usable, now);
     updateHud(now);
@@ -1937,14 +2156,32 @@ export function boot() {
   state.inputStage = 'menu';
   setMode('mouse', { silent: true });
 
-  // 载入已保存的 9 点标定模型
-  state.gazeModel = loadGazeModel();
+  // 载入模型：统一从 IndexedDB 读取；读不到要求回工作台标定
+  state.gazeModel = null;
+  initGazeBus();
+  pickStartupModel().then((m) => {
+    if (!m) {
+      if (SHARED_HOSTED) requestHostCalib();
+      return;
+    }
+    state.gazeModel = m;
+    if (state.settings.gazeAbs === 'on') {
+      gazeSource.setModel(m);
+      syncKalmanR();
+    }
+    paintCalib();
+  });
   if (params.get('gaze') === 'abs') state.settings.gazeAbs = 'on';
   if (state.settings.gazeAbs === 'on') {
     if (state.gazeModel && state.gazeModel.ok) gazeSource.setModel(state.gazeModel);
     else {
       state.settings.gazeAbs = 'off';
-      toast('没有可用的标定数据，精确注视已关闭（设置页可重新标定）', 'bad');
+      toast(
+        SHARED_HOSTED
+          ? '没有可用的共享模型：请在工作台点「标定视线」，完成后会自动应用'
+          : '没有可用的标定数据，精确注视已关闭（设置页可重新标定）',
+        'bad'
+      );
     }
   }
   // 卡尔曼的 R 跟着标定质量走；在线学习的样本池已在模块加载时从 localStorage 恢复
@@ -1992,6 +2229,14 @@ try {
 
 // 调试/自测入口
 if (typeof window !== 'undefined') {
+  // iframe 卸载：主动退订，避免宿主一直以为还有人要 landmarks
+  window.addEventListener('pagehide', () => {
+    if (hostedLmOff) {
+      hostedLmOff();
+      hostedLmOff = null;
+    }
+  });
+
   window.__airRunner = {
     get router() {
       return router;
@@ -2014,6 +2259,9 @@ if (typeof window !== 'undefined') {
     forceCalibPass,
     applySetting,
     gazeSource,
+    sharedHosted: () => SHARED_HOSTED,
+    // 自检：PAGE_NORM → 本页三区坐标（与 gazeZone 收到的是同一条路径）
+    zonePoint: (x, y) => toZonePoint({ x, y, conf: 1 }),
     smooth:
       SMOOTH_KIND === 'kalman'
         ? { kind: SMOOTH_KIND, filter: (p, t) => kalman.filter(p, t), reset: () => kalman.reset() }
@@ -2066,5 +2314,97 @@ if (typeof window !== 'undefined') {
       }),
     },
     actions: ACTIONS,
+  };
+}
+
+/* GAZE-AUDIT-PROBE：只读；window.__GAZE_AUDIT_OFF 可整体关闭 */
+if (!window.__GAZE_AUDIT_OFF && window.__makeGazeAudit) {
+  window.__gazeAudit = window.__makeGazeAudit({
+    page: 'air-runner',
+    engine: () => 'mediapipe-face-mesh-478',
+    model: () => state.gazeModel,
+    points: () => GC_POINTS.length,
+    coord: 'page-norm',
+    lastGaze: () => ({ x: state.cursor.x, y: state.cursor.y, live: true, ts: 0 }),
+    quality: () => (state.gazeModel && state.gazeModel.quality) || null
+  });
+}
+
+/* 调试钩子：仅 ?debug=1 生效，用于验证「视频 → 引擎 → 标定」链路。
+   必须合并进已有钩子：直接整体赋值会覆盖 gazeCalib / boot / beginRun 等入口。 */
+if (params.get('debug') === '1') {
+  const hook = window.__airRunner || {};
+  hook.ensureDetectors = ensureDetectors;
+  hook.onFaceResults = onFaceResults;
+  Object.defineProperty(hook, 'face', { get: () => face, configurable: true, enumerable: true });
+  Object.defineProperty(hook, 'camera', { get: () => camera, configurable: true, enumerable: true });
+  window.__airRunner = hook;
+}
+
+/* ------------------------------------------------------------------ 窗口尺寸变化 → 两点校正 */
+
+let twoPt = null;
+
+/**
+ * 两点校正：窗口一改，注视点会整体平移/缩放。用两个点解 s/t（x/y 各自独立），
+ * 比重新做 9 点快得多；缩放超出 REFINE_SCALE_RANGE 时会提示重新标定。
+ */
+function startTwoPointRefine() {
+  if (twoPt && twoPt.running) return twoPt;
+  if (!state.gazeModel || !state.gazeModel.ok) {
+    toast('还没有标定模型，先做 9 点标定', 'warn');
+    return null;
+  }
+  twoPt = createTwoPoint({
+    container: document.body,
+    model: state.gazeModel,
+    getLandmarks: () => {
+      if (sim.active) return null;
+      const arr = state.faceResults && state.faceResults.multiFaceLandmarks;
+      return arr && arr[0] ? arr[0] : null;
+    },
+    getAspect: currentAspect,
+    storage: (() => {
+      try {
+        return localStorage;
+      } catch {
+        return null;
+      }
+    })(),
+    onDone: (r) => {
+      if (!r.ok) {
+        toast(r.reason === 'out-of-range' ? '变化太大，请重新标定' : '两点校正未完成', 'bad');
+        return;
+      }
+      state.gazeModel = r.model;
+      gazeSource.setModel(r.model);
+      if (!sim.active) saveGazeModel(r.model);
+      syncKalmanR();
+      const e = r.after && r.after.avgErr;
+      toast(`两点校正完成${isFinite(e) ? `（平均 ${(e * 100).toFixed(1)}%）` : ''}`, 'ok');
+    },
+  });
+  twoPt.start();
+  return twoPt;
+}
+
+// 尺寸变化：soft → 顶部条「两点校正」；hard → 阻塞「重新标定」
+installCompatGuard({
+  getModel: () => state.gazeModel,
+  onRefine: startTwoPointRefine,
+  onRecalib: () => {
+    try {
+      startGazeCalib();
+    } catch (e) {
+      console.warn('[air-runner] 重新标定失败', e);
+    }
+  },
+});
+
+if (typeof window !== 'undefined') {
+  window.__airRunnerGaze = {
+    ...(window.__airRunnerGaze || {}),
+    twoPoint: startTwoPointRefine,
+    trainer,
   };
 }

@@ -27,21 +27,21 @@
   }
   :root:not([data-theme]), :root[data-theme="dark"]{
     color-scheme:dark;
-    --bg:#0b0b07; --bg2:#16160f; --panel:rgba(22,22,15,.93);
-    --line:rgba(245,197,24,.16); --line-strong:rgba(245,197,24,.5);
-    --txt:#f7f2de; --dim:#a79d72; --faint:#6b6449;
-    --acc:#f5c518; --acc-ink:#16160f; --acc2:#ffd94a;
-    --acc-soft:rgba(245,197,24,.08); --bad:#ff5a4d; --good:#4cd964;
-    --glow:rgba(245,197,24,.5); --grid-line:rgba(245,197,24,.06);
+    --bg:#080d09; --bg2:#121a12; --panel:rgba(20,28,19,.93);
+    --line:rgba(169,219,123,.16); --line-strong:rgba(169,219,123,.5);
+    --txt:#eef2e6; --dim:#9aa88f; --faint:#6b7a62;
+    --acc:#a9db7b; --acc-ink:#16200f; --acc2:#68955d;
+    --acc-soft:rgba(169,219,123,.10); --bad:#ff5a4d; --good:#4cd964;
+    --glow:rgba(169,219,123,.45); --grid-line:rgba(169,219,123,.07);
   }
   :root[data-theme="light"]{
     color-scheme:light;
-    --bg:#f3f7fc; --bg2:#ffffff; --panel:rgba(255,255,255,.96);
-    --line:rgba(37,99,235,.16); --line-strong:rgba(37,99,235,.5);
-    --txt:#16233a; --dim:#5a6b84; --faint:#8fa0b4;
-    --acc:#2563eb; --acc-ink:#ffffff; --acc2:#3b82f6;
-    --acc-soft:rgba(37,99,235,.08); --bad:#e5484d; --good:#16a34a;
-    --glow:rgba(37,99,235,.32); --grid-line:rgba(37,99,235,.07);
+    --bg:#f1f5ec; --bg2:#ffffff; --panel:rgba(255,255,255,.96);
+    --line:rgba(77,128,70,.18); --line-strong:rgba(77,128,70,.5);
+    --txt:#16200f; --dim:#56654b; --faint:#779549;
+    --acc:#4d8046; --acc-ink:#ffffff; --acc2:#68955d;
+    --acc-soft:rgba(77,128,70,.10); --bad:#e5484d; --good:#16a34a;
+    --glow:rgba(77,128,70,.30); --grid-line:rgba(77,128,70,.07);
   }
   *{box-sizing:border-box; -webkit-user-select:none; user-select:none;}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
@@ -185,9 +185,11 @@
   <div id="log"></div>
 </div>
 
+<script src="../shared/gaze/audit-probe.js"></script>
 <script type="module">
 import { classifyHand, createGestureStream } from "./js/gesture.js";
 import { createBackend } from "./js/backend.js";
+import * as PB from "../shared/gaze/page-bridge.js";
 
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -254,7 +256,7 @@ function log(msg, cls) {
   const t = new Date().toLocaleTimeString("zh-CN", { hour12: false });
   logs.unshift({ t, msg, cls: cls || "" });
   if (logs.length > 80) logs.pop();
-  $("log").innerHTML = logs.map(l => `<div><span style="color:#5b6d87">${l.t}</span> <span class="${l.cls}">${l.msg}</span></div>`).join("");
+  $("log").innerHTML = logs.map(l => `<div><span style="color:#66756a">${l.t}</span> <span class="${l.cls}">${l.msg}</span></div>`).join("");
 }
 $("btnClearLog").addEventListener("click", () => { logs.length = 0; $("log").innerHTML = ""; });
 
@@ -283,8 +285,57 @@ const gestureStream = createGestureStream({
   },
 });
 
-/* ---------- WebGazer 眼动 ---------- */
+/* ---------- 共享模型眼动（默认）---------- */
 let gInit = false;
+let sharedSrc = null;
+
+function needWorkbenchHint() {
+  log(
+    '没有可用的共享视线模型。请先到 <a href="../workbench/" target="_blank" rel="noopener" style="color:#a9db7b;text-decoration:underline">工作台</a> 完成一次标定（完成后本页自动可读），' +
+      '或加 <code>?gaze=legacy</code> 使用原 WebGazer 路径。',
+    'er'
+  );
+  setPill($("pillCam"), false, "摄像头 · 缺共享模型");
+}
+
+function onSharedFrame(f) {
+  if (!f || !f.ok || !f.point) { setPill($("pillCam"), true, "摄像头 · 无视线"); return; }
+  S.gazeCount++;
+  const nx = clamp(f.point.x, 0, 1);
+  const ny = clamp(f.point.y, 0, 1);
+  if (!gInit) { S.gx = nx; S.gy = ny; gInit = true; }
+  S.gx += (nx - S.gx) * EMA;
+  S.gy += (ny - S.gy) * EMA;
+  backend.sendCursor(S.gx, S.gy);
+  setCursor(S.gx * innerWidth, S.gy * innerHeight);
+}
+
+/**
+ * 共享模型启动。成功即代表「单一模型源」：WebGazer 全程不 begin。
+ * @returns {Promise<boolean>}
+ */
+async function bootShared() {
+  const model = await PB.primeSharedModel();
+  if (!model) { needWorkbenchHint(); return false; }
+  try {
+    sharedSrc = await PB.startSharedGaze({ onFrame: onSharedFrame });
+  } catch (e) {
+    const msg = (e && e.message) || String(e);
+    log("共享模式启动失败：" + msg, "er");
+    setPill($("pillCam"), false, "摄像头 · 失败");
+    if (msg === 'NotAllowedError' || /permission/i.test(msg)) {
+      log("摄像头权限被拒绝：请在地址栏允许摄像头后点「启动摄像头」重试", "er");
+    }
+    return false;
+  }
+  handImg = sharedSrc.video;   // 手势复用同一路流
+  cursorEl.classList.add("live");
+  setPill($("pillCam"), true, `摄像头 · ${sharedSrc.video.videoWidth || "?"}×${sharedSrc.video.videoHeight || "?"}`);
+  log(`共享模型就绪（${model.sig || "created:" + model.created}）· 摄像头已接管`, "ok");
+  return true;
+}
+
+/* ---------- WebGazer 眼动（?gaze=legacy 回退）---------- */
 function onGaze(data) {
   if (!data) { setPill($("pillCam"), true, "摄像头 · 无视线"); return; }
   S.gazeCount++;
@@ -403,9 +454,15 @@ function handLoop(now) {
 /* ---------- 启动 ---------- */
 async function boot() {
   $("btnBoot").disabled = true;
-  log("正在启动眼动（WebGazer 开摄像头）…");
-  const okEye = await bootEye();
-  if (!okEye) { $("btnBoot").disabled = false; return; }
+  if (PB.gazeMode() === "shared") {
+    log("共享模型模式：启动摄像头 + FaceLandmarker…");
+    const okShared = await bootShared();
+    if (!okShared) { $("btnBoot").disabled = false; return; }
+  } else {
+    log("正在启动眼动（WebGazer 开摄像头）…");
+    const okEye = await bootEye();
+    if (!okEye) { $("btnBoot").disabled = false; return; }
+  }
   log("正在加载手势模型…");
   const okHand = await bootHand();
   S.running = true;
@@ -416,6 +473,10 @@ $("btnBoot").addEventListener("click", boot);
 /* ---------- 停止摄像头 ---------- */
 function stopCamera() {
   if (!S.running && !gInit) { log("摄像头本就未开启"); return; }
+  if (sharedSrc) {
+    try { sharedSrc.stop(); } catch (e) {}
+    sharedSrc = null;
+  }
   try {
     if (typeof webgazer !== "undefined") {
       try { webgazer.clearGazeListener(); } catch (e) {}
@@ -464,6 +525,34 @@ document.addEventListener("keyup", (e) => {
 /* ---------- 初始化 ---------- */
 backend.connect();
 renderHand();
+/* GAZE-AUDIT-PROBE：只读；window.__GAZE_AUDIT_OFF 可整体关闭 */
+if (!window.__GAZE_AUDIT_OFF && window.__makeGazeAudit) {
+  window.__gazeAudit = window.__makeGazeAudit({
+    page: 'control-frontend',
+    engine: () => (sharedSrc ? 'shared' : 'webgazer'),
+    model: () => (sharedSrc ? sharedSrc.getModel() : null),
+    points: () => 0,
+    coord: 'page-norm',
+    lastGaze: () => ({ x: S.gx, y: S.gy, live: true, ts: 0 }),
+    quality: () => null,
+    note: '无标定 UI，直接用 WebGazer 当前回归'
+  });
+}
+// 模型热更新：工作台重新标定后，本页无需刷新
+PB.subscribeModel((m) => {
+  if (sharedSrc) sharedSrc.setModel(m);
+  log(`共享模型已更新（${m.sig || "created:" + m.created}）`, "ok");
+  setPill($("pillCam"), true, "摄像头 · 共享模型已更新");
+});
+
+// 自检钩子
+window.__cf = {
+  mode: () => PB.gazeMode(),
+  shared: () => ({ hasModel: !!PB.readSharedModel(), running: !!sharedSrc }),
+  injectNorm: (x, y) => onSharedFrame({ ok: true, point: { x, y, conf: 1 } }),
+  state: S,
+};
+
 log("前端就绪。可先「连接」后端，再「启动摄像头」或直接用模拟模式联调。");
 </script>
 </body>

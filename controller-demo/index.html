@@ -10,12 +10,12 @@
   :root {
     --bg: #ffffff;
     --ink: #1d1d1f;
-    --muted: #6e6e73;
-    --line: #e8e8ed;
+    --muted: #5f6b59;
+    --line: #e2e8dc;
     --btn: #1d1d1f;
     --btn-hover: #3a3a3c;
-    --blue: #0071e3;
-    --soft: #f5f5f7;
+    --blue: #4d8046;
+    --soft: #f2f5ed;
     --radius: 12px;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -35,7 +35,7 @@
     padding: 14px 28px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
   }
   header .brand { display: flex; align-items: center; gap: 12px; }
-  header .logo { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg,#0f1728,#2f4aa8); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 15px; }
+  header .logo { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg,#0c140d,#4d8046); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 15px; }
   header h1 { font-size: 17px; margin: 0; letter-spacing: .2px; }
   header .sub { font-size: 12px; color: var(--muted); }
   .spacer { flex: 1; }
@@ -89,12 +89,12 @@
   .key:hover { background: var(--btn-hover); }
   .key:active { transform: scale(.96); }
   .key .glyph { display: block; font-size: 20px; margin-bottom: 6px; }
-  .key.hovered { background: #515154; box-shadow: 0 0 0 3px rgba(0,113,227,.35); }
+  .key.hovered { background: #515154; box-shadow: 0 0 0 3px rgba(77,128,70,.35); }
   .key.triggered { background: var(--blue); }
 
   .calib-panel { display: flex; flex-direction: column; gap: 14px; }
   .big-btn { background: var(--blue); color: #fff; border: none; border-radius: var(--radius); padding: 16px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background .18s ease, transform .12s ease; }
-  .big-btn:hover { background: #1a5fc0; }
+  .big-btn:hover { background: #3f6b3a; }
   .big-btn:active { transform: scale(.98); }
   .big-btn.ghost { background: var(--soft); color: var(--ink); border: 1px solid var(--line); }
   .big-btn.ghost:hover { background: #eaeaee; }
@@ -109,8 +109,8 @@
   }
   .gesture-tag.open { background: #e6f4ea; color: #1a7f37; border-color: #bfe3c9; }
   .gesture-tag.close { background: #ffe8e0; color: #b33a1e; border-color: #ffcfbf; }
-  .gesture-tag.action { background: #e8f1fd; color: #1a56c4; border-color: #cfe0f6; }
-  .gesture-tag.scroll { background: #ede9fe; color: #6d28d9; border-color: #ddd6fe; }
+  .gesture-tag.action { background: #e8f2e0; color: #3f6b3a; border-color: #cfe0c4; }
+  .gesture-tag.scroll { background: #eef4e4; color: #4f6f46; border-color: #d7e0ce; }
   .gesture-map { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 2px; }
   .gmap-item { font-size: 12px; color: var(--muted); background: var(--soft); border: 1px solid var(--line); border-radius: 20px; padding: 5px 12px; }
   .gmap-item b { color: var(--ink); margin-right: 4px; font-size: 13px; }
@@ -121,7 +121,7 @@
   .scroll-demo::-webkit-scrollbar { width: 8px; }
   .scroll-demo::-webkit-scrollbar-thumb { background: #c7ccd6; border-radius: 8px; }
   .sd-item { padding: 10px 14px; margin: 4px 0; border-radius: 10px; background: #fff; border: 1px solid var(--line); font-size: 13px; color: var(--ink); }
-  .sd-item.active { background: #e8f1fd; border-color: var(--blue); }
+  .sd-item.active { background: #e8f2e0; border-color: var(--blue); }
 
   footer { max-width: 1120px; margin: 0 auto 40px; padding: 0 28px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   footer .note { font-size: 12px; color: var(--muted); margin-left: auto; }
@@ -142,7 +142,7 @@
   .cam-off { position: fixed; right: 20px; bottom: 20px; z-index: 25; font-size: 12px; color: var(--muted); background: var(--soft); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; }
 
   /* 标定覆盖层 */
-  .overlay { position: fixed; inset: 0; z-index: 100; background: rgba(15,23,40,.96); display: none; flex-direction: column; align-items: center; justify-content: center; color: #fff; }
+  .overlay { position: fixed; inset: 0; z-index: 100; background: rgba(15,23,15,.96); display: none; flex-direction: column; align-items: center; justify-content: center; color: #fff; }
   .overlay.show { display: flex; }
   .overlay h2 { font-size: 20px; margin: 0 0 6px; }
   .overlay .sub { font-size: 13px; opacity: .8; margin: 0 0 20px; }
@@ -293,6 +293,12 @@
   <div class="bar" id="calibBar">已标定 0 / 9</div>
 </div>
 
+<script src="../shared/gaze/audit-probe.js"></script>
+<script type="module">
+  // 共享模型桥（ESM）；classic IIFE 通过 window.__epblPageBridge 取用
+  import * as PB from "../shared/gaze/page-bridge.js";
+  window.__epblPageBridge = Object.assign(window.__epblPageBridge || {}, PB);
+</script>
 <script>
 (function () {
   "use strict";
@@ -304,6 +310,22 @@
     dwellMs: 800, calibDone: false, speed: 1.0,
     dbg: { gazes: 0, handSend: 0, handRes: 0, handErr: "", gazeErr: "" },
   };
+
+  // ---------- 共享模型（shared/gaze）----------
+  // ?gaze=legacy 强制走原 WebGazer 链路；默认有共享模型就用共享模型
+  const PB = window.__epblPageBridge || null;
+  const GAZE_LEGACY = new URLSearchParams(location.search).get("gaze") === "legacy";
+  const SG = { on: false, source: null, model: null, off: null };
+
+  /** 桥是 defer 加载的：classic IIFE 先跑，这里等它挂到 window 上 */
+  async function waitBridge(timeoutMs = 3000) {
+    const t0 = performance.now();
+    while (!window.__epblPageBridge) {
+      if (performance.now() - t0 > timeoutMs) return null;
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    return window.__epblPageBridge;
+  }
 
   // ---------- hero 模式（?mode=hero）----------
   // 必须在桥接代码之前声明：heroSend / onGaze 都引用它。
@@ -537,7 +559,8 @@
   }
   function setCalibPill() {
     const p = $("pillCalib"), dot = p.querySelector(".dot");
-    if (S.calibDone) { dot.className = "dot on"; p.lastChild.textContent = " 已标定"; }
+    if (SG.on && SG.model) { dot.className = "dot on"; p.lastChild.textContent = " 共享模型"; }
+    else if (S.calibDone) { dot.className = "dot on"; p.lastChild.textContent = " 已标定"; }
     else { dot.className = "dot warn"; p.lastChild.textContent = " 未标定"; }
   }
 
@@ -572,6 +595,16 @@
     });
   }
   function startCalib() {
+    // shared 模式：本页不标定，请宿主统一标定
+    if (SG.on) {
+      const B = window.__epblPageBridge;
+      if (!B || !B.requestHostCalib()) {
+        showBanner("<b>共享模型模式下不需要在这里标定。</b> 请到工作台点「标定视线」；独立打开时加 <code>?gaze=legacy</code> 可恢复 WebGazer 9 点标定。");
+        return;
+      }
+      showBanner("<b>已请求工作台标定。</b> 完成后共享模型会自动应用到本页，不需要刷新。");
+      return;
+    }
     if (typeof webgazer === "undefined" || !runGaze) {
       showBanner("当前模式未启用眼动追踪（WebGazer），无法标定。");
       return;
@@ -632,9 +665,11 @@
       return;
     }
     setPill($("pillFace"), true);
-    const rx = clamp(data.x, 0, window.innerWidth);
-    const ry = clamp(data.y, 0, window.innerHeight);
+    applyGazeClient(clamp(data.x, 0, window.innerWidth), clamp(data.y, 0, window.innerHeight));
+  }
 
+  /** WebGazer 与共享模型共用同一条「client px → 平滑/磁吸/光标」链路 */
+  function applyGazeClient(rx, ry) {
     // hero 模式：原样转发，交给 hero 自己的 One-Euro + 速度门 + 扫视重放
     if (heroMode) { heroSend(rx, ry); return; }
 
@@ -710,6 +745,61 @@
   // ---------- 初始化 ----------
   let handImg = null; // hands 的输入源（video 元素 或 WebGazer 的 video canvas）
 
+  // ---------- 共享模型启动 ----------
+  function onSharedFrame(f) {
+    if (!f) return;
+    S.dbg.gazes++;
+    if (!f.ok || !f.point) {
+      setPill($("pillFace"), false);
+      if (heroMode) heroLost();
+      return;
+    }
+    setPill($("pillFace"), true);
+    const B = window.__epblPageBridge;
+    const c = B ? B.pageToClient(f.point) : null;
+    if (!c) return;
+    applyGazeClient(clamp(c.x, 0, window.innerWidth), clamp(c.y, 0, window.innerHeight));
+  }
+
+  /**
+   * 尝试用共享模型接管视线。
+   * 成功返回 true，且此时 WebGazer **不启动**（同一时刻只有一套预测在写光标）。
+   */
+  async function startSharedMode() {
+    if (GAZE_LEGACY || !runGaze) return false;
+    const B = await waitBridge();
+    if (!B) return false;
+    const model = await B.primeSharedModel();
+    if (!model) {
+      B.requireSharedModel();
+      return false;
+    }
+    try {
+      SG.source = await B.startSharedGaze({ onFrame: onSharedFrame });
+      SG.model = model;
+      SG.on = true;
+      setPill($("pillCam"), true);
+      $("camOff").style.display = "none";
+      if (!heroMode) cursorEl.classList.add("live");
+      if (runHand) handImg = SG.source.canvas;   // 手势复用同一路摄像头
+      SG.off = B.subscribeModel((m) => {
+        SG.model = m;
+        SG.source.setModel(m);
+        setCalibPill();
+        S.dbg.gazeErr = "";
+      });
+      markLibReady();
+      setCalibPill();
+      return true;
+    } catch (e) {
+      S.dbg.gazeErr = "shared: " + ((e && e.message) || e);
+      try { if (SG.source) SG.source.stop(); } catch (_) {}
+      SG.source = null;
+      SG.on = false;
+      return false;
+    }
+  }
+
   async function init() {
     // URL 覆盖吸附参数：?ema=0.14&gravity=70&kalman=1
     if (qp.has("ema")) snap.ema = parseFloat(qp.get("ema")) || snap.ema;
@@ -718,6 +808,9 @@
 
     // --- 摄像头 + 眼动（WebGazer 独占摄像头；hand-only 由页面独占）---
     if (runGaze) {
+      const sharedOk = await startSharedMode();
+      if (!sharedOk) {
+      // ---- 回退：原 WebGazer 链路（?gaze=legacy，或没有共享模型/启动失败）----
       if (typeof webgazer === "undefined") {
         setLibPill("fail");
         showBanner("<b>WebGazer 库加载失败。</b> 请确认 vendor/webgazer/webgazer.js 存在且可访问。");
@@ -741,6 +834,7 @@
         showBanner("<b>WebGazer 启动失败：</b>" + S.dbg.gazeErr + "<br>请确认：1) 已授权摄像头；2) 通过 localhost/127.0.0.1 访问；3) F12 Network/Console 中 facemesh 模型是否加载成功（vendor/webgazer/facemesh_model/model.json）。");
         return;
       }
+      }  // end if (!sharedOk)
     } else {
       // hand-only：页面自己获取摄像头
       const video = $("video");
@@ -821,11 +915,34 @@
   connectBackend();
   if (!heroMode) updateCursor();
   setCalibPill();
-  if (typeof webgazer === "undefined" && runGaze) {
+  if (typeof webgazer === "undefined" && runGaze && GAZE_LEGACY) {
     setLibPill("fail");
     showBanner("<b>WebGazer 库加载失败。</b> 请确认 vendor/webgazer/webgazer.js 存在且可访问。");
   } else {
     init();
+  }
+  // 自检：共享模型状态 + 直接喂一个 client 坐标走完整链路
+  window.__ctrlDemo = {
+    state: S,
+    shared: () => ({
+      on: SG.on,
+      hasModel: !!(SG.source && SG.source.getModel()),
+      legacy: GAZE_LEGACY,
+    }),
+    injectClient: (x, y) => applyGazeClient(clamp(x, 0, window.innerWidth), clamp(y, 0, window.innerHeight)),
+  };
+  /* GAZE-AUDIT-PROBE：只读；window.__GAZE_AUDIT_OFF 可整体关闭 */
+  if (!window.__GAZE_AUDIT_OFF && window.__makeGazeAudit) {
+    window.__gazeAudit = window.__makeGazeAudit({
+      page: 'controller-demo',
+      engine: () => (SG.on ? 'shared' : 'webgazer'),
+      model: () => SG.model,
+      points: () => (SG.on ? 0 : CALIB_POINTS.length),
+      coord: 'screen-px',
+      lastGaze: () => S.cursor,
+      quality: () => (SG.model && SG.model.quality) || null,
+      note: 'cursor 为吸附后的屏幕像素；shared 模式下 WebGazer 预测已关闭'
+    });
   }
 })();
 </script>

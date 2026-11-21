@@ -17,8 +17,7 @@
  *      （用户点了按钮但眼睛在看别处）把模型带坏——这类污染样本是必然存在的。
  */
 
-import { GazeCalibModel, CLICK_HALF_LIFE_MS } from './gaze-calib.js';
-import { sampleWeights } from './gaze-calib.js';
+import { GazeCalibModel, CLICK_HALF_LIFE_MS, sampleWeights } from '../../../../shared/gaze/core/index.js';
 
 /** 样本池上限（含标定样本）。48 条约 10KB JSON，localStorage 毫无压力 */
 export const SAMPLE_POOL_MAX = 48;

@@ -6,9 +6,9 @@
 <title>手势精确度测试台</title>
 <style>
   :root{
-    --bg:#0b1120; --panel:#111a2e; --panel2:#0e1626; --line:#1e2b45;
-    --txt:#e6edf7; --dim:#8b9bb4; --accent:#3ddc97; --warn:#ffb454; --bad:#ff6b6b;
-    --blue:#5aa9ff;
+    --bg:#080d09; --panel:#111a13; --panel2:#0c1410; --line:#1e2c21;
+    --txt:#e8f1e5; --dim:#9ab497; --accent:#a9db7b; --warn:#ffb454; --bad:#ff6b6b;
+    --blue:#68955d;
   }
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--bg);color:var(--txt);
@@ -44,7 +44,7 @@
     font-size:15px;white-space:nowrap;max-width:92%;overflow:hidden;text-overflow:ellipsis}
   .target-big b{color:var(--blue)}
   .ring{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:120px;height:120px;
-    border-radius:50%;border:3px solid rgba(90,169,255,.25);display:none}
+    border-radius:50%;border:3px solid rgba(169,219,123,.25);display:none}
   .ring.on{display:block}
   .ring i{position:absolute;inset:-3px;border-radius:50%;border:3px solid transparent;border-top-color:var(--blue);
     animation:spin 1s linear infinite}
@@ -52,24 +52,24 @@
 
   .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
   .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  button{cursor:pointer;border-radius:10px;border:1px solid var(--line);background:#18243d;color:var(--txt);
+  button{cursor:pointer;border-radius:10px;border:1px solid var(--line);background:#16201a;color:var(--txt);
     padding:9px 14px;font-size:13px;font-weight:600}
-  button:hover{background:#1e2c4a}
+  button:hover{background:#22331f}
   button:disabled{opacity:.45;cursor:not-allowed}
   button.primary{background:#123d2c;border-color:#1f5c42;color:#a8f0cd}
-  button.primary:hover{background:#174a36}
+  button.primary:hover{background:#1f4a33}
   label.inp{display:flex;align-items:center;gap:6px;color:var(--dim);font-size:12px}
-  label.inp input{width:56px;background:#0b1526;color:var(--txt);border:1px solid var(--line);
+  label.inp input{width:56px;background:#0b150f;color:var(--txt);border:1px solid var(--line);
     border-radius:8px;padding:6px;font-size:13px}
 
-  .bar-wrap{height:8px;background:#0b1526;border-radius:99px;overflow:hidden;margin:12px 0;border:1px solid var(--line)}
-  .bar{height:100%;width:0;background:linear-gradient(90deg,#2b7fff,#3ddc97);transition:width .08s linear}
+  .bar-wrap{height:8px;background:#0b150f;border-radius:99px;overflow:hidden;margin:12px 0;border:1px solid var(--line)}
+  .bar{height:100%;width:0;background:linear-gradient(90deg,#4d8046,#a9db7b);transition:width .08s linear}
 
   .gestures{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px}
   .gestures li{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--line);
     border-radius:10px;background:var(--panel2);cursor:pointer;transition:.12s}
-  .gestures li:hover{border-color:#2b7fff}
-  .gestures li.active{border-color:var(--blue);background:#0f1d33}
+  .gestures li:hover{border-color:#a9db7b}
+  .gestures li.active{border-color:var(--blue);background:#0f1d13}
   .gestures li.done .score{color:var(--accent)}
   .gestures li .g{width:26px;text-align:center;font-size:18px}
   .gestures li .n{flex:1}
@@ -91,7 +91,7 @@
   .matrix td.hot{background:#123d2c;color:#a8f0cd;font-weight:700}
   .matrix td.warm{background:#3d2c12;color:#ffd39b}
   .empty{color:var(--dim);font-size:13px;padding:14px 0}
-  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#18243d;border:1px solid var(--line);
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#16201a;border:1px solid var(--line);
     color:var(--txt);padding:10px 18px;border-radius:12px;opacity:0;transition:.25s;pointer-events:none;z-index:9}
   .toast.show{opacity:1}
 </style>
@@ -308,7 +308,7 @@ function drawSkeleton(lm, color) {
   ctx.save();
   ctx.translate(w, 0); ctx.scale(-1, 1);   // 与镜像视频对齐
   ctx.lineWidth = Math.max(2, w / 480);
-  ctx.strokeStyle = color || "#3ddc97";
+  ctx.strokeStyle = color || "#a9db7b";
   ctx.beginPath();
   for (const [a, b] of CONN) {
     ctx.moveTo(lm[a].x * w, lm[a].y * h);
@@ -451,7 +451,7 @@ function loop(now) {
   } else {
     $("feat").innerHTML = "未检测到手<br>fps " + fps;
   }
-  drawSkeleton(lm, pred === state.target ? "#3ddc97" : "#5aa9ff");
+  drawSkeleton(lm, pred === state.target ? "#a9db7b" : "#aabf91");
 
   // 采集统计
   if (state.phase === "collect" && state.current) {

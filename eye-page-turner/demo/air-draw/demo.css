@@ -1,17 +1,17 @@
 /* 隔空画画 · 视觉基线沿用《设计报告》深色主题 */
 :root {
-  --bg: #0b1020;
-  --stage: #0f1420;
-  --panel: #141c30;
-  --line: #23304d;
-  --grad: linear-gradient(135deg, #2f6bff, #7a3bff);
-  --ok: #7ce0a5;
+  --bg: #080d09;
+  --stage: #0f1a12;
+  --panel: #16201a;
+  --line: #2a3d2c;
+  --grad: linear-gradient(135deg, #4d8046, #a9db7b);
+  --ok: #a9db7b;
   --warn: #f0c674;
   --danger: #f0a0b0;
-  --gaze: #50aaff;
-  --hand: #50dc96;
-  --ink: #e8eefc;
-  --muted: #8b9ac2;
+  --gaze: #aabf91;
+  --hand: #68955d;
+  --ink: #e8efe4;
+  --muted: #8b9a86;
 }
 
 * { box-sizing: border-box; }
@@ -37,7 +37,7 @@ body.paper #stage { background: transparent; }
   height: 100vh;
   display: block;
   background:
-    radial-gradient(900px 600px at 30% 20%, #182545 0%, transparent 60%),
+    radial-gradient(900px 600px at 30% 20%, #243527 0%, transparent 60%),
     var(--stage);
 }
 
@@ -81,17 +81,17 @@ body.paper #stage {
   font-size: 12px;
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(20, 28, 48, 0.86);
+  background: rgba(20, 30, 20, 0.86);
   border: 1px solid var(--line);
   color: var(--muted);
   backdrop-filter: blur(8px);
 }
 .chip.ok { color: var(--ok); border-color: rgba(124, 224, 165, 0.45); }
 .chip.warn { color: var(--warn); border-color: rgba(240, 198, 116, 0.45); }
-.chip.gaze { color: var(--gaze); border-color: rgba(80, 170, 255, 0.5); }
-.chip.hand { color: var(--hand); border-color: rgba(80, 220, 150, 0.5); }
+.chip.gaze { color: var(--gaze); border-color: rgba(170, 191, 145, 0.5); }
+.chip.hand { color: var(--hand); border-color: rgba(104, 149, 93, 0.5); }
 
-body.paper .chip { background: rgba(255, 255, 255, 0.86); color: #5a5f6e; border-color: #d6d0c4; }
+body.paper .chip { background: rgba(255, 255, 255, 0.86); color: #5a6759; border-color: #d6d0c4; }
 body.paper .brand span { border-color: #d6d0c4; color: #8b8577; }
 
 /* ---------------- M14 调色板 ---------------- */
@@ -105,7 +105,7 @@ body.paper .brand span { border-color: #d6d0c4; color: #8b8577; }
   gap: 14px;
   padding: 14px 12px;
   border-radius: 20px;
-  background: rgba(20, 28, 48, 0.82);
+  background: rgba(20, 30, 20, 0.82);
   border: 1px solid var(--line);
   backdrop-filter: blur(10px);
 }
@@ -153,7 +153,7 @@ body.paper .sw { border-color: rgba(0, 0, 0, 0.12); }
   border-radius: 14px;
   overflow: hidden;
   border: 1px solid var(--line);
-  background: #0a0e18;
+  background: #080d09;
   opacity: 0.35;
   transition: opacity 0.25s ease, border-color 0.25s ease;
 }
@@ -169,7 +169,7 @@ body.paper .sw { border-color: rgba(0, 0, 0, 0.12); }
   left: 8px;
   bottom: 6px;
   font-size: 11px;
-  color: #cfe0ff;
+  color: #e8f1e5;
   text-shadow: 0 1px 3px #000;
 }
 
@@ -184,7 +184,7 @@ body.paper .sw { border-color: rgba(0, 0, 0, 0.12); }
   gap: 14px;
   padding: 10px 16px;
   border-radius: 999px;
-  background: rgba(20, 28, 48, 0.86);
+  background: rgba(20, 30, 20, 0.86);
   border: 1px solid var(--line);
   backdrop-filter: blur(10px);
   font-size: 12px;
@@ -194,9 +194,9 @@ body.paper .sw { border-color: rgba(0, 0, 0, 0.12); }
   max-width: min(920px, calc(100vw - 420px));
 }
 .tools .rng { display: flex; align-items: center; gap: 6px; }
-.tools input[type="range"] { width: 84px; accent-color: #4b7bff; }
+.tools input[type="range"] { width: 84px; accent-color: #4d8046; }
 .tools .chk { display: flex; align-items: center; gap: 5px; cursor: pointer; }
-.tools input[type="checkbox"] { accent-color: #4b7bff; }
+.tools input[type="checkbox"] { accent-color: #4d8046; }
 .tools button,
 .tools .primary,
 .overlay .primary {
@@ -205,7 +205,7 @@ body.paper .sw { border-color: rgba(0, 0, 0, 0.12); }
   padding: 7px 14px;
   border-radius: 999px;
   border: 1px solid var(--line);
-  background: #1b2540;
+  background: #2a3d2c;
   color: var(--ink);
   cursor: pointer;
   text-decoration: none;
@@ -229,11 +229,11 @@ body.paper .sw { border-color: rgba(0, 0, 0, 0.12); }
   width: 150px;
   border-radius: 999px;
   border: 1px solid var(--line);
-  background: #101a30;
+  background: #0f1a12;
   color: var(--ink);
   outline: none;
 }
-.sign::placeholder { color: #5f6d92; }
+.sign::placeholder { color: #6b7a6c; }
 
 body.paper .tools { background: rgba(255, 255, 255, 0.9); border-color: #d6d0c4; color: #6b6558; }
 body.paper .tools button { background: #efeae0; border-color: #d6d0c4; color: #3c3a34; }
@@ -250,7 +250,7 @@ body.paper .sign { background: #fff; border-color: #d6d0c4; color: #3c3a34; }
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.85);
   background: rgba(255, 255, 255, 0.14);
-  box-shadow: 0 0 14px rgba(120, 170, 255, 0.6);
+  box-shadow: 0 0 14px rgba(169, 219, 123, 0.6);
   pointer-events: none;
   opacity: 0;
   transition: width 0.12s ease, height 0.12s ease, background 0.12s ease, opacity 0.2s ease;
@@ -265,7 +265,7 @@ body.paper .sign { background: #fff; border-color: #d6d0c4; color: #3c3a34; }
   box-shadow: 0 0 22px rgba(255, 255, 255, 0.8);
 }
 .penDot.frozen { border-color: var(--warn); box-shadow: 0 0 16px rgba(240, 198, 116, 0.75); }
-.penDot.over { border-color: #9fd0ff; box-shadow: 0 0 20px rgba(80, 170, 255, 0.85); }
+.penDot.over { border-color: #aabf91; box-shadow: 0 0 20px rgba(170, 191, 145, 0.85); }
 
 /* ---------------- 提示 / 吐司 ---------------- */
 .hint {
@@ -274,11 +274,11 @@ body.paper .sign { background: #fff; border-color: #d6d0c4; color: #3c3a34; }
   bottom: 78px;
   transform: translateX(-50%);
   font-size: 13px;
-  color: #b9c8ea;
-  background: rgba(10, 16, 32, 0.6);
+  color: #9ab497;
+  background: rgba(8, 14, 8, 0.6);
   padding: 6px 14px;
   border-radius: 999px;
-  border: 1px solid rgba(35, 48, 77, 0.7);
+  border: 1px solid rgba(35, 48, 35), 0.7);
   pointer-events: none;
   white-space: nowrap;
 }
@@ -292,7 +292,7 @@ body.paper .hint { background: rgba(255, 255, 255, 0.8); color: #5a5449; border-
   font-size: 13px;
   padding: 9px 18px;
   border-radius: 12px;
-  background: rgba(20, 28, 48, 0.95);
+  background: rgba(20, 30, 20, 0.95);
   border: 1px solid var(--line);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
   opacity: 0;
@@ -318,7 +318,7 @@ body.paper .hint { background: rgba(255, 255, 255, 0.8); color: #5a5449; border-
   width: min(560px, calc(100vw - 48px));
   padding: 28px 30px;
   border-radius: 22px;
-  background: linear-gradient(180deg, #16203a, #111a2e);
+  background: linear-gradient(180deg, #16201a, #111a13);
   border: 1px solid var(--line);
   box-shadow: 0 30px 70px rgba(0, 0, 0, 0.55);
   text-align: center;
@@ -338,7 +338,7 @@ body.paper .hint { background: rgba(255, 255, 255, 0.8); color: #5a5449; border-
 .steps li {
   padding: 14px 8px;
   border-radius: 14px;
-  background: rgba(11, 16, 32, 0.7);
+  background: rgba(11, 16, 11), 0.7);
   border: 1px solid var(--line);
   display: flex;
   flex-direction: column;
@@ -354,12 +354,12 @@ body.paper .hint { background: rgba(255, 255, 255, 0.8); color: #5a5449; border-
   padding: 9px 18px;
   border-radius: 999px;
   border: 1px solid var(--line);
-  background: #1b2540;
+  background: #2a3d2c;
   color: var(--ink);
   cursor: pointer;
 }
 .overlay button:hover { filter: brightness(1.18); }
-.overlay .tip { margin: 16px 0 0; font-size: 11px; color: #6b7ba3; }
+.overlay .tip { margin: 16px 0 0; font-size: 11px; color: #7a8a72; }
 
 #resultImg {
   width: 100%;
@@ -367,7 +367,7 @@ body.paper .hint { background: rgba(255, 255, 255, 0.8); color: #5a5449; border-
   object-fit: contain;
   border-radius: 14px;
   border: 1px solid var(--line);
-  background: #0b1020;
+  background: #080d09;
   margin-bottom: 12px;
 }
-#result .cap { margin: 0 0 14px; font-size: 13px; color: #cfe0ff; }
+#result .cap { margin: 0 0 14px; font-size: 13px; color: #e8f1e5; }

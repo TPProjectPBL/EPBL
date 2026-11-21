@@ -414,7 +414,7 @@ el.btnClear.addEventListener('click', () => {
 el.bgToggle.addEventListener('change', () => {
   const paper = el.bgToggle.checked;
   document.body.classList.toggle('paper', paper);
-  brush.setBackground(paper ? '#fbfaf7' : '#0b1020');
+  brush.setBackground(paper ? '#fbfaf7' : '#0b100b');
 });
 
 /* ---------------------------------------------------------------- 作品完成 / 导出 */

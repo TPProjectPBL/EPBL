@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>隔空控制器 · 工作台</title>
-<meta name="description" content="隔空控制器本地工作台：统一入口加载测试台、控制前端、画板、翻页与演示模块。">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' http://127.0.0.1:8899 ws://127.0.0.1:8899; frame-src 'self'; object-src 'none'; base-uri 'none'">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b0e14'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%234f9cf9'/%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%234f9cf9' stroke-opacity='.55' stroke-width='1.6'/%3E%3C/svg%3E">
+<meta name="description" content="隔空控制器：一次视线标定，进入四个隔空交互空间（测试台 / 热力图 / 画板 / 跑酷）。">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' http://127.0.0.1:8899 ws://127.0.0.1:8899; frame-src 'self'; object-src 'none'; base-uri 'none'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230c1410'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23a9db7b'/%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23a9db7b' stroke-opacity='.55' stroke-width='1.6'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -48,6 +48,8 @@
         <span id="crumb">加载中…</span>
       </div>
       <div class="top-actions">
+        <button class="btn ghost" id="gazeCalibBtn" title="用摄像头标定视线模型">标定视线</button>
+        <span class="gaze-dot none" id="gazeModelDot" title="未标定" aria-label="未标定"></span>
         <span class="pill" id="backendPill">后端检测中</span>
         <button class="icon-btn" id="themeBtn" title="切换主题" aria-label="切换主题">◐</button>
       </div>
@@ -60,6 +62,7 @@
         <p class="mb-note" id="modNote" hidden></p>
       </div>
       <div class="mb-right">
+        <button class="btn ghost" id="backBtn">返回导航</button>
         <button class="btn ghost" id="reloadBtn">重载</button>
         <button class="btn" id="openBtn">新标签打开</button>
       </div>
@@ -76,6 +79,8 @@
   </main>
 </div>
 
-<script src="app.js"></script>
+<script src="../shared/gaze/audit-probe.js"></script>
+<script src="app.js?v=20261121e"></script>
+<script src="gaze-host.js?v=20261121e"></script>
 </body>
 </html>
