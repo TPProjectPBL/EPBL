@@ -48,8 +48,7 @@ function earOf(lm, idxs) {
  *
  * @param {Array<{x:number,y:number,z?:number}>} lm 478 个归一化关键点
  * @param {{aspect?: number, limits?: object}} [opts]
- *   aspect 为取流宽高比（默认 4/3），用于缩放归一化距离阈值；
- *   传入 16/9 时距离上限同步放大，避免把正常距离误判成「太近」
+ *   aspect 为取流宽高比，仅为兼容调用方保留；距离阈值固定，不随宽高比缩放
  * @returns {{
  *   ok: boolean, faceW: number, faceH: number, cx: number, cy: number,
  *   roll: number, yaw: number, pitch: number,
@@ -126,13 +125,13 @@ export function headPose(lm, opts = {}) {
   const ear = Number.isFinite(earL) && Number.isFinite(earR) ? (earL + earR) / 2 : NaN;
   const blink = Number.isFinite(ear) && ear > 0 && ear < L.blinkEar;
 
-  // 距离阈值随取流宽高比缩放：坐标系是归一化的，16:9 下同样距离的人脸
-  // 在画面高度里占的比例约为 4:3 的 4/3 倍，不缩放会把正常距离误判成「太近」。
-  const rawAspect = Number(opts.aspect);
-  const aspect = Number.isFinite(rawAspect) && rawAspect > 0.1 ? rawAspect : 4 / 3;
-  const distScale = aspect / (4 / 3);
-  const distMin = L.distMin * distScale;
-  const distMax = L.distMax * distScale;
+  // 距离阈值固定，不随宽高比缩放。
+  // faceH 是归一化关键点差值（脸占画面高度比例）；摄像头 FOV 固定时，同一物理距离
+  // 的面孔在 4:3 与 16:9 下的归一化高度基本一致，按 aspect 缩放是错误假设。
+  // 更糟的是 16:9 下 distMax 会被抬到 1.067（>1，等于取消「太近」保护），
+  // 而 distMin 抬到 0.293 会把 0.24~0.29 的正常坐姿误判成「太远」并丢帧。
+  const distMin = L.distMin;
+  const distMax = L.distMax;
   const distanceOk = faceH >= distMin && faceH <= distMax;
   const centerOk = Math.abs(cx - 0.5) <= L.centerX && Math.abs(cy - 0.5) <= L.centerY;
   const poseOk =

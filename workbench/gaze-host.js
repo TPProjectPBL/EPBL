@@ -188,7 +188,7 @@
 
     const box = document.createElement('div');
     box.style.cssText =
-      'max-width:440px;width:100%;background:var(--panel,#111a13);border:1px solid var(--line2,#2a3a30);' +
+      'max-width:' + (opts.detail ? '560px' : '440px') + ';width:100%;background:var(--panel,#111a13);border:1px solid var(--line2,#2a3a30);' +
       'border-radius:12px;padding:18px 20px 16px;color:var(--txt,#e9f0e6);' +
       'font:13px/1.65 system-ui,-apple-system,"PingFang SC",sans-serif;box-shadow:0 18px 50px rgba(0,0,0,.55)';
 
@@ -201,6 +201,15 @@
     body.style.cssText = 'margin:0 0 14px;color:var(--dim,#8b9a8b)';
 
     const row = document.createElement('div');
+    let diag = null;
+    if (opts.detail) {
+      diag = document.createElement('pre');
+      diag.textContent = opts.detail;
+      diag.style.cssText =
+        'margin:0 0 14px;padding:10px 12px;border-radius:8px;background:rgba(0,0,0,.28);' +
+        'color:var(--dim,#8b9a8b);font:11px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;' +
+        'white-space:pre;overflow-x:auto';
+    }
     row.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap';
 
     for (const [label, fn, kind] of opts.actions || []) {
@@ -213,6 +222,7 @@
 
     box.appendChild(title);
     box.appendChild(body);
+    if (diag) box.appendChild(diag);
     box.appendChild(row);
     wrap.appendChild(box);
     document.body.appendChild(wrap);
@@ -681,6 +691,7 @@
       text:
         `5 点测试正确率 ${pct}（通过线 ${report && report.passScore ? report.passScore : 60} 分）。` +
         '建议重新标定：保持头部不动、眼睛看向每个圆点，直到进度走完。',
+      detail: buildDiagDetail(report, S.raw && S.raw.env),
       actions: [
         [
           '重新标定',
@@ -700,6 +711,36 @@
         ],
       ],
     });
+  }
+
+  /**
+   * 把验证报告 + 环境拼成可读诊断文本，直接在结果面板显示。
+   * 目的：用户不必打开开发者工具就能看到每点帧数/丢弃/误差，避免
+   * DevTools 改变视口大小反过来影响标定与评分。
+   */
+  function buildDiagDetail(report, env) {
+    if (!report || !Array.isArray(report.points) || !report.points.length) return '';
+    const cam = env && env.camera;
+    const asp = S.video && S.video.videoWidth && S.video.videoHeight
+      ? S.video.videoWidth / S.video.videoHeight
+      : (report.model && Number(report.model.aspect)) || 0;
+    const faceH = report.headRef && Number(report.headRef.faceH);
+    const head = [
+      `摄像头 ${cam && cam.w ? cam.w + '×' + cam.h : '—'}` +
+        `  aspect ${asp > 0 ? asp.toFixed(3) : '—'}` +
+        `  faceH ${Number.isFinite(faceH) ? faceH.toFixed(3) : '—'}`,
+      '点   有效帧  丢弃  误差    分数',
+    ];
+    const pad = (v, n) => String(v == null ? '—' : v).padStart(n);
+    for (let i = 0; i < report.points.length; i += 1) {
+      const p = report.points[i];
+      head.push(
+        `${pad(i + 1, 2)}   ${pad(p.frames, 4)}   ${pad(p.dropped, 3)}  ` +
+          `${pad(Number.isFinite(p.avg) ? p.avg.toFixed(3) : '—', 5)}  ` +
+          `${pad(Number.isFinite(p.score) ? Math.round(p.score) : '—', 3)}`,
+      );
+    }
+    return head.join('\n');
   }
 
   /**
@@ -759,14 +800,26 @@
     const text =
       `正确率 ${score != null ? Math.round(score) + ' 分' : '—'}` +
       (skipped ? ' · 已跳过测试' : ` · ${S.status === 'ok' ? '模型可用' : '建议重标'}`);
+    const resultText =
+      `正确率 ${score != null ? Math.round(score) + ' 分' : '—'}（通过线 ${report && report.passScore ? report.passScore : 60} 分）\n` +
+      (skipped ? '已跳过测试，模型已保存' : S.status === 'ok' ? '模型已保存，可以开始使用' : '建议重新标定');
     if (S.overlay) {
       S.overlay.showResult({
         ok: !skipped,
-        text: `正确率 ${score != null ? Math.round(score) + ' 分' : '—'}\n` +
-          (skipped ? '已跳过测试，模型已保存' : S.status === 'ok' ? '模型已保存，可以开始使用' : '建议重新标定'),
+        text: resultText,
         hud: skipped ? '已跳过测试' : '标定完成',
       });
     }
+    // 诊断常驻卡片：2.6s 后 stopAll 会销毁 overlay，所以诊断不能只放在 overlay 里。
+    // 用独立的 panel 承载（层级更高，盖住 overlay 的结果），用户看完点「知道了」再关，
+    // 避免被迫开 DevTools 取数——控制台改变视口会反过来污染标定。
+    const diagText = buildDiagDetail(report, record.env);
+    renderPanel({
+      title: skipped ? '已跳过测试' : '标定完成',
+      text: resultText + '\n下方是本次 5 点测试的诊断数据（可截图用于排查）：',
+      detail: diagText,
+      actions: [['知道了', () => { hidePanel(); }]],
+    });
     emitStage('done', text);
 
     const done = {

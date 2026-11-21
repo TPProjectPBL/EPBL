@@ -622,6 +622,28 @@ export function createOverlay(options = {}) {
   ].join(';');
   root.appendChild(result);
 
+  // 诊断详情：标定/验证完成后展示每点帧数与误差，用户无需打开开发者工具。
+  // 独立区块而不是塞进 result.textContent，是为了保留表格对齐与弱色层级。
+  const detail = doc.createElement('div');
+  detail.style.cssText = [
+    'position:absolute',
+    'left:50%',
+    'top:calc(50% + 62px)',
+    'transform:translateX(-50%)',
+    'max-width:520px',
+    'padding:10px 14px',
+    'border-radius:10px',
+    'background:var(--gaze-cal-bg)',
+    'color:var(--gaze-cal-ink)',
+    'font-size:11px',
+    'line-height:1.5',
+    'white-space:pre',
+    'display:none',
+    'pointer-events:none',
+    'overflow:auto',
+  ].join(';');
+  root.appendChild(detail);
+
   let currentIdx = 0;
   let counting = false;
   const cdResolvers = new Set();
@@ -907,6 +929,12 @@ export function createOverlay(options = {}) {
     result.style.display = 'block';
     result.style.color = ok ? 'var(--gaze-cal-ink)' : 'var(--gaze-cal-bad)';
     result.textContent = payload.text || (ok ? '标定完成' : '标定失败');
+    if (payload.detail) {
+      detail.textContent = typeof payload.detail === 'string' ? payload.detail : '';
+      detail.style.display = 'block';
+    } else {
+      detail.style.display = 'none';
+    }
     hudText.nodeValue = payload.hud || (ok ? '标定完成' : '标定失败');
     dots.forEach((item) => {
       item.dot.style.borderColor = ok ? 'var(--gaze-cal-done)' : 'var(--gaze-cal-bad)';
@@ -923,6 +951,7 @@ export function createOverlay(options = {}) {
 
   function hideResult() {
     result.style.display = 'none';
+    detail.style.display = 'none';
   }
 
   function destroy() {
