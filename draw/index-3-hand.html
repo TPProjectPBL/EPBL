@@ -126,6 +126,10 @@ body{
 
 /* ---------------- 侧栏工具栏（左竖排调色板 + 右竖排按钮） ---------------- */
 .toolbar{
+  /* 占满顶栏与 HUD 之间的全部剩余高度，让按钮随高度平分变大 */
+  flex:1 1 auto;
+  min-height:0;
+  display:flex;
   padding:16px 18px;
   border-bottom:1px solid var(--line);
   background:rgba(17,26,19,.34);
@@ -133,11 +137,14 @@ body{
   position:relative;
   z-index:45;
 }
-/* 两列：左侧调色板开关（窄），右侧动作按钮（宽） */
+/* 两列：左侧调色板开关（窄），右侧动作按钮（宽）
+   align-items:stretch 让两列都随工具区高度撑满 */
 .tool-controls{
   display:grid;
   grid-template-columns:56px minmax(0,1fr);
-  align-items:start;
+  align-items:stretch;
+  flex:1;
+  min-height:0;
   gap:12px;
 }
 
@@ -146,23 +153,25 @@ body{
   position:relative;
   width:56px;
   min-width:0;
+  height:100%;
 }
 .palette{
-  /* 从竖排调色板开关下方展开为 6 色单列，与开关同宽，不遮挡右侧按钮 */
+  /* 展开时覆盖整条开关列：开关已随工具区撑高，色板同样 6 色平分整列高度，
+     既不溢出侧栏也不遮挡右侧按钮 */
   position:absolute;
-  top:calc(100% - 8px);
-  left:0;
+  inset:0;
   width:56px;
   display:grid;
   grid-template-columns:1fr;
+  grid-template-rows:repeat(6,minmax(0,1fr));
   gap:6px;
   box-sizing:border-box;
   border-radius:12px;
   border:1px solid rgba(255,255,255,.10);
   background:rgba(13,18,30,.98);
   box-shadow:0 28px 64px -20px rgba(0,0,0,.9);
-  /* 默认收起：向上平移 + 不接收指针事件 */
-  transform:translateY(-8px);
+  /* 默认收起：轻微缩放 + 不接收指针事件 */
+  transform:scale(.96);
   padding:0;
   overflow:hidden;
   opacity:0;
@@ -173,7 +182,7 @@ body{
 .palette.is-open{
   padding:6px;
   opacity:1;
-  transform:translateY(0);
+  transform:scale(1);
   pointer-events:auto;
 }
 .palette::-webkit-scrollbar{ display:none; }
@@ -181,7 +190,7 @@ body{
 .swatch{
   position:relative;
   min-width:0;
-  height:40px;              /* 6 色单列，压低以适配侧栏高度 */
+  min-height:0;             /* 高度由色板 6 行平分，随工具区高度自适应 */
   border-radius:10px;
   border:1px solid rgba(255,255,255,.16);
   background:var(--c);
@@ -329,7 +338,7 @@ body{
   width:56px;
   min-width:56px;
   height:100%;
-  min-height:224px;         /* 与右侧 4 按钮列等高 */
+  min-height:0;             /* 随工具区高度撑满，与右侧 4 按钮列等高 */
   padding:12px 0;
   white-space:nowrap;
 }
