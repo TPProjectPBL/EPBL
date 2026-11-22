@@ -6,11 +6,12 @@
 (() => {
   'use strict';
 
-  const STAGE_W = 1280;
-  const STAGE_H = 800;
+  // 舞台尺寸跟随左侧容器；刺激内容按真实像素排版，不再把固定 1280×800 硬缩放。
+  let STAGE_W = 1280;
+  let STAGE_H = 800;
   const HEAT_W = 640;
-  const HEAT_H = 400;
-  const HEAT_SCALE = HEAT_W / STAGE_W;
+  let HEAT_H = 400;
+  let HEAT_SCALE = HEAT_W / STAGE_W;
 
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -614,14 +615,27 @@
 
   function layoutStage() {
     const wrap = el.stageWrap;
-    const w = wrap.clientWidth;
-    const h = wrap.clientHeight;
-    if (!w || !h) return;
-    // 铺满左侧舞台：按较大比例缩放（cover），不再用 min + padding 留黑边。
-    // 容器比 1280×800 更宽/更高时多出的部分由 .stage-wrap 裁切。
-    const s = Math.max(w / STAGE_W, h / STAGE_H);
-    S.stageScale = Math.max(0.15, s);
-    el.stage.style.setProperty('--stage-scale', S.stageScale.toFixed(5));
+    const w = Math.max(1, Math.round(wrap.clientWidth));
+    const h = Math.max(1, Math.round(wrap.clientHeight));
+    if (STAGE_W === w && STAGE_H === h && S.stageRect) return;
+
+    STAGE_W = w;
+    STAGE_H = h;
+    HEAT_SCALE = HEAT_W / STAGE_W;
+    HEAT_H = Math.max(1, Math.round(STAGE_H * HEAT_SCALE));
+
+    // 画布与内容同尺寸：坐标 1:1，不再有缩放/裁切。
+    el.heat.width = HEAT_W;
+    el.heat.height = HEAT_H;
+    el.track.width = STAGE_W;
+    el.track.height = STAGE_H;
+    accum.width = HEAT_W;
+    accum.height = HEAT_H;
+    accumCtx.clearRect(0, 0, HEAT_W, HEAT_H);
+    accumCtx.globalCompositeOperation = 'lighter';
+
+    S.stageScale = 1;
+    el.stage.style.setProperty('--stage-scale', '1');
     S.stageRect = el.stage.getBoundingClientRect();
   }
 
@@ -2516,19 +2530,19 @@
   async function captureContentSnapshot() {
     const css = await fetch('style.css').then((r) => (r.ok ? r.text() : ''));
     const scoped = css.replace(/:root/g, '.sightline-report-root');
-    const html = '<div xmlns="http://www.w3.org/1999/xhtml" class="sightline-report-root" style="width:1280px;height:800px;overflow:hidden">' +
+    const html = '<div xmlns="http://www.w3.org/1999/xhtml" class="sightline-report-root" style="width:' + STAGE_W + 'px;height:' + STAGE_H + 'px;overflow:hidden">' +
       '<style>' + scoped + '</style>' +
-      '<style>.sightline-report-root{width:1280px;height:800px;overflow:hidden}.sightline-report-root .content{position:relative;inset:auto;width:1280px;height:800px}</style>' +
+      '<style>.sightline-report-root{width:' + STAGE_W + 'px;height:' + STAGE_H + 'px;overflow:hidden}.sightline-report-root .content{position:relative;inset:auto;width:' + STAGE_W + 'px;height:' + STAGE_H + 'px}</style>' +
       '<div class="content">' + el.content.innerHTML + '</div></div>';
-    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800"><foreignObject x="0" y="0" width="1280" height="800">' + html + '</foreignObject></svg>';
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + STAGE_W + '" height="' + STAGE_H + '"><foreignObject x="0" y="0" width="' + STAGE_W + '" height="' + STAGE_H + '">' + html + '</foreignObject></svg>';
     const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
     const img = new Image();
     img.src = url;
     await img.decode();
     const c = document.createElement('canvas');
-    c.width = 1280;
-    c.height = 800;
-    c.getContext('2d').drawImage(img, 0, 0, 1280, 800);
+    c.width = STAGE_W;
+    c.height = STAGE_H;
+    c.getContext('2d').drawImage(img, 0, 0, STAGE_W, STAGE_H);
     return c;
   }
 
