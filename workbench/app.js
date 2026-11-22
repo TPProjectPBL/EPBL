@@ -33,6 +33,14 @@ const byId = (id) => document.getElementById(id);
 init();
 
 async function init() {
+  // 每次打开/刷新页面都先落到封面；URL 里带来的旧 hash（尤其 #/calibrate）
+  // 不在加载时自动执行，否则会直接跳到标定屏。会话内点按钮跳转不受影响。
+  try {
+    history.replaceState(null, '', '#/');
+  } catch (_) {
+    location.hash = '#/';
+  }
+
   applyTheme(localStorage.getItem(LS.theme) || 'dark');
   bindShell();
 
