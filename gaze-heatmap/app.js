@@ -1212,6 +1212,14 @@
       el.engineTag.textContent = 'DEMO INPUT';
       el.engineTag.classList.add('live');
       el.pillFps.querySelector('span').textContent = 'DEMO';
+    } else if (engine === 'shared') {
+      // 工作台已统一接管摄像头、推理与标定，本页只消费共享视线
+      p.classList.add('on');
+      span.textContent = '工作台共享视线';
+      el.engineTag.textContent = 'SHARED';
+      el.engineTag.classList.add('live');
+      el.pillFps.classList.add('on');
+      el.pillFps.querySelector('span').textContent = 'HOST';
     } else if (engine === 'error') {
       p.classList.add('err');
       span.textContent = '追踪不可用';
@@ -1222,7 +1230,7 @@
       el.engineTag.classList.remove('live');
       el.pillFps.querySelector('span').textContent = '-- FPS';
     }
-    if (engine !== 'webgazer' && engine !== 'demo') {
+    if (engine !== 'webgazer' && engine !== 'demo' && engine !== 'shared') {
       el.engineTag.classList.remove('live');
       el.pillFps.classList.remove('on');
     }
@@ -2961,6 +2969,16 @@
     }
   })();
 
+  if (GAZE_SHARED) {
+    // 工作台已接管的入口统一隐藏（样式在 style.css 的 .is-hosted 规则），
+    // 并改写空态/提示文案：这里只需要「开始记录」。
+    document.body.classList.add('is-hosted');
+    const emptySmall = el.stageEmpty.querySelector('small');
+    if (emptySmall) emptySmall.textContent = '工作台已接入眼控，点「开始记录」后注视点会在这里实时累积';
+    const stageHint = document.getElementById('stageHint');
+    if (stageHint) stageHint.textContent = '提示：工作台已完成统一标定，点「开始记录」后自然浏览内容即可。';
+  }
+
   async function applySharedModel(msg) {
     try {
       const PB = await import('../shared/gaze/page-bridge.js');
@@ -3110,6 +3128,12 @@
       return;
     }
     bus.hello();
+    // 宿主提供视线流：这里视为「已追踪」，恢复开始记录按钮（此前一直停在禁用态）。
+    if (GAZE_SHARED) {
+      S.tracking = true;
+      setEngine('shared');
+      setRecUI();
+    }
     bus.onModel((msg) => applySharedModel(msg));
     // 宿主 landmarks → 本地模型 → 热力图（不开自己的摄像头）
     lmOff = bus.onLandmarks(async (f) => {

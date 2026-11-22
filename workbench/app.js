@@ -86,7 +86,7 @@ function bindShell() {
   });
   // 键盘焦点可能停留在外层工作台（眼控/手势用户常不点 iframe），
   // 模块页收不到按键。把画板快捷键转发给当前 iframe，避免“必须先用鼠标点一下”。
-  const FORWARD_KEY_RE = /^(?:[1-6cCbeEpPgGhHvVzZ]| )$/;
+  const FORWARD_KEY_RE = /^(?:[1-6 ]|[cCbBeEpPgGhHvVzZrRtT])$/;
   function forwardKeyToFrame(e, eventType) {
     if (document.body.dataset.view !== 'module') return;
     if (e.key === 'Escape') return;   // Escape 由工作台自己处理，避免重复退出

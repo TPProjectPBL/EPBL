@@ -1767,6 +1767,22 @@ kbd {
 .quality-grid div { padding: 7px 8px; border-radius: 7px; background: rgba(255,255,255,.035); border: 1px solid var(--line); }
 .quality-grid span { display: block; font-size: 8.5px; color: var(--dim); margin-bottom: 3px; }
 .quality-grid b { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--text); }
+
+/* 工作台托管模式：摄像头 / 标定 / 头部预览都由工作台统一完成，
+   热力图里这些按钮点了也不会生效，直接砍掉，只留记录与说明。 */
+body.is-hosted #btnDemo,
+body.is-hosted #btnCalib,
+body.is-hosted #btnStart,
+body.is-hosted #pillFps,
+body.is-hosted .mini-cam,
+body.is-hosted .mini-open { display: none !important; }
+
+body.is-hosted .topbar-actions { gap: 10px; }
+body.is-hosted #btnRecord {
+  min-width: 132px;
+  justify-content: center;
+  font-weight: 600;
+}
 .quality-points { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
 .q-point {
   display: grid;
