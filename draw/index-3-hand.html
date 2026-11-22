@@ -1185,10 +1185,9 @@ body.is-landing > .side{
           <li><span class="k">注视移动</span><span class="v">笔尖按九宫格平滑跟随视线</span></li>
           <li><span class="k">捏合</span><span class="v">落笔 · 笔尖移动即画线（橡皮模式下擦除）</span></li>
           <li><span class="k">张开手掌</span><span class="v">抬笔 · 只移动笔尖不画线</span></li>
-          <li><span class="k">拇指朝上</span><span class="v">打开调色板 / 确认高亮颜色</span></li>
-          <li><span class="k">拇指朝下</span><span class="v">切换画笔 / 橡皮</span></li>
-          <li><span class="k">拇指朝左 / 右</span><span class="v">调色板展开时，向对应方向移动一格</span></li>
-          <li><span class="k">调色板内握拳</span><span class="v">抬笔，松开后可再次向同一方向移动</span></li>
+          <li><span class="k">拇指朝上</span><span class="v">调色板收起时打开，展开时向上移动一格</span></li>
+          <li><span class="k">拇指朝下</span><span class="v">调色板收起时切换画笔 / 橡皮，展开时向下移动一格</span></li>
+          <li><span class="k">调色板内握拳</span><span class="v">保持 2 秒确认高亮颜色并收起调色板</span></li>
           <li><span class="k">食指朝上</span><span class="v">撤回一笔（等价 Ctrl+Z）；按住不重复</span></li>
           <li><span class="k">🤟 我爱你</span><span class="v">调色板收起时，保持约半秒清空画布；提前松手取消</span></li>
           <li><span class="k">左手张开拖动</span><span class="v">平移画布内容（平移期间笔尖锁定）</span></li>
@@ -1196,7 +1195,7 @@ body.is-landing > .side{
         </ul>
         <p class="guide-note">
           <b>真机模式</b>：WebGazer 负责注视（需 localhost / https），MediaPipe 负责手势，两路共用 WebGazer 的摄像头。
-          视线控制笔尖。用拇指手势选色和切换工具。左右手识别反了按 <b>H</b> 交换。
+          视线控制笔尖。左右手识别反了按 <b>H</b> 交换。
           无摄像头时仍可用鼠标模拟：移动＝注视，按住＝落笔，<b>空格＋拖动＝左手平移</b>；
           1–6 选色、E 画笔/橡皮、B 画布黑/白、Ctrl+Z 撤回、
           P 颜色条、C 清空、G 模拟注视丢失、V 触发 Victory。
@@ -1257,14 +1256,14 @@ body.is-landing > .side{
   <div class="tool-controls">
     <!-- 左列：竖排调色板开关 + 竖向展开的色板 -->
     <div class="palette-wrap">
-      <button class="btn switcher" id="btnPalette" type="button" aria-expanded="false" aria-controls="palette" data-dock-label="调色板 · [P]" title="调色板（拇指朝上打开或确认颜色，P 展开 / 收起）">
+      <button class="btn switcher" id="btnPalette" type="button" aria-expanded="false" aria-controls="palette" data-dock-label="调色板 · [P]" title="调色板（拇指朝上打开，握拳 2 秒确认颜色，P 展开 / 收起）">
         <i class="swatch-mini" id="switcherDot"></i><span class="switcher-text">调色板</span><span class="key">[P]</span>
       </button>
       <div class="palette" id="palette" role="listbox" aria-label="调色板"></div>
     </div>
     <!-- 右列：四个动作按钮竖排 -->
     <div class="actions">
-      <button class="btn" id="btnTool" type="button" data-dock-label="画笔 / 橡皮 · [E]" title="切换画笔 / 橡皮（拇指朝下或按 E）"><span id="btnToolLabel">画笔</span><span class="key">[E]</span></button>
+      <button class="btn" id="btnTool" type="button" data-dock-label="画笔 / 橡皮 · [E]" title="切换画笔 / 橡皮（调色板收起时拇指朝下，或按 E）"><span id="btnToolLabel">画笔</span><span class="key">[E]</span></button>
       <button class="btn" id="btnUndo" type="button" data-dock-label="撤回 · ⌘/⌃Z" title="撤回上一笔（食指朝上，或按 ⌘Z / Ctrl+Z）">撤回<span class="key">⌘/⌃Z</span></button>
       <button class="btn with-dot" id="btnCanvas" type="button" data-dock-label="画布颜色 · [B]" title="切换黑 / 白画布（V 手势或按 B）"><i class="mini-dot" id="canvasDot"></i>画布<span class="key">[B]</span></button>
       <button class="btn danger" id="btnClear" type="button" data-dock-label="清空画布 · [C]">清空<span class="key">[C]</span></button>
@@ -1369,6 +1368,8 @@ body.is-landing > .side{
     minStep: 1.6,          // 最小采样距离(CSS px)，抑制手抖抖动
     penCooldown: 300,      // 落笔/抬笔切换 300ms 冷却
     armMs: 450,            // 清空画布的确认时长
+    paletteConfirmMs: 2000,
+    paletteFistMaxGapMs: 300, // 识别中断后重新计时
     idleMs: 3000,          // 无输入自动进入待机
     maxDpr: 2,             // devicePixelRatio 上限
     maxStrokes: 50,        // 修改3：最多保留最近 50 笔
@@ -1726,6 +1727,8 @@ body.is-landing > .side{
     pinchOn: false,
     thumbGate: null,
     pointGate: null,
+    paletteFistHold: null,
+    paletteFistConsumed: false,
     clearGestureAt: -Infinity,
     lastLeftPalm: null,
     gazeSmoothX: 0,
@@ -2157,8 +2160,10 @@ body.is-landing > .side{
         real.pinchOn = true;
       }
 
-      // 握拳或捏合 → 落笔；张开 / 其他 → 抬笔。沿用两帧确认。
-      const wantDown = !state.paletteOpen && (draw.cat === 'Closed_Fist' || real.pinchOn);
+      const isFist = draw.cat === 'Closed_Fist';
+      if (!isFist) real.paletteFistConsumed = false;
+      // 确认颜色的握拳要先松开，下一次手势才可落笔。
+      const wantDown = !state.paletteOpen && !real.paletteFistConsumed && (isFist || real.pinchOn);
       real.fistFrames = wantDown
         ? Math.min(3, real.fistFrames + 1)
         : Math.max(0, real.fistFrames - 1);
@@ -2205,21 +2210,8 @@ body.is-landing > .side{
     real.thumbGate.step('none', now);
     real.pointGate.reset();
     clearGate.reset();
+    real.paletteFistHold = null;
     real.clearGestureAt = -Infinity;
-  }
-
-  function thumbDirection(draw) {
-    if (draw.cat === 'Closed_Fist' || draw.cat === 'ILoveYou') return 'none';
-    if (draw.cls === 'thumb') {
-      const base = draw.pts[2], tip = draw.pts[4], wrist = draw.pts[0];
-      const dx = base.x - tip.x;  // 水平方向与镜像预览一致
-      const dy = tip.y - base.y;
-      const palmSize = Math.hypot(wrist.x - draw.lm.x, wrist.y - draw.lm.y);
-      if (Math.abs(dx) > Math.max(Math.abs(dy), palmSize * 0.25)) {
-        return dx < 0 ? 'thumb-left' : 'thumb-right';
-      }
-    }
-    return draw.cat === 'Thumb_Up' || draw.cat === 'Thumb_Down' ? draw.cat : 'none';
   }
 
   function updateGestureActions(draw, now) {
@@ -2228,23 +2220,36 @@ body.is-landing > .side{
       return;
     }
 
-    const direction = thumbDirection(draw);
-    const gesture = !state.paletteOpen && draw.cat === 'Victory' ? 'Victory' : direction;
+    const isThumb = draw.cat === 'Thumb_Up' || draw.cat === 'Thumb_Down';
+    const isVictory = !state.paletteOpen && draw.cat === 'Victory';
+    const gesture = isThumb || isVictory ? draw.cat : 'none';
     const action = real.thumbGate.step(gesture, now);
-    if (action?.gesture === 'Victory') {
+    if (state.paletteOpen) {
+      if (action) {
+        const step = action.gesture === 'Thumb_Up' ? -1 : 1;
+        state.highlightedIndex = clamp(state.highlightedIndex + step, 0, PALETTE.length - 1);
+      }
+      if (draw.cat === 'Closed_Fist') {
+        const hold = real.paletteFistHold;
+        if (!hold || now - hold.lastAt > CFG.paletteFistMaxGapMs) {
+          real.paletteFistHold = { startedAt: now, lastAt: now };
+        } else {
+          hold.lastAt = now;
+          if (now - hold.startedAt >= CFG.paletteConfirmMs) {
+            real.paletteFistConsumed = true;
+            selectColor(state.highlightedIndex, true);
+            closePalette();
+          }
+        }
+      } else {
+        real.paletteFistHold = null;
+      }
+    } else if (action?.gesture === 'Victory') {
       cycleCanvasTheme();
     } else if (action?.gesture === 'Thumb_Down') {
       toggleTool();
     } else if (action?.gesture === 'Thumb_Up') {
-      if (state.paletteOpen) {
-        selectColor(state.highlightedIndex, true);
-        closePalette();
-      } else {
-        openPalette();
-      }
-    } else if (action && state.paletteOpen) {
-      const step = action.gesture === 'thumb-left' ? -1 : 1;
-      state.highlightedIndex = clamp(state.highlightedIndex + step, 0, PALETTE.length - 1);
+      openPalette();
     }
 
     const isClearGesture = draw.cat === 'ILoveYou';
@@ -3423,11 +3428,12 @@ body.is-landing > .side{
     paletteEl.classList.add('is-open');
     btnPalette.classList.add('is-active');
     btnPalette.setAttribute('aria-expanded', 'true');
-    toast('拇指朝左 / 右选色 · 朝上确认');
+    toast('拇指朝上 / 下选色 · 握拳 2 秒确认');
   }
 
   function closePalette() {
     state.paletteOpen = false;
+    real.paletteFistHold = null;
     state.highlightedIndex = -1;
     paletteEl.classList.remove('is-open');
     btnPalette.classList.remove('is-active');
@@ -3792,6 +3798,7 @@ body.is-landing > .side{
   function exitBoard() {
     if (!boardActive) return;
     boardActive = false;
+    real.paletteFistHold = null;
     exitAcc = 0;
     lastModeAt = performance.now();
 
