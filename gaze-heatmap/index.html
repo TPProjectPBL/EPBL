@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Sightline · 视线热力图工作台</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34'%3E%3Crect width='34' height='34' rx='8' fill='%230a0b0f'/%3E%3Cpath d='M2 17s5.4-9 15-9 15 9 15 9-5.4 9-15 9S2 17 2 17Z' stroke='%2374f0ce' stroke-width='1.6' fill='none'/%3E%3Ccircle cx='17' cy='17' r='4.6' stroke='%2374f0ce' stroke-width='1.6' fill='none'/%3E%3Ccircle cx='17' cy='17' r='1.5' fill='%2374f0ce'/%3E%3C/svg%3E" />
-<link rel="stylesheet" href="style.css?v=20261122a" />
+<link rel="stylesheet" href="style.css?v=20261122c" />
 <!-- WebGazer 2.1.2（沿用仓库内 patch 版：模型指向本地 vendor/webgazer/facemesh_model） -->
 <script src="vendor/webgazer/webgazer.js"></script>
 <!-- MediaPipe FaceMesh：仅用于标定前的头部就位检测，标定结束后释放 -->
@@ -14,36 +14,6 @@
 <body>
 
 <div class="app">
-  <header class="topbar">
-    <div class="brand">
-      <div class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 34 34" fill="none">
-          <path d="M2 17s5.4-9 15-9 15 9 15 9-5.4 9-15 9S2 17 2 17Z" stroke="currentColor" stroke-width="1.6"/>
-          <circle cx="17" cy="17" r="4.6" stroke="currentColor" stroke-width="1.6"/>
-          <circle cx="17" cy="17" r="1.5" fill="currentColor"/>
-        </svg>
-      </div>
-      <div class="brand-text">
-        <strong>SIGHTLINE</strong>
-        <span>视线热力图工作台</span>
-      </div>
-    </div>
-
-    <div class="topbar-status">
-      <div class="pill" id="pillEngine"><i class="dot"></i><span>追踪未启动</span></div>
-      <div class="pill" id="pillFps"><i class="dot"></i><span>-- FPS</span></div>
-      <div class="pill rec" id="pillRec"><i class="dot"></i><span>待记录</span></div>
-    </div>
-
-    <div class="topbar-actions">
-      <button class="btn ghost" id="btnDemo" title="不使用摄像头，用鼠标在内容区移动来模拟视线">演示模式</button>
-      <button class="btn ghost" id="btnCalib" disabled>9 点标定</button>
-      <button class="btn primary" id="btnStart">启动视线追踪</button>
-      <button class="btn record" id="btnRecord" disabled>开始记录</button>
-      <button class="btn ghost icon" id="btnHelp" aria-label="使用说明">?</button>
-    </div>
-  </header>
-
   <main class="layout">
     <section class="stage-col">
       <div class="stage-head">
@@ -83,6 +53,36 @@
     </section>
 
     <aside class="side">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 34 34" fill="none">
+              <path d="M2 17s5.4-9 15-9 15 9 15 9-5.4 9-15 9S2 17 2 17Z" stroke="currentColor" stroke-width="1.6"/>
+              <circle cx="17" cy="17" r="4.6" stroke="currentColor" stroke-width="1.6"/>
+              <circle cx="17" cy="17" r="1.5" fill="currentColor"/>
+            </svg>
+          </div>
+          <div class="brand-text">
+            <strong>SIGHTLINE</strong>
+            <span>视线热力图工作台</span>
+          </div>
+        </div>
+
+        <div class="topbar-status">
+          <div class="pill" id="pillEngine"><i class="dot"></i><span>追踪未启动</span></div>
+          <div class="pill" id="pillFps"><i class="dot"></i><span>-- FPS</span></div>
+          <div class="pill rec" id="pillRec"><i class="dot"></i><span>待记录</span></div>
+        </div>
+
+        <div class="topbar-actions">
+          <button class="btn ghost" id="btnDemo" title="不使用摄像头，用鼠标在内容区移动来模拟视线">演示模式</button>
+          <button class="btn ghost" id="btnCalib" disabled>9 点标定</button>
+          <button class="btn primary" id="btnStart">启动视线追踪</button>
+          <button class="btn record" id="btnRecord" disabled>开始记录</button>
+          <button class="btn ghost icon" id="btnHelp" aria-label="使用说明">?</button>
+        </div>
+      </header>
+
       <section class="card">
         <div class="card-head">
           <h2>实时数据</h2>
@@ -320,6 +320,6 @@
 
 <script type="module" src="../shared/gaze/bus.js"></script>
 <script src="../shared/gaze/audit-probe.js"></script>
-<script src="app.js?v=20261122a"></script>
+<script src="app.js?v=20261122c"></script>
 </body>
 </html>
