@@ -17,15 +17,6 @@
       "desc": "13 点标定 / 12 目标精度 / 眼手联合点击 / 结果导出"
     },
     {
-      "id": "mgaze-test",
-      "group": "test",
-      "name": "视线精度（MGazeNet）",
-      "standaloneUrl": "../mgaze-test/index.html",
-      "capabilities": ["camera"],
-      "requires": ["local"],
-      "desc": "GazeFollower 深度学习视线估计 / 13 点岭回归标定 / 12 目标精度 / 导出 JSON（需本地 8901 网关）"
-    },
-    {
       "id": "gaze-heatmap",
       "group": "test",
       "name": "视线热力图",
