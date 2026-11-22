@@ -6,7 +6,10 @@
 (() => {
   'use strict';
 
-  // 舞台尺寸跟随左侧容器；刺激内容按真实像素排版，不再把固定 1280×800 硬缩放。
+  // 刺激内容锁定 1280×800 设计画布：字号与比例恒定，整体等比缩放适配舞台，
+  // 避免动态重排造成的文字重叠与底部裁切。舞台/热力坐标仍使用真实像素。
+  const DESIGN_W = 1280;
+  const DESIGN_H = 800;
   let STAGE_W = 1280;
   let STAGE_H = 800;
   const HEAT_W = 640;
@@ -595,6 +598,8 @@
     el.cursor.classList.remove('live');
     el.content.innerHTML = def.render();
     el.contentTitle.textContent = def.title;
+    el.stage.classList.remove('c-bg-article', 'c-bg-landing', 'c-bg-dashboard');
+    el.stage.classList.add('c-bg-' + id);
     $$('#contentSwitch button').forEach((b) => {
       b.classList.toggle('on', b.dataset.content === id);
     });
@@ -623,6 +628,13 @@
     STAGE_H = h;
     HEAT_SCALE = HEAT_W / STAGE_W;
     HEAT_H = Math.max(1, Math.round(STAGE_H * HEAT_SCALE));
+
+    // 内容锁定 1280×800 设计画布，等比缩放铺满舞台：
+    // 字号/比例恒定 → 不会重叠；contain 居中 → 不裁切；霓白由舞台同色背景填充。
+    const zoom = Math.min(w / DESIGN_W, h / DESIGN_H);
+    el.stage.style.setProperty('--stage-zoom', zoom.toFixed(5));
+    el.stage.classList.remove('c-bg-article', 'c-bg-landing', 'c-bg-dashboard');
+    el.stage.classList.add('c-bg-' + S.content);
 
     // 画布与内容同尺寸：坐标 1:1，不再有缩放/裁切。
     el.heat.width = HEAT_W;
@@ -2530,11 +2542,12 @@
   async function captureContentSnapshot() {
     const css = await fetch('style.css').then((r) => (r.ok ? r.text() : ''));
     const scoped = css.replace(/:root/g, '.sightline-report-root');
-    const html = '<div xmlns="http://www.w3.org/1999/xhtml" class="sightline-report-root" style="width:' + STAGE_W + 'px;height:' + STAGE_H + 'px;overflow:hidden">' +
+    // 内容按 1280×800 设计画布渲染（与舞台等比缩放前一致），保证排版比例恒定。
+    const html = '<div xmlns="http://www.w3.org/1999/xhtml" class="sightline-report-root" style="width:' + DESIGN_W + 'px;height:' + DESIGN_H + 'px;overflow:hidden">' +
       '<style>' + scoped + '</style>' +
-      '<style>.sightline-report-root{width:' + STAGE_W + 'px;height:' + STAGE_H + 'px;overflow:hidden}.sightline-report-root .content{position:relative;inset:auto;width:' + STAGE_W + 'px;height:' + STAGE_H + 'px}</style>' +
+      '<style>.sightline-report-root{width:' + DESIGN_W + 'px;height:' + DESIGN_H + 'px;overflow:hidden}.sightline-report-root .stage{display:block}.sightline-report-root .content{position:relative;inset:auto;width:' + DESIGN_W + 'px;height:' + DESIGN_H + 'px;transform:none;flex:none}</style>' +
       '<div class="content">' + el.content.innerHTML + '</div></div>';
-    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + STAGE_W + '" height="' + STAGE_H + '"><foreignObject x="0" y="0" width="' + STAGE_W + '" height="' + STAGE_H + '">' + html + '</foreignObject></svg>';
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + DESIGN_W + '" height="' + DESIGN_H + '"><foreignObject x="0" y="0" width="' + DESIGN_W + '" height="' + DESIGN_H + '">' + html + '</foreignObject></svg>';
     const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
     const img = new Image();
     img.src = url;

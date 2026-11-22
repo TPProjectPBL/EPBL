@@ -206,7 +206,21 @@ h1, h2, h3, p { margin: 0; }
   overflow: hidden;
   box-shadow: 0 0 0 1px rgba(255,255,255,.08), 0 30px 90px rgba(0,0,0,.55);
 }
-.content { position: absolute; inset: 0; overflow: hidden; }
+/* 内容锁定 1280×800 设计画布，整体等比缩放适配舞台：
+   比例恒定 → 文字永不重叠；缩放居中 → 无裁切；留白同色 → 无黑边。 */
+.stage { display: flex; align-items: center; justify-content: center; }
+.stage.c-bg-article { background: #f5f0e6; }
+.stage.c-bg-landing { background: #fbfbfd; }
+.stage.c-bg-dashboard { background: #eef1f7; }
+.stage.c-bg-article .stage-empty { color: #1c1a16; }
+.content {
+  position: relative; /* 不 inset，尺寸由 --zoom 决定，交给 flex 居中 */
+  flex: none;
+  width: 1280px; height: 800px;
+  transform: scale(var(--stage-zoom, 1));
+  transform-origin: center center;
+  overflow: hidden;
+}
 .overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .overlay.heat { opacity: 0; transition: opacity .25s ease; mix-blend-mode: normal; }
 .overlay.track { opacity: 0; transition: opacity .25s ease; }
