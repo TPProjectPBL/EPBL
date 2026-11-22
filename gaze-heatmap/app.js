@@ -617,8 +617,9 @@
     const w = wrap.clientWidth;
     const h = wrap.clientHeight;
     if (!w || !h) return;
-    const pad = 22;
-    const s = Math.min((w - pad) / STAGE_W, (h - pad) / STAGE_H);
+    // 铺满左侧舞台：按较大比例缩放（cover），不再用 min + padding 留黑边。
+    // 容器比 1280×800 更宽/更高时多出的部分由 .stage-wrap 裁切。
+    const s = Math.max(w / STAGE_W, h / STAGE_H);
     S.stageScale = Math.max(0.15, s);
     el.stage.style.setProperty('--stage-scale', S.stageScale.toFixed(5));
     S.stageRect = el.stage.getBoundingClientRect();
