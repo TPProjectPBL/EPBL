@@ -465,13 +465,20 @@ body{
 /* ---------------- HUD（侧栏底部） ---------------- */
 .hud{
   margin-top:auto;
-  padding:16px 18px 20px;
+  max-height:135px;            /* 原约 270px，砍半；超出部分滚动查看 */
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding:12px 18px 14px;
   border-top:1px solid var(--line);
   font:400 11.5px/1.7 ui-monospace,Menlo,Consolas,monospace;
   letter-spacing:.06em;
   color:var(--muted);
-  pointer-events:none;
+  pointer-events:auto;         /* 侧栏内需可滚动（早期浮层时为 none） */
 }
+.hud::-webkit-scrollbar{width:5px}
+.hud::-webkit-scrollbar-track{background:transparent}
+.hud::-webkit-scrollbar-thumb{background:var(--line2);border-radius:6px}
+.hud::-webkit-scrollbar-thumb:hover{background:var(--muted)}
 .hud .row{
   display:flex;
   align-items:baseline;
