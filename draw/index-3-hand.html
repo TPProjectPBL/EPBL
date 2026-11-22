@@ -2357,6 +2357,23 @@ body.is-landing > .side{
 
   let hostedOffLandmarks = null;
   let hostedOffHands = null;
+  let hostedOffModel = null;
+
+  /** 工作台重新标定后热替换共享模型：不必刷新本页，落点立即变准。
+   *  根因：画板原来只在 startHosted 启动时读一次 IDB，工作台标定写入新模型并广播后，
+   *  已打开的画板仍用旧模型 → 落点偏；刷新才重新读到新模型 → 变准。 */
+  async function refreshSharedModel() {
+    try {
+      const idbMod = await import('../shared/gaze/idb.js');
+      const model = await idbMod.readPredictor();
+      if (!model) return;
+      const sig = model.sig || ('created:' + model.created);
+      if (sharedGaze.model && (sharedGaze.model.sig || ('created:' + sharedGaze.model.created)) === sig) return;
+      sharedGaze.model = model;
+      if (sharedGaze.source) sharedGaze.source.setModel(model);
+      toast('共享视线模型已更新 · ' + sig, 'ok');
+    } catch (_) {}
+  }
 
   async function startHosted() {
     if (real.running || real.starting) return;
@@ -2407,6 +2424,9 @@ body.is-landing > .side{
         real.handPoints++;
         handleHands(res, performance.now());
       });
+
+      // 订阅工作台标定完成后的新模型：热替换，不再需要刷新页面
+      hostedOffModel = busMod.onModel(() => { void refreshSharedModel(); });
 
       // 请宿主开始手部推理（宿主收到才加载 GestureRecognizer）
       try {
@@ -2633,6 +2653,7 @@ body.is-landing > .side{
     declareExclusive(false);
     if (hostedOffLandmarks) { hostedOffLandmarks(); hostedOffLandmarks = null; }
     if (hostedOffHands) { hostedOffHands(); hostedOffHands = null; }
+    if (hostedOffModel) { hostedOffModel(); hostedOffModel = null; }
     try {
       if (HOSTED) window.parent.postMessage({ type: 'epbl:gaze-gesture-request', version: 1, on: false }, window.location.origin);
     } catch (e) {}
