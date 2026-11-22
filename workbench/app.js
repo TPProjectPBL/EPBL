@@ -84,6 +84,34 @@ function bindShell() {
       location.hash = '#/';
     }
   });
+  // 键盘焦点可能停留在外层工作台（眼控/手势用户常不点 iframe），
+  // 模块页收不到按键。把画板快捷键转发给当前 iframe，避免“必须先用鼠标点一下”。
+  const FORWARD_KEY_RE = /^(?:[1-6cCbeEpPgGhHvVzZ]| )$/;
+  function forwardKeyToFrame(e, eventType) {
+    if (document.body.dataset.view !== 'module') return;
+    if (e.key === 'Escape') return;   // Escape 由工作台自己处理，避免重复退出
+    const target = e.target;
+    if (target && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable)) return;
+    if (!FORWARD_KEY_RE.test(e.key) && e.code !== 'Space') return;
+    const frame = byId('stage').querySelector('iframe.frame');
+    if (!frame || !frame.contentWindow) return;
+    try {
+      frame.contentWindow.postMessage({
+        type: 'epbl:forward-key',
+        eventType,
+        key: e.key,
+        code: e.code || '',
+        metaKey: !!e.metaKey,
+        ctrlKey: !!e.ctrlKey,
+        shiftKey: !!e.shiftKey,
+        altKey: !!e.altKey,
+        repeat: !!e.repeat
+      }, '*');
+      e.preventDefault();
+    } catch (_) { /* iframe 尚未就绪时忽略 */ }
+  }
+  window.addEventListener('keydown', (e) => forwardKeyToFrame(e, 'keydown'));
+  window.addEventListener('keyup', (e) => forwardKeyToFrame(e, 'keyup'));
   // 宿主标定完成 → 自动进导航页；失败则退回首页说明原因
   window.addEventListener('epbl:gaze-calibrated', (ev) => {
     const ok = !!(ev.detail && ev.detail.ok);

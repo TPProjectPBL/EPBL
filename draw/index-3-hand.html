@@ -1265,7 +1265,7 @@ body.is-landing > .side{
     <!-- 右列：四个动作按钮竖排 -->
     <div class="actions">
       <button class="btn" id="btnTool" type="button" data-dock-label="画笔 / 橡皮 · [E]" title="切换画笔 / 橡皮（拇指朝下或按 E）"><span id="btnToolLabel">画笔</span><span class="key">[E]</span></button>
-      <button class="btn" id="btnUndo" type="button" data-dock-label="撤回 · ⌃Z" title="撤回上一笔（食指朝上或 Ctrl+Z）">撤回<span class="key">⌃Z</span></button>
+      <button class="btn" id="btnUndo" type="button" data-dock-label="撤回 · ⌘/⌃Z" title="撤回上一笔（食指朝上，或按 ⌘Z / Ctrl+Z）">撤回<span class="key">⌘/⌃Z</span></button>
       <button class="btn with-dot" id="btnCanvas" type="button" data-dock-label="画布颜色 · [B]" title="切换黑 / 白画布（V 手势或按 B）"><i class="mini-dot" id="canvasDot"></i>画布<span class="key">[B]</span></button>
       <button class="btn danger" id="btnClear" type="button" data-dock-label="清空画布 · [C]">清空<span class="key">[C]</span></button>
     </div>
@@ -1651,6 +1651,32 @@ body.is-landing > .side{
     } else if (k === 'v' || k === 'V') {
       if (!state.paletteOpen) cycleCanvasTheme();
     }
+  });
+
+  // 工作台外层可能持有键盘焦点（眼控/手势用户通常不会点击 iframe），
+  // 这里接收外层转发的按键，复用上面同一套快捷键逻辑。
+  window.addEventListener('message', (ev) => {
+    const d = ev && ev.data;
+    if (!d || d.type !== 'epbl:forward-key') return;
+    if (ev.source && ev.source !== window.parent) return;
+    const type = d.eventType === 'keyup' ? 'keyup' : 'keydown';
+    let synthetic;
+    try {
+      synthetic = new KeyboardEvent(type, {
+        key: d.key,
+        code: d.code || '',
+        metaKey: !!d.metaKey,
+        ctrlKey: !!d.ctrlKey,
+        shiftKey: !!d.shiftKey,
+        altKey: !!d.altKey,
+        repeat: !!d.repeat,
+        bubbles: true,
+        cancelable: true
+      });
+    } catch (_) {
+      return;
+    }
+    window.dispatchEvent(synthetic);
   });
 
   /* ============================================================
