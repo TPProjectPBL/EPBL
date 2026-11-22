@@ -44,11 +44,19 @@
       <button class="btn ghost" id="reloadBtn">重载</button>
       <button class="btn" id="openBtn">新标签打开</button>
     </div>
+    <div class="rb-camera">
+      <div class="rb-cam-head">摄像头预览 <span>LIVE</span></div>
+      <div class="rb-cam-box">
+        <canvas id="rbCamCanvas" width="400" height="225"></canvas>
+        <div class="rb-cam-empty" id="rbCamEmpty">摄像头未开启<br><small>点顶栏「标定视线」启动</small></div>
+      </div>
+      <div class="rb-cam-foot" id="rbCamFoot">与标定同一路画面</div>
+    </div>
   </aside>
 </div>
 
 <script src="../shared/gaze/audit-probe.js"></script>
-<script src="app.js?v=20261122d"></script>
+<script src="app.js?v=20261122f"></script>
 <script src="gaze-host.js?v=20261121f"></script>
 </body>
 </html>

@@ -295,6 +295,50 @@ function renderModuleBar(mod) {
   byId('crumb').textContent = mod.name;
 }
 
+/* ---------------- 右侧栏摄像头预览 ----------------
+ * 直接镜像绘制宿主那一路 video（__epblGazeHost.getVideo()），
+ * 与标定时看到的是同一个画面。不移动 video 元素本身，标定链路不受影响。
+ * video 是异步创建的（模块订阅视线后才 ensureCamera），所以循环每帧重新取。
+ */
+let railCamTimer = 0;
+function startRailCamera() {
+  stopRailCamera();
+  const canvas = byId('rbCamCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const cw = canvas.width, ch = canvas.height;
+  const box = canvas.parentElement;
+  const foot = byId('rbCamFoot');
+  // 用 setInterval 而非 rAF：摄像头 30fps 足够，且后台/无头标签也能持续刷新，
+  // 不会像 rAF 那样被浏览器节流导致预览停在旧帧。
+  const tick = () => {
+    let v = null;
+    try {
+      const host = window.__epblGazeHost;
+      if (host && typeof host.getVideo === 'function') v = host.getVideo();
+    } catch (_) {}
+    if (!v || !v.videoWidth || v.readyState < 2) {
+      box.classList.remove('has-video');
+      if (foot) foot.textContent = '与标定同一路画面';
+      return;
+    }
+    box.classList.add('has-video');
+    if (foot) foot.textContent = '摄像头已连接 · 镜像预览';
+    // cover 填充：按较大比例缩放后居中裁切，避免 4:3 摄像头被拉变形
+    const vw = v.videoWidth, vh = v.videoHeight;
+    const scale = Math.max(cw / vw, ch / vh);
+    const dw = vw * scale, dh = vh * scale;
+    ctx.drawImage(v, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
+  };
+  tick();
+  railCamTimer = setInterval(tick, 40); // ~25fps，足够预览且不吃 CPU
+}
+function stopRailCamera() {
+  if (railCamTimer) { clearInterval(railCamTimer); railCamTimer = 0; }
+  const box = document.querySelector('.rb-cam-box');
+  if (box) box.classList.remove('has-video');
+}
+
 function showEmpty(title, detail) {
   const stage = byId('stage');
   stage.textContent = '';
@@ -330,6 +374,9 @@ function setView(view, { standalone = false } = {}) {
   byId('gazeCalibBtn').hidden = standalone;
   byId('gazeModelDot').hidden = standalone;
   screens.view = view;
+  // 摄像头预览只在模块视图常驻；离开模块即停，省一个 rAF 循环
+  if (view === 'module') startRailCamera();
+  else stopRailCamera();
   if (screens.gazeOff) {
     screens.gazeOff();
     screens.gazeOff = null;
