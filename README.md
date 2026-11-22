@@ -8,11 +8,11 @@
 
 ## 核心方案
 
-- **眼动**：WebGazer 2.1.2（本地 vendor + 本地 facemesh 模型）→ 视线定位 → EMA 平滑 → 按钮磁吸。
-- **手势**：MediaPipe Hands / GestureRecognizer（21 点，本地优先、CDN 兜底）→ 6 个静态手势 + 方向滚动。
-- **形态**：纯前端 HTML/JS，**无构建工具、无框架**，浏览器 + 摄像头即可运行。
+- **眼动**：工作台用 MediaPipe Face Landmarker 和共享标定模型。基础控制器用 WebGazer 2.1.2（本地 vendor 和 facemesh 模型），支持 EMA 平滑和按钮磁吸。
+- **手势**：MediaPipe Hands / GestureRecognizer 提供 21 个手部关键点。基础控制器和画板各有自己的手势映射。
+- **形态**：Web 页面用 HTML/JS，可通过静态服务直接运行。控制后端和独立 GazeFollower 对照画板各有本机服务。
 
-## 手势映射（6 件套）
+## 基础控制器的手势映射
 
 | 姿态 | 动作 |
 |---|---|
@@ -25,10 +25,13 @@
 
 `open`（四指伸出、指尖水平）为中立态，只用于验证滚动误触发，不算动作。
 
+工作台画板用拇指朝上打开调色板。展开后，拇指朝上或朝下移动高亮一格，握拳 2 秒确认颜色。拇指朝下在调色板收起时切换画笔和橡皮。完整手势见[交接文档](HANDOFF.md#工作台画板的手势)。
+
 ## 目录结构
 
 | 目录 | 说明 |
 |---|---|
+| `workbench/` | 工作台，共用摄像头和视线标定模型 |
 | `dual-test/` | **主测试台**：眼动光标 + 手势控制（标定、眼动/手势/联合点击测试、结果导出） |
 | `control-backend/` | 控制后端：FastAPI + Playwright 控制浏览器（含**控制小窗启动器** `launcher.command`） |
 | `control-frontend/` | 控制前端：眼动 + 手势采集，经 WebSocket 上报后端 |
@@ -43,18 +46,13 @@
 
 ```bash
 # 项目根目录
-python3 -m http.server 8125
-
-# 浏览器打开主测试台
-open http://localhost:8125/dual-test/
+bash scripts/fetch-gaze-model.sh
+python3 scripts/serve.py 8125 .
 ```
 
-内网 / 其它设备访问：
+打开 [工作台](http://127.0.0.1:8125/workbench/index.html)，点击「开始 9 点标定」，完成标定和 5 点验证后，从空间导航选择「隔空画板」。向下滑进入画布。
 
-```bash
-python3 .deepworks/tmp/ssl/https_server.py
-# 访问 https://<内网IP>:8443/dual-test/
-```
+也可打开[独立测试台](http://127.0.0.1:8125/dual-test/?gaze=legacy)进行 WebGazer 对照测试。内网访问需要 HTTPS，本地服务脚本和证书的说明见[交接文档](HANDOFF.md#6-运行方式--服务--url)。
 
 ## 控制后端（浏览器控制）
 
@@ -75,7 +73,7 @@ cd control-backend && ./run.sh
 open http://localhost:8125/control-frontend/index.html
 ```
 
-## 使用流程
+## 独立测试台的使用流程
 
 1. 点击右上「启动摄像头 + 模型」，授权摄像头；
 2. 完成 13 点视线标定；
@@ -84,4 +82,4 @@ open http://localhost:8125/control-frontend/index.html
 ## 环境要求
 
 - 现代浏览器（Chrome / Safari / Edge），需授予摄像头权限；
-- 无需安装依赖、无需构建；WebGazer 已本地化，MediaPipe 本地优先、断网时请使用本地 vendor。
+- Web 页面无需构建。工作台首次运行需准备 Face Landmarker 模型，WebGazer 对照入口使用本地 vendor。

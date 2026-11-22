@@ -1,6 +1,6 @@
 # 隔空控制器（Air Controller）· 交接文档
 
-> 最后更新：2026-11-22 ｜ 画板与工作台版本：`00c6fd8`
+> 最后更新：2026-11-22 ｜ 工作台画板版本：`f47704d`
 > 团队仓库：`origin = TPProjectPBL/EPBL` ｜ 本机克隆**只配了 origin**（旧文档里的个人 fork `jarvis` 已移除）
 > 分工（按提交历史）：AlexiaWHsu = 眼动 / dual-test / 控制后端 ｜ Evelyn = 文档 / fruit-slice ｜ **Thriving-r = 隔空画板 `draw/`**
 
@@ -10,49 +10,42 @@
 
 ### 启动与复测
 
-在仓库根目录分别启动两个服务：
+在仓库根目录准备本地 Face Landmarker 模型并启动工作台。
 
 ```bash
-# 终端 1 · 工作台静态服务（8125）
+bash scripts/fetch-gaze-model.sh
 python3 scripts/serve.py 8125 .
-
-# 终端 2 · GazeFollower 画板服务（8789）
-draw/.venv/bin/python draw/gazefollower_server.py
 ```
 
-- 工作台画板入口为 `http://127.0.0.1:8125/workbench/index.html#/draw`，也可直开 `http://127.0.0.1:8789/index-3-hand-gazefollower.html`。后启动 8789 时，点工作台工具栏的「重载」。进入画板后点「开启摄像头」，依次点击并注视 9 个标定点。画板重载或视口尺寸变化后需要重新标定。
-- 本机 `draw/.venv` 使用 Python 3.12，已安装 `gazefollower==1.1.0`。虚拟环境在 Git 忽略范围内，换机器需要重新安装依赖。服务正常时，`http://127.0.0.1:8789/gaze/health` 返回 `{"model":"GazeFollower"}`。
-- 测试台、热力图和跑酷仍由工作台宿主统一标定并提供推理。首次在工作台运行这条链路时，用 `bash scripts/fetch-gaze-model.sh` 准备本地 Face Landmarker 模型，再在工作台完成 9 点标定和 5 点验证。
-- 真机复测项包括画板 9 点标定、视线笔尖、捏合落笔、调色板手势，以及从跑酷切入画板再切回后摄像头和手势是否恢复。进入画板后可在工作台顶层控制台查看 `__epblGazeHost.getStatus()`，预期 `exclusive: true`、`camera: false`、`hands: false`。
+- 打开 [工作台](http://127.0.0.1:8125/workbench/index.html)，点击封面的「开始 9 点标定」，授权摄像头并完成 9 点标定和 5 点验证。打开或刷新工作台都会先显示封面。
+- 从空间导航选择「隔空画板」，向下滑进入画布。画板自动接入工作台宿主的眼动和手势推理，共用工作台的标定模型与摄像头。
+- 真机复测包括视线笔尖、捏合落笔、上下选色、握拳确认，以及切到跑酷再返回后的摄像头与手势恢复情况。进入画布并接入宿主后，在工作台顶层控制台查看 `__epblGazeHost.getStatus()`，预期 `exclusive: false`、`camera: true`、`hands: true`。
 
-### 两版画板的手势
+### 工作台画板的手势
 
-GazeFollower 与独立 WebGazer 画板使用相同映射。视线负责移动笔尖，调色板和工具栏由手势操作，也支持鼠标点击和键盘快捷键。
+视线移动笔尖。调色板和工具栏也支持鼠标点击和键盘快捷键。
 
 | 手势 | 动作 |
 |---|---|
-| 👍 拇指朝上 | 打开调色板并高亮当前颜色。展开后再次朝上，应用高亮颜色并收起 |
-| 👎 拇指朝下 | 切换画笔 / 橡皮 |
-| 拇指朝左 / 右 | 调色板展开时，按镜像预览方向移动高亮一格。到两端停住 |
-| ✊ 握拳 | 调色板展开时暂停落笔，握拳后可再次向同一方向移动。收起时可握拳落笔 |
-| ☝️ 食指朝上 | 撤回一笔 |
+| 👍 拇指朝上 | 调色板收起时打开并高亮当前颜色。展开时向上移动一格 |
+| 👎 拇指朝下 | 调色板收起时切换画笔 / 橡皮。展开时只将高亮向下移动一格 |
+| ✊ 握拳 | 展开时连续握拳 2 秒确认高亮颜色并收起调色板。松开后可再次握拳落笔 |
+| ☝️ 食指朝上 | 调色板收起时，撤回一笔 |
 | ✌️ V 手势 | 调色板收起时，切换黑 / 白画布 |
 | 🤟 我爱你 | 调色板收起时，保持约半秒清空画布。提前松手取消 |
 
-- 拇指手势连续识别 3 帧后执行一次。持续保持朝上不会打开后立刻确认，持续朝左或右只移一格。调色板展开期间暂停绘画，颜色在确认时生效。
-- 两版的手势映射、调色预览与确认、握拳暂停落笔均通过模拟输入验证。`node --test scripts/test-draw-clear-gesture.mjs` 可复测清空手势。实际摄像头识别和左右方向仍待真机复测。
+- 拇指手势连续识别 3 帧触发一次。持续保持同一手势只执行一次，高亮到两端停住。调色板展开期间暂停绘画，握拳提前松开、失去手部识别或识别帧间隔超过 300 毫秒会重新计时。
+- `node --test scripts/test-draw-clear-gesture.mjs` 覆盖工作台的选色、工具切换和握拳确认，以及两版画板的清空手势。7 项模拟测试通过，实际摄像头识别待复测。
 
-### 已提交的改动
+### 工作台接入
 
-- `5e81f55` 新增 `draw/index-3-hand-gazefollower.html` 和 `draw/gazefollower_server.py`。画板浏览器端开一条摄像头流，MediaPipe 在浏览器内识别手势，同一路的 JPEG 帧送往本机 `/gaze/features` 提取 258 维注视特征。9 点样本交给 `/gaze/calibrate` 拟合岭回归，浏览器持有权重并计算视线坐标。
-- `57077e1` 修复工作台宿主漏取 `bus` 导致手势广播失效的问题。跑酷进入时订阅 `onHands` 并请求宿主启动手部推理，离开时退订并请求停止。
-- `6bdf3ca`、`0384b98`、`f98e729` 更新宿主统一标定：摄像头弹窗与头位引导、1080p 理想采集分辨率、百分制验证结果与内置诊断。实现入口见 `workbench/gaze-host.js` 和 `shared/gaze/calibrate/`。
+- `workbench/modules.json` 的 `draw` 指向 `draw/index-3-hand.html`。进画布后，`startHosted()` 读取共享模型，订阅宿主人脸与手部结果，并请求宿主启动手部推理。重新标定后，画板通过模型更新广播接收新模型。
+- `2f85b38` 恢复宿主接入版画板，`828b5f9` 修复进入画布后自动接入眼动和手势，`f47704d` 更新调色板手势。
 
-### 工作台接入与本地模型
+### 独立 GazeFollower 对照版
 
-- `workbench/modules.json` 将 `draw` 切到 8789 的 `standaloneUrl`。`workbench/app.js` 对该路由直接加载独立 iframe，授予 `camera` 权限并隐藏宿主标定按钮和状态点。「重载」和「新标签打开」都使用同一个独立地址。
-- `workbench/gaze-host.js` 在进入画板时停止手部推理并释放宿主摄像头，独立画板打开期间阻止宿主重新取流。`cameraEpoch` 用来作废已发出但迟到的取流请求，返回的媒体轨道会被关闭。离开画板后，宿主可按订阅重新取流。`workbench/index.html` 的 CSP 放行 8789 iframe，前端版本号更新为 `20261121f`。
-- 独立 WebGazer 版加载 `draw/vendor/webgazer/blazeface_model/` 中已入库的 `model.json` 和 `group1-shard1of1.bin`，并设置 `fromTFHub: false`。工作台接入、本地模型和两版画板的手势改动一同收入 `00c6fd8`。
+- `draw/.venv` 使用 Python 3.12 和 `gazefollower==1.1.0`。换机器需安装依赖。用 `draw/.venv/bin/python draw/gazefollower_server.py` 启动后，打开 [独立画板](http://127.0.0.1:8789/index-3-hand-gazefollower.html) 并在画板内完成 9 点标定。可用 `/gaze/health` 检查本机服务。
+- 浏览器把同一路摄像头的 JPEG 帧送给本机 `/gaze/features` 提取特征，并通过 `/gaze/calibrate` 拟合视线模型。手势由浏览器识别。调色板展开后用拇指朝左 / 右移一格，拇指朝上确认；拇指朝下切换画笔 / 橡皮。
 
 ---
 
@@ -65,13 +58,13 @@ GazeFollower 与独立 WebGazer 画板使用相同映射。视线负责移动笔
 > **眼动负责"指哪"（当鼠标光标），手势负责"做什么"（当命令）。**
 
 - **眼动**：工作台宿主用 MediaPipe Face Landmarker 和共享视线模型；独立画板用 GazeFollower；旧演示页和对照入口保留 WebGazer 2.1.2。
-- **手势**：MediaPipe GestureRecognizer / Hands（21 点）→ 6 个静态手势 + 方向滚动。
+- **手势**：MediaPipe GestureRecognizer / Hands 提供 21 个手部关键点。基础控制器的手势映射见下表，画板手势见第 0 节。
 - **形态**：工作台和各 Web 页面用 HTML/JS，无需构建；GazeFollower 画板的注视推理由本机 Python 服务提供。
 - **目标场景**：双手被占用、不便接触、行动不便。
 
 **明确不做**：iOS 原生（`EyeControlApp/` 已废弃）；1–2 米不可靠的捏合 / 摇滚 / 快速甩动手势。
 
-### 手势映射（6 件套，已定稿）
+### 基础控制器的手势映射
 
 | 姿态 | 动作 | 可靠性（1–2m） |
 |---|---|---|
@@ -120,13 +113,9 @@ GazeFollower 与独立 WebGazer 画板使用相同映射。视线负责移动笔
 **gesture-test 是当前唯一被验证"识别精度很高"的手势实现，它是双模页的参考标准。**
 它的取流方式：页面自己 `getUserMedia({video:{width:{ideal:1280},height:{ideal:720},facingMode:"user"}})` → 自有 `<video>` → `recognizer.recognizeForVideo(video, now)`，`numHands:1`，三个置信度 `0.5`，循环节流 34ms，GPU 失败回退 CPU。
 
-### 独立 WebGazer 画板：`draw/index-3-hand.html`（Thriving-r 负责）
+### 工作台画板 `draw/index-3-hand.html`（Thriving-r 负责）
 
-本节记录 WebGazer 版的功能和历史验证。原 `draw/index.html` 的渲染与工具层已合并进这版。工作台使用的 GazeFollower 版见第 0 节。
-
-| 文件 | 形态 | 落笔方式 | 适用 |
-|---|---|---|---|
-| `draw/index-3-hand.html` | WebGazer 9 点标定、视线笔尖和手势工具栏 | 拇指与食指捏合落笔（<0.45 落 / >0.60 抬）。调色板收起时也可握拳落笔 | 独立访问 |
+原 `draw/index.html` 的渲染与工具层已合并进这版。工作台入口和手势见第 0 节。画板也可直接打开，默认使用同源的共享标定模型，`?gaze=legacy` 可切到 WebGazer 对照模式。
 
 它支持：
 
@@ -138,8 +127,8 @@ GazeFollower 与独立 WebGazer 画板使用相同映射。视线负责移动笔
 - 关键参数：捏合 0.45 / 0.60，落笔确认 `fistFrames >= 2`，检测节流 34ms，`numHands = 2`。
 - 抽出 `window.AirCanvasKit`（版本 `dual-test-port-2`）：`classifyHand` / `createGestureGate` / `isBlackFrame` / `summarizeGaze` / `summarizeJoint` / `buildTestReport`（schema `air-canvas-test/v1`）/ `downloadJSON`，调试桥 `AirCanvasBridge.kit`。移植分两批：第一批纯工具，第二批接 thumb/point 动作。
 - 验证状态：`draw/index-3-hand-测试记录.md` 记录了 headless Chrome + CDP 注入假 landmark 的 7 项合成验证：**6 项通过**（镜像、慢线平滑、捏合起止、左右手不串、9 点标定回归 / 鼠标与键盘兜底、零新增依赖），第 3 项「快线断点」**未单独压测**——**只证明逻辑正确，不等于真实摄像头手感**。
-- ⚠️ 取流基线偏差：画板当前用 `recognizeForVideo(getVideoElementCanvas())`（WebGazer 默认约 640×480 缓冲），与第 5.2 节「手势一律喂 1280×720 `<video>`、不要传 canvas」不一致。这是真机手势不稳的优先排查项，详见 4.6。
-- 真机复测包括视线笔尖和拇指左右方向、慢线抖动、快甩断点、捏合灵敏度和取流基线，见第 4.6 节。
+- WebGazer 对照模式用 `recognizeForVideo(getVideoElementCanvas())`。宿主模式由 `workbench/gaze-host.js` 读取摄像头 `video` 并广播识别结果。
+- 真机复测包括视线笔尖、调色板上下移动、握拳确认、慢线抖动、快甩断点和捏合灵敏度，见第 4.6 节。
 - 依赖体积：`draw/vendor/webgazer/`（patched WebGazer 2.1.2 + 本地 facemesh 模型）、`draw/vendor/vision/`（MediaPipe Vision wasm）、`draw/models/gesture_recognizer.task`（约 8.4MB）。
   ⚠️ `.gitignore` 已加 `*.task` / `*.tflite`（老师要求大模型文件不入库）。`draw/models/gesture_recognizer.task` 是**历史已跟踪**文件，仍会随提交走；**新增**模型文件默认不入库，需 `git add -f` 或改成首次运行自动下载（参考 `outputs/fruit-slice/`）。
 - **契约**：`dual-test/` 与 `gesture-test/` 的模型和 wasm **都指向 `draw/`**（`../draw/models/gesture_recognizer.task`、`../draw/vendor/vision/`），**别删、别挪**这两个目录。
@@ -260,17 +249,15 @@ GazeFollower 与独立 WebGazer 画板使用相同映射。视线负责移动笔
 - **补光**：⚠️ 必须**可见光**。Brio 是 RGB + IR-cut，红外补光灯无效。用户当前选择"先不买灯"。
 - 待实测调参：`gFinger=1.2`、`gThumb=1.25`、`gDead=0.12`、`gEnter=3`、`gStep=40`、`gScroll=120`；磁吸 `gravity`（70px 中档）未定死。
 
-### 4.6 独立 WebGazer 画板真机复测（Thriving-r）
+### 4.6 工作台画板真机复测（Thriving-r）
 
-`draw/index-3-hand.html` 只做过合成 landmark 验证，真实摄像头还欠五项：
+`draw/index-3-hand.html` 的新调色板手势已有模拟输入验证。真机复测以下交互。
 
-1. 确认视线向左右移动时笔尖方向正确，并验证拇指横向手势与镜像预览和色块移动方向一致。
+1. 确认视线和笔尖方向一致。检查调色板展开后拇指上下各移动一格，握拳满 2 秒应用颜色，确认后松开再握拳才落笔。
 2. 慢速横 / 竖 / 圆是否还有可见抖动或滞后。
 3. 快速甩线是否断点 / 折角；必要时在相邻采样点之间补点（≤8px）。
 4. 捏合阈值 0.45 / 0.60 是否灵敏、是否误触；实测后回写 `draw/index-3-hand-测试记录.md`。
-5. **取流基线**：当前画板把 WebGazer 的 `getVideoElementCanvas()`（默认约 640×480）喂给手势模型，而 gesture-test 的黄金基线是 1280×720 自有 `<video>`。若上面几项怎么调都不稳，优先按 5.2 第 7/8 条改造取流，再谈阈值与平滑。
-
-另外眼动版（已并入 `draw/index-3-hand.html`）的 9 点标定精度与视线九宫格手感，建议和 dual-test 一起真机复测。
+5. 检查工作台 9 点标定后的视线九宫格手感，以及在画板和跑酷间切换后宿主的摄像头与手部识别状态。
 
 ---
 
@@ -326,7 +313,7 @@ GazeFollower 与独立 WebGazer 画板使用相同映射。视线负责移动笔
 | 服务 | 端口 | 命令 | 说明 |
 |---|---|---|---|
 | 工作台静态服务 | 8125 | `python3 scripts/serve.py 8125 .` | 绑定 `127.0.0.1`，开发时禁用缓存 |
-| GazeFollower 画板 | 8789 | `draw/.venv/bin/python draw/gazefollower_server.py` | 绑定 `127.0.0.1`，提供画板页面和注视推理接口 |
+| 独立 GazeFollower 对照画板 | 8789 | `draw/.venv/bin/python draw/gazefollower_server.py` | 绑定 `127.0.0.1`，提供画板页面和注视推理接口 |
 | 内网 HTTPS | 8443 | `python3 .deepworks/tmp/ssl/https_server.py` | 白名单 `controller-demo`、`outputs`、`gesture-test`、`dual-test`、`draw`；根路径 302 → 主页面。**脚本和证书不进仓库，本机当前缺失，换机器需重建** |
 
 > 浏览器摄像头需要安全上下文。本机可用 `127.0.0.1` 或 `localhost`，局域网访问需要 HTTPS。8789 是访问者设备自己的本机服务。
@@ -337,10 +324,11 @@ GazeFollower 与独立 WebGazer 画板使用相同映射。视线负责移动笔
 |---|---|
 | 主控制器 | `http://localhost:8125/controller-demo/index.html` ｜ 内网 `https://<内网IP>:8443/controller-demo/index.html` |
 | 工作台 | `http://127.0.0.1:8125/workbench/index.html` |
-| 眼动 + 手势测试台 | `http://127.0.0.1:8125/workbench/index.html#/dual-test` ｜ 独立对照 `http://localhost:8125/dual-test/index.html` |
+| 眼动 + 手势测试台 | 工作台空间导航 →「眼动 + 手势测试台」 ｜ WebGazer 对照 `http://127.0.0.1:8125/dual-test/?gaze=legacy` |
 | 手势测试台（精度基准） | `http://localhost:8125/gesture-test/index.html` |
-| GazeFollower 隔空画板 | `http://127.0.0.1:8125/workbench/index.html#/draw` ｜ 直开 `http://127.0.0.1:8789/index-3-hand-gazefollower.html` |
-| 独立 WebGazer 画板 | `http://localhost:8125/draw/index-3-hand.html` |
+| 工作台隔空画板 | 工作台空间导航 →「隔空画板」 |
+| WebGazer 对照入口 | `http://localhost:8125/draw/index-3-hand.html?gaze=legacy` |
+| 独立 GazeFollower 对照画板 | `http://127.0.0.1:8789/index-3-hand-gazefollower.html` |
 | 控制前端（眼动/手势采集） | `http://localhost:8125/control-frontend/index.html` |
 | 手势切水果 | Python 版 `outputs/fruit-slice/`（纯前端 `gesture-fruit/` 已删除） |
 | 信任证书（内网 HTTPS 用） | `https://<内网IP>:8443/ca.crt` |
@@ -382,9 +370,9 @@ openssl verify -CAfile ca.crt server.crt
 | `controller-demo/vendor/webgazer/` | 已 patch 的 WebGazer 2.1.2 + 本地 `facemesh_model/`（**必须提交**） |
 | `controller-demo/webgazer-gaze.html` | 眼动对照页，调 EMA / 磁吸参数用 |
 | `controller-demo/hero.html` | 协作者 hero 视觉页（`?mode=hero`），保留 |
-| `draw/index-3-hand-gazefollower.html`、`draw/gazefollower_server.py` | 工作台隔空画板页面和 8789 本机服务 |
-| **`draw/index-3-hand.html`** | **独立 WebGazer 画板（Thriving-r）**，使用视线笔尖与第 0 节的手势调色板，`AirCanvasKit` 移植自 dual-test |
-| `scripts/test-draw-clear-gesture.mjs` | 两版画板的 🤟 清空手势回归测试 |
+| `draw/index-3-hand-gazefollower.html`、`draw/gazefollower_server.py` | 独立 GazeFollower 对照画板和 8789 本机服务 |
+| **`draw/index-3-hand.html`** | **工作台画板（Thriving-r）**，使用宿主共享模型和第 0 节的手势调色板 |
+| `scripts/test-draw-clear-gesture.mjs` | 工作台画板调色手势与两版画板清空手势的回归测试 |
 | **`draw/index-3-hand-测试记录.md`** | 画板手势版的参数、7 项合成验证（6 通过 / 快线断点未压测）、回归红线与待真机复测清单 |
 | **`draw/models/` + `draw/vendor/vision/`** | **共用资源**：`gesture_recognizer.task` + MediaPipe Vision wasm；gesture-test / dual-test 均以 `../draw/...` 引用，**别删别挪** |
 | `control-backend/` | 控制后端（FastAPI + Playwright），`launcher.command` 一键起停；含 `test_control.py` 真实 Chrome 回读验证 |
@@ -407,9 +395,15 @@ openssl verify -CAfile ca.crt server.crt
 - 提交信息用中文 `feat:/fix:/chore:` 前缀，与仓库现有风格一致。
 - 提交后校验同步：`git rev-list --left-right --count origin/main...main` 应为 `0 0`（本机只有 `origin`；若克隆里还有 `jarvis`，再补一次 `jarvis/main...main`）。
 
-### 最近提交链（倒序）
+### 相关提交（倒序）
 
 ```
+f47704d feat(draw): 更新工作台调色板手势
+57a9de8 chore(deploy): 新增公网静态站点构建脚本
+2bda0f9 docs(outputs): 新增项目简介页面（单文件 HTML）
+e5d1a93 fix(workbench): 打开页面先显示封面，不再自动跳标定
+828b5f9 fix(draw): 进入画板自动接入眼控与手势，修复握拳无反应
+2f85b38 fix(workbench): 画板改回接入版，移除侧栏并将导航压入顶栏
 00c6fd8 Integrate GazeFollower workbench and gesture palette
 9df559a feat(draw): map I love you gesture to clear canvas
 5e81f55 feat(draw): add standalone GazeFollower canvas
