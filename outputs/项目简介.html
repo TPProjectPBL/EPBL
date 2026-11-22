@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>隔空控制器 Air Controller · 项目简介</title>
+<link rel="icon" href="data:,">
+<style>
+  :root{
+    --bg:#070b12;
+    --panel:#0d1420;
+    --panel-2:#111a29;
+    --line:#1d2938;
+    --text:#e8effa;
+    --muted:#8ea3bd;
+    --acc:#4f9cf9;
+    --acc-soft:rgba(79,156,249,.12);
+    --mint:#38e0c8;
+    --warn:#f5b544;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1100px 600px at 12% -8%, rgba(79,156,249,.16), transparent 60%),
+      radial-gradient(900px 500px at 92% 4%, rgba(56,224,200,.10), transparent 62%),
+      var(--bg);
+    color:var(--text);
+    font:16px/1.75 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 28px 96px}
+  a{color:var(--acc);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ---------- 顶部 ---------- */
+  header.hero{padding:88px 0 56px;border-bottom:1px solid var(--line)}
+  .kicker{
+    display:inline-block;font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--mint);border:1px solid rgba(56,224,200,.28);
+    background:rgba(56,224,200,.07);border-radius:999px;padding:6px 14px;
+  }
+  h1{
+    margin:22px 0 14px;font-size:clamp(38px,6vw,62px);line-height:1.08;letter-spacing:-.02em;
+    background:linear-gradient(96deg,#ffffff 8%,#bcd6ff 46%,#4f9cf9 92%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  h1 small{display:block;font-size:.34em;letter-spacing:.06em;color:var(--muted);
+    background:none;-webkit-text-fill-color:var(--muted);margin-top:10px;font-weight:400}
+  .lede{font-size:clamp(17px,2.2vw,21px);color:#c3d3e8;max-width:44em;margin:0 0 26px}
+  .lede b{color:#fff;font-weight:600}
+  .badges{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:34px}
+  .badge{
+    font-size:13px;color:#b9cbe2;border:1px solid var(--line);background:var(--panel);
+    border-radius:8px;padding:7px 12px;
+  }
+  .badge b{color:var(--acc);font-weight:600}
+
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:8px}
+  .stat{background:linear-gradient(180deg,var(--panel-2),var(--panel));border:1px solid var(--line);
+    border-radius:14px;padding:18px 18px 16px}
+  .stat .v{font-size:26px;font-weight:700;letter-spacing:-.01em;color:#fff;line-height:1.2}
+  .stat .v span{font-size:13px;color:var(--muted);font-weight:500;margin-left:3px}
+  .stat .k{font-size:12.5px;color:var(--muted);margin-top:4px}
+
+  /* ---------- 区块 ---------- */
+  section{padding:62px 0 8px;border-bottom:1px solid var(--line)}
+  section:last-of-type{border-bottom:0}
+  .sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:26px}
+  .sec-num{font:600 13px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--acc);
+    border:1px solid rgba(79,156,249,.35);border-radius:6px;padding:5px 8px;background:var(--acc-soft)}
+  h2{font-size:clamp(22px,3vw,29px);margin:0;letter-spacing:-.01em}
+  h2 .sub{display:block;font-size:14px;font-weight:400;color:var(--muted);margin-top:6px;letter-spacing:0}
+
+  p{color:#c9d8ea}
+  .muted{color:var(--muted)}
+
+  /* 场景卡 */
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px}
+  .card h3{margin:0 0 8px;font-size:16px;color:#fff}
+  .card p{margin:0;font-size:14.5px;color:var(--muted);line-height:1.7}
+  .card .tag{font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--mint)}
+
+  /* 双模态 */
+  .dual{display:grid;grid-template-columns:1fr 44px 1fr;align-items:stretch;gap:0;margin-top:6px}
+  .mode{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px}
+  .mode.eye{border-color:rgba(79,156,249,.38);box-shadow:inset 0 0 0 1px rgba(79,156,249,.06)}
+  .mode.hand{border-color:rgba(56,224,200,.30)}
+  .mode .role{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+  .mode h3{margin:8px 0 4px;font-size:23px;color:#fff}
+  .mode .one{color:var(--acc);font-size:14.5px;margin-bottom:14px}
+  .mode.hand .one{color:var(--mint)}
+  .mode ul{margin:0;padding-left:18px;font-size:14.5px;color:#b9cbe2}
+  .mode ul li{margin:5px 0}
+  .plus{display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:22px}
+
+  /* 表格 */
+  table{width:100%;border-collapse:collapse;font-size:14.5px;margin-top:4px}
+  th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600;
+    background:rgba(255,255,255,.02)}
+  td b{color:#fff;font-weight:600}
+  tr:last-child td{border-bottom:0}
+  code{font:13px ui-monospace,SFMono-Regular,Menlo,monospace;background:rgba(255,255,255,.06);
+    padding:2px 6px;border-radius:5px;color:#cfe0f7}
+
+  /* 架构 */
+  .arch{display:grid;gap:12px;margin-top:6px}
+  .layer{display:grid;grid-template-columns:132px 1fr;gap:16px;background:var(--panel);
+    border:1px solid var(--line);border-radius:12px;padding:16px 18px;align-items:start}
+  .layer .lname{font-size:13px;color:var(--acc);font-weight:600;padding-top:2px}
+  .layer .lbody{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{font-size:13px;color:#c2d3e8;border:1px solid var(--line);background:var(--panel-2);
+    border-radius:7px;padding:5px 10px}
+  .chip.k{color:var(--mint);border-color:rgba(56,224,200,.26)}
+
+  /* 模块 */
+  .mods{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .mod{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px}
+  .mod .top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .mod h3{margin:0;font-size:17px;color:#fff}
+  .state{font-size:11.5px;border-radius:999px;padding:3px 9px;white-space:nowrap}
+  .state.ok{color:var(--mint);background:rgba(56,224,200,.1);border:1px solid rgba(56,224,200,.3)}
+  .state.wait{color:var(--warn);background:rgba(245,181,68,.1);border:1px solid rgba(245,181,68,.3)}
+  .mod p{margin:10px 0 0;font-size:14px;color:var(--muted);line-height:1.7}
+  .mod .stack{margin-top:12px;font-size:12.5px;color:#8fa3bd}
+
+  /* 交付 */
+  .deliver{display:grid;grid-template-columns:1.15fr .85fr;gap:18px;align-items:stretch}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px}
+  .box h3{margin:0 0 10px;font-size:16px;color:#fff}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:14px}
+  .kv dt{color:var(--muted)}
+  .kv dd{margin:0;color:#dbe8f7}
+  .hash{font:12px ui-monospace,Menlo,monospace;color:#93a9c4;word-break:break-all}
+  .note{margin-top:14px;font-size:13px;color:var(--warn);line-height:1.65}
+
+  /* 验证 */
+  .verdict{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:18px 0 6px}
+  .vitem{background:linear-gradient(180deg,var(--panel-2),var(--panel));border:1px solid var(--line);
+    border-radius:12px;padding:16px 18px;text-align:center}
+  .vitem .n{font-size:19px;color:#fff;font-weight:700}
+  .vitem .n span{font-size:12px;color:var(--muted);font-weight:500;margin-left:3px}
+  .vitem .d{font-size:12.5px;color:var(--muted);margin-top:3px}
+  .legend{margin-top:16px;font-size:13px;color:var(--muted)}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px}
+  .dot.g{background:var(--mint)} .dot.y{background:var(--warn)}
+
+  /* 团队 */
+  .team{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  .person{display:flex;gap:14px;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:16px 18px}
+  .avatar{width:38px;height:38px;flex:0 0 38px;border-radius:10px;display:flex;align-items:center;
+    justify-content:center;font-weight:700;color:#08111d;background:linear-gradient(140deg,#7fb8ff,#38e0c8)}
+  .person .who{font-size:14.5px;color:#fff;font-weight:600}
+  .person .what{font-size:13.5px;color:var(--muted);line-height:1.6;margin-top:2px}
+
+  /* 红线 */
+  .rules{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:6px}
+  .rule{display:flex;gap:12px;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:14px 16px;font-size:14px;color:#c2d3e8}
+  .rule .no{color:var(--warn);font-weight:700;font-size:13px;flex:0 0 auto}
+
+  footer{padding:54px 0 0;color:var(--muted);font-size:13.5px;border-top:1px solid var(--line);margin-top:56px}
+  footer .row{display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between}
+
+  @media (max-width:860px){
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .cards,.mods,.team,.rules,.deliver{grid-template-columns:1fr}
+    .dual{grid-template-columns:1fr;gap:12px}
+    .plus{transform:rotate(90deg)}
+    .verdict{grid-template-columns:1fr}
+    .layer{grid-template-columns:1fr;gap:8px}
+    header.hero{padding:60px 0 40px}
+  }
+  @media print{
+    body{background:#fff;color:#111}
+    .badge,.card,.mode,.mod,.box,.layer,.person,.rule,.stat,.vitem{background:#fff;border-color:#ddd}
+    h1{color:#123;-webkit-text-fill-color:#123}
+    .lede,p,.card p,.mod p,.person .what{color:#333}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <span class="kicker">PBL 课程项目 · 团队协作</span>
+    <h1>隔空控制器<small>Air Controller · 免接触人机交互</small></h1>
+    <p class="lede">
+      用一颗普通摄像头，让<b>眼睛负责「指哪」</b>，<b>手负责「做什么」</b>。
+      双手被占用、不便触碰屏幕、行动不便的场景下，不用鼠标键盘也能操控界面。
+    </p>
+    <div class="badges">
+      <span class="badge">纯前端 <b>零构建</b></span>
+      <span class="badge">输入只有 <b>摄像头</b></span>
+      <span class="badge">macOS <b>一键安装</b></span>
+      <span class="badge">模型 <b>本地推理</b></span>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="v">6<span>项</span></div><div class="k">静态手势指令</div></div>
+      <div class="stat"><div class="v">21<span>点</span></div><div class="k">手部关键点追踪</div></div>
+      <div class="stat"><div class="v">9–13<span>点</span></div><div class="k">视线标定流程</div></div>
+      <div class="stat"><div class="v">68<span>MB</span></div><div class="k">安装包体积</div></div>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">01</span>
+      <h2>为什么做这件事<span class="sub">找的是「手忙不过来」的那一小段时间</span></h2>
+    </div>
+    <div class="cards">
+      <div class="card"><div class="tag">场景一</div><h3>双手被占用</h3>
+        <p>做饭、修理、抱着东西、戴着手套。想翻一页菜谱或暂停一段视频，摘手套、擦手、去碰设备，整套动作比目的本身还贵。</p></div>
+      <div class="card"><div class="tag">场景二</div><h3>不方便触碰</h3>
+        <p>公共屏幕、手术室、实验室洁净台。物理接触既是污染源，也是公共设备的卫生痛点。</p></div>
+      <div class="card"><div class="tag">场景三</div><h3>行动能力受限</h3>
+        <p>精细手部动作困难的使用者，用眼睛定位、用大动作发指令，比精确点击更现实。</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">02</span>
+      <h2>核心方案：把「指哪」和「做什么」拆开<span class="sub">单靠眼动会误触，单靠手势会累，拆开就都成立了</span></h2>
+    </div>
+    <div class="dual">
+      <div class="mode eye">
+        <div class="role">Input A · 定位</div>
+        <h3>眼动</h3>
+        <div class="one">负责「指哪」——它就是鼠标光标</div>
+        <ul>
+          <li>摄像头取面部特征，回归出屏幕坐标</li>
+          <li>指数平滑压抖动，按钮磁吸降低精度要求</li>
+          <li>停留触发（dwell）完成「悬停即选中」</li>
+        </ul>
+      </div>
+      <div class="plus">+</div>
+      <div class="mode hand">
+        <div class="role">Input B · 指令</div>
+        <h3>手势</h3>
+        <div class="one">负责「做什么」——它就是鼠标按键</div>
+        <ul>
+          <li>21 点手部关键点，判手指伸屈而非手型模板</li>
+          <li>连续 3 帧确认才执行，抑制误触</li>
+          <li>离散动作带冷却，方向手势单独节流</li>
+        </ul>
+      </div>
+    </div>
+    <table style="margin-top:22px">
+      <thead><tr><th style="width:24%">姿态</th><th style="width:26%">指令</th><th>设计考虑</th></tr></thead>
+      <tbody>
+        <tr><td><b>握拳</b></td><td>确认</td><td>最稳定的手型，远距离也认得出，所以承担最高频的确认动作</td></tr>
+        <tr><td><b>拇指朝上</b></td><td>返回</td><td>原本用「张开手掌」，与上滚同姿态会冲突，改掉后两者互斥</td></tr>
+        <tr><td><b>食指伸出</b></td><td>主页</td><td>指向性最强，视觉上自然对应「回首页」</td></tr>
+        <tr><td><b>二指（V）</b></td><td>菜单</td><td>与拇指、食指区分度足够，且单手可稳定保持</td></tr>
+        <tr><td><b>四指朝上</b></td><td>向上滚动</td><td rowspan="2">同一手型的两个朝向，靠指尖与手腕的相对位置判定方向</td></tr>
+        <tr><td><b>四指朝下</b></td><td>向下滚动</td></tr>
+      </tbody>
+    </table>
+    <p class="muted" style="font-size:13.5px;margin-top:12px">
+      判定对朝向鲁棒：用「指尖到手腕的距离」与「指根到手腕的距离」做比值，而不是比对固定手型，因此远近、侧倾、不同手型都能收敛。
+    </p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">03</span>
+      <h2>系统结构<span class="sub">一个入口，统一标定，各功能作为模块挂载</span></h2>
+    </div>
+    <div class="arch">
+      <div class="layer"><div class="lname">入口层</div>
+        <div class="lbody">
+          <span class="chip">统一工作台 <code>workbench/</code></span>
+          <span class="chip">模块注册表 <code>modules.json</code></span>
+          <span class="chip">下载中心</span>
+          <span class="chip">单实例互斥</span>
+        </div></div>
+      <div class="layer"><div class="lname">感知层</div>
+        <div class="lbody">
+          <span class="chip k">Face Landmarker · 视线</span>
+          <span class="chip k">Gesture Recognizer · 手势</span>
+          <span class="chip">统一标定协议</span>
+          <span class="chip">共享模型存储</span>
+          <span class="chip">摄像头交接与释放</span>
+        </div></div>
+      <div class="layer"><div class="lname">模块层</div>
+        <div class="lbody">
+          <span class="chip">眼动 + 手势测试台</span>
+          <span class="chip">视线热力图</span>
+          <span class="chip">隔空画板</span>
+          <span class="chip">星际跑酷</span>
+        </div></div>
+      <div class="layer"><div class="lname">控制层</div>
+        <div class="lbody">
+          <span class="chip">FastAPI 控制后端</span>
+          <span class="chip">Playwright 驱动真实浏览器</span>
+          <span class="chip">WebSocket 状态上报</span>
+          <span class="chip">远程开关摄像头</span>
+        </div></div>
+      <div class="layer"><div class="lname">分发层</div>
+        <div class="lbody">
+          <span class="chip">py2app 原生启动器</span>
+          <span class="chip">DMG 打包流水线</span>
+          <span class="chip">首次运行自动铺环境</span>
+        </div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">04</span>
+      <h2>四个已上线的模块<span class="sub">每个模块都在验证同一套交互假设的不同侧面</span></h2>
+    </div>
+    <div class="mods">
+      <div class="mod">
+        <div class="top"><h3>眼动 + 手势测试台</h3><span class="state ok">已上线</span></div>
+        <p>项目的主控台。完成标定后测眼动精度，再测手势识别，最后跑「眼-手联合点击」——用眼定位、用手确认，统计命中与耗时。</p>
+        <div class="stack">工作台宿主推理 · 9 点共享标定 / 13 点对照 · 导出 JSON</div>
+      </div>
+      <div class="mod">
+        <div class="top"><h3>视线热力图</h3><span class="state ok">已上线</span></div>
+        <p>记录注视点在界面上的分布，输出热力、轨迹、点阵三种视图，用于回答「用户到底在看哪、有没有漏看关键区域」。</p>
+        <div class="stack">9 点标定 · 头位校验 · 导出 CSV 与 AOI 报告</div>
+      </div>
+      <div class="mod">
+        <div class="top"><h3>隔空画板</h3><span class="state ok">已上线</span></div>
+        <p>视线移动笔尖，手势切画笔、换色、撤回、清空。双手入镜时左手拖动平移画布，把「指哪」和「怎么画」同时用上。</p>
+        <div class="stack">视线笔尖 · 7 项手势 · 调色板预览与确认</div>
+      </div>
+      <div class="mod">
+        <div class="top"><h3>星际跑酷</h3><span class="state ok">已上线</span></div>
+        <p>压力测试场：在实时游戏循环里同时消费视线与手势，检验连续输入下的延迟、丢帧和误触，比静态页面更接近真实使用。</p>
+        <div class="stack">订阅宿主人脸与手部结果 · 实时渲染</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">05</span>
+      <h2>交付形态<span class="sub">不让使用者先装 Python、再读命令行</span></h2>
+    </div>
+    <div class="deliver">
+      <div class="box">
+        <h3>macOS 安装包</h3>
+        <dl class="kv">
+          <dt>版本</dt><dd>1.0.0（开发通道）</dd>
+          <dt>平台</dt><dd>macOS 12+ · Apple 芯片（arm64）</dd>
+          <dt>体积</dt><dd>68 MB</dd>
+          <dt>内含</dt><dd>工作台、四个模块、启动器与静态服务</dd>
+          <dt>校验</dt><dd class="hash">a8b5bb8c57d109296ea8653508a92a9d</dd>
+        </dl>
+        <p class="note">首次启动需联网创建运行环境并安装依赖，约 1–3 分钟。安装包未做 Apple 公证，首次打开需右键 →「打开」。Intel 版本已列入计划，尚未构建。</p>
+      </div>
+      <div class="box">
+        <h3>控制后端</h3>
+        <p style="margin:0 0 12px;font-size:14.5px;color:var(--muted)">
+          FastAPI + Playwright 驱动一个真实 Chrome 窗口，让隔空输入真正作用在浏览器上，而不只是页面里的演示光标。
+        </p>
+        <ul style="margin:0;padding-left:18px;font-size:14px;color:#b9cbe2">
+          <li>双击启动器即用，无需终端</li>
+          <li>控制小窗用原生 AppKit 实现，避开系统 Python 的 Tk 渲染问题</li>
+          <li>可向已连接前端广播「开 / 关摄像头」</li>
+          <li>仅监听 <code>127.0.0.1</code>，不暴露到局域网</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">06</span>
+      <h2>验证到什么程度<span class="sub">区分「逻辑跑通」和「真机手感好」，不混为一谈</span></h2>
+    </div>
+    <div class="verdict">
+      <div class="vitem"><div class="n">&lt; 70<span>px</span></div><div class="d">平均偏差 · 眼动可用线</div></div>
+      <div class="vitem"><div class="n">≥ 80<span>%</span></div><div class="d">联合点击命中率 · 可用线</div></div>
+      <div class="vitem"><div class="n">&lt; 3<span>s</span></div><div class="d">单次联合操作耗时 · 可用线</div></div>
+    </div>
+    <table>
+      <thead><tr><th style="width:26%">能力</th><th style="width:18%">状态</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><b>手势识别</b></td><td><span class="dot g"></span>已实测</td>
+          <td>独立手势测试台满 7 项测试，逐手势帧级准确率与混淆矩阵可导出，实际使用反馈识别稳定</td></tr>
+        <tr><td><b>眼动链路</b></td><td><span class="dot g"></span>已修复并可用</td>
+          <td>曾出现「摄像头正常但视线 0 fps」，根因为同一条媒体流被多个 video 消费；改为单流单 video 后恢复</td></tr>
+        <tr><td><b>隔空画板手势</b></td><td><span class="dot y"></span>合成验证</td>
+          <td>7 项注入式验证通过 6 项，快速甩线的断点问题未单独压测；不等于真实摄像头手感</td></tr>
+        <tr><td><b>眼动精度数据</b></td><td><span class="dot y"></span>待真机采集</td>
+          <td>测试台与指标口径已就绪，需要在目标硬件上完成标定后产出平均偏差 / P90 / 命中率</td></tr>
+        <tr><td><b>热力图与跑酷</b></td><td><span class="dot g"></span>已上线</td>
+          <td>已接入工作台，随统一标定运行；导出与记录链路可用</td></tr>
+      </tbody>
+    </table>
+    <p class="legend">未标注具体数值的地方，是因为数据必须在真实摄像头与真实用户下采集，没有用合成数据替代。</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">07</span>
+      <h2>团队分工<span class="sub">按代码归属划分，各自负责一条完整链路</span></h2>
+    </div>
+    <div class="team">
+      <div class="person"><div class="avatar">徐</div><div>
+        <div class="who">徐千喻 · 眼动与控制链路</div>
+        <div class="what">眼动定位、双模态测试台、控制后端、统一工作台、安装包与分发</div></div></div>
+      <div class="person"><div class="avatar">T</div><div>
+        <div class="who">Thriving-r · 隔空画板</div>
+        <div class="what">视线笔尖、手势调色板、捏合落笔、双手平移与画布操作</div></div></div>
+      <div class="person"><div class="avatar">E</div><div>
+        <div class="who">Evelyn · 文档与示例</div>
+        <div class="what">协作规范、交接文档、手势切水果示例、需求口径与红线自查</div></div></div>
+      <div class="person"><div class="avatar">Y</div><div>
+        <div class="who">yuanheyiiii · 视线热力图</div>
+        <div class="what">注视点采集、热力与轨迹视图、AOI 报告、工作台导航与布局</div></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">08</span>
+      <h2>工程约束<span class="sub">这些限制是刻意的，不是省事</span></h2>
+    </div>
+    <div class="rules">
+      <div class="rule"><span class="no">01</span><div><b>零构建、零框架。</b> 页面是可直接打开的 HTML/JS，没有打包步骤，改完强刷即生效——评估者不需要先配环境。</div></div>
+      <div class="rule"><span class="no">02</span><div><b>模型本地化。</b> 推理权重与 wasm 随本地目录分发，装好后断网可用，人脸画面不出本机。</div></div>
+      <div class="rule"><span class="no">03</span><div><b>摄像头必须安全上下文。</b> 只在 <code>127.0.0.1</code> 或 HTTPS 下授权，局域网访问需自签证书。</div></div>
+      <div class="rule"><span class="no">04</span><div><b>大文件不入库。</b> 新增模型权重走首次运行下载，避免仓库膨胀；共用的模型目录禁止挪动。</div></div>
+      <div class="rule"><span class="no">05</span><div><b>推送只走团队仓库。</b> 提交前逐项确认改动，冲突先变基，绝不强推。</div></div>
+      <div class="rule"><span class="no">06</span><div><b>不越界改别人的模块。</b> 画板、热力图各自归属明确，接入靠注册表而不是改对方代码。</div></div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="row">
+      <div>隔空控制器 Air Controller · PBL 课程项目</div>
+      <div>团队仓库 <code>TPProjectPBL/EPBL</code> · 文档以 <code>HANDOFF.md</code> 为准</div>
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>
