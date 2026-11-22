@@ -2419,7 +2419,8 @@ body.is-landing > .side{
       const idbMod = await import('../shared/gaze/idb.js');
       sharedGaze.model = await idbMod.readPredictor();
       if (!sharedGaze.model) {
-        setRealUi('err', '尚未完成 9 点标定：请回到工作台标定后再进入画板', true);
+        setRealUi('err', '尚未完成标定：请回到工作台点「标定视线」后再进入画板', true);
+        if (boardActive) toast('请先回工作台点「标定视线」完成标定', 'err');
         real.starting = false;
         return;
       }
@@ -2490,7 +2491,7 @@ body.is-landing > .side{
         false
       );
       requestAnimationFrame(previewLoop);
-      toast('已切换到宿主推理：本页不再打开摄像头', 'ok');
+      toast('眼控与手势已自动接入 · 握拳即可落笔', 'ok');
     } catch (e) {
       real.starting = false;
       const msg = (e && e.message) || String(e);
@@ -2555,7 +2556,8 @@ body.is-landing > .side{
       const idbMod = await import('../shared/gaze/idb.js');
       sharedGaze.model = await idbMod.readPredictor();
       if (!sharedGaze.model) {
-        setRealUi('err', '尚未完成 9 点标定：请回到工作台标定后再进入画板', true);
+        setRealUi('err', '尚未完成标定：请回到工作台点「标定视线」后再进入画板', true);
+        if (boardActive) toast('请先回工作台点「标定视线」完成标定', 'err');
         real.starting = false;
         return;
       }
@@ -3753,7 +3755,12 @@ body.is-landing > .side{
     });
     setTimeout(syncSize, 160);
 
-    toast('已进入画板 · 移动鼠标或用注视控制笔尖');
+    // 进入画板即自动接入眼控与手势：真机面板已隐藏，不能再依赖「开启摄像头」按钮，
+    // 否则工作台收不到 gesture-request、手势引擎不启动，握拳完全没有反应。
+    // startReal 自带防重入，重复进入不会重复启动。
+    void startReal();
+
+    toast('已进入画板 · 眼控与手势自动接入，握拳即可落笔');
   }
 
   function exitBoard() {
